@@ -6,6 +6,8 @@ import { combineLatest } from 'rxjs';
 import { StateService } from '@app/services/state.service';
 import { LanguageService } from '@app/services/language.service';
 
+import { basePath } from '@app/chain/base-path';
+import { PROFILE } from '@app/chain/profiles';
 @Injectable({
   providedIn: 'root'
 })
@@ -26,7 +28,8 @@ export class OpenGraphService {
   ) {
     // save og:image tag from original template
     const initialOgImageTag = metaService.getTag('property=\'og:image\'');
-    this.defaultImageUrl = initialOgImageTag?.content || 'https://mempool.space/resources/previews/mempool-space-preview.jpg';
+    // Chains Explorer: the chain's own preview (resources/previews/chain-<id>.png, chains/previews.py)
+    this.defaultImageUrl = document.location.origin + basePath() + '/resources/previews/chain-' + PROFILE.id + '.png';
     this.router.events.pipe(
       filter(event => event instanceof NavigationEnd),
       map(() => this.activatedRoute),
@@ -51,27 +54,20 @@ export class OpenGraphService {
   }
 
   setOgImage() {
-    const lang = this.LanguageService.getLanguage();
-    const ogImageUrl = `${window.location.protocol}//${window.location.host}/render/${lang}/preview${this.router.url}`;
-    this.metaService.updateTag({ property: 'og:image', content: ogImageUrl });
-    this.metaService.updateTag({ name: 'twitter:image', content: ogImageUrl });
-    this.metaService.updateTag({ property: 'og:image:width', content: '1200' });
-    this.metaService.updateTag({ property: 'og:image:height', content: '600' });
+    // Chains Explorer: no unfurler (/render/) to draw page previews: the chain's preview for every page
+    this.clearOgImage();
   }
 
   clearOgImage() {
     this.metaService.updateTag({ property: 'og:image', content: this.defaultImageUrl });
     this.metaService.updateTag({ name: 'twitter:image', content: this.defaultImageUrl });
-    this.metaService.updateTag({ property: 'og:image:width', content: '1000' });
-    this.metaService.updateTag({ property: 'og:image:height', content: '500' });
+    this.metaService.updateTag({ property: 'og:image:width', content: '1200' });
+    this.metaService.updateTag({ property: 'og:image:height', content: '630' });
   }
 
   setManualOgImage(imageFilename) {
-    const ogImage = `${window.location.protocol}//${window.location.host}/resources/previews/${imageFilename}`;
-    this.metaService.updateTag({ property: 'og:image', content: ogImage });
-    this.metaService.updateTag({ property: 'og:image:width', content: '2000' });
-    this.metaService.updateTag({ property: 'og:image:height', content: '1000' });
-    this.metaService.updateTag({ name: 'twitter:image', content: ogImage });
+    // Chains Explorer: mempool's page previews are mempool.space's: the chain's preview instead
+    this.clearOgImage();
   }
 
   /// register an event that needs to resolve before we can take a screenshot

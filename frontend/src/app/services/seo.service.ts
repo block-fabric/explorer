@@ -3,6 +3,7 @@ import { Title, Meta } from '@angular/platform-browser';
 import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
 import { filter, map, switchMap } from 'rxjs';
 import { StateService } from '@app/services/state.service';
+import { basePath } from '@app/chain/base-path';
 
 @Injectable({
   providedIn: 'root'
@@ -83,7 +84,8 @@ export class SeoService {
   }
 
   updateCanonical(path) {
-    this.canonicalLink.setAttribute('href', 'https://' + this.baseDomain + path);
+    // Chains Explorer: the page's own address (host, and the sub-path the explorer runs under), not mempool.space's
+    this.canonicalLink?.setAttribute('href', document.location.origin + basePath() + path);
   }
 
   getTitle(): string {
@@ -97,7 +99,8 @@ export class SeoService {
       {return this.baseTitle + ' - Liquid Network';}
     if (this.network === 'liquidtestnet')
       {return this.baseTitle + ' - Liquid Testnet';}
-    return this.baseTitle + ' - ' + (this.network ? this.ucfirst(this.network) : 'Bitcoin') + ' Explorer';
+    // Chains Explorer: the base title is already the chain's ("Layers Explorer"): no " - Bitcoin Explorer" after it
+    return this.baseTitle;
   }
 
   getDescription(): string {

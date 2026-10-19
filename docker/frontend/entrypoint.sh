@@ -77,7 +77,15 @@ case "${CHAIN_PROFILE:-chains}" in
   zside) __CHAIN_NAME__=zSide ;; thunder) __CHAIN_NAME__=Thunder ;; hivemind) __CHAIN_NAME__=Hivemind ;;
   layers) __CHAIN_NAME__=Layers ;; *) __CHAIN_NAME__=Chains ;;
 esac
-for f in $(find /var/www/mempool -name index.html); do sed -i "s/Chains Explorer/${__CHAIN_NAME__} Explorer/g" "$f"; done
+# ... and absolute links for crawlers and link previews (which do not run the app): this chain's public URL from
+# CHAIN_EXPLORER_URLS; without one, the links stay relative to the page
+__CHAIN_URL__=$(echo "${CHAIN_EXPLORER_URLS:-}" | tr ',' '\n' | grep "^${CHAIN_PROFILE:-chains}=" | cut -d= -f2- | sed 's#/*$##')
+for f in $(find /var/www/mempool -name index.html); do
+  sed -i -e "s/Chains Explorer/${__CHAIN_NAME__} Explorer/g" -e "s#resources/previews/chain-chains.png#resources/previews/chain-${CHAIN_PROFILE:-chains}.png#g" "$f"
+  if [ -n "$__CHAIN_URL__" ]; then
+    sed -i -e "s#content=\"resources/previews/#content=\"${__CHAIN_URL__}/resources/previews/#g" -e "s#rel=\"canonical\" href=\"./\"#rel=\"canonical\" href=\"${__CHAIN_URL__}/\"#" "$f"
+  fi
+done
 
 # Export as environment variables to be used by envsubst
 export __MAINNET_ENABLED__
