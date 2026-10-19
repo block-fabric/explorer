@@ -24,6 +24,8 @@ const CHN = '0'.repeat(64);
 const KINDS: Record<number, string> = {
   0: 'transfer', 1: 'reserve', 2: 'register', 3: 'mint', 4: 'update', 5: 'burn', 6: 'swap', 7: 'add-liquidity',
   8: 'remove-liquidity', 9: 'create-auction', 10: 'bid', 11: 'collect', 12: 'release',
+  13: 'route', 14: 'register-oracle', 15: 'attest', 16: 'create-oracle-contract', 17: 'settle-oracle-contract',
+  32: 'set-logo', 33: 'register', 34: 'set-display-name', 35: 'register',
 };
 
 export function decodeBitassetsMarker(payload: Buffer): any {
@@ -34,7 +36,9 @@ export function decodeBitassetsMarker(payload: Buffer): any {
   const script = () => r.varBytes().toString('hex');
   switch (k) {
     case 1: op.commitment = r.hex(32); break;
-    case 2: op.asset = r.hash(); r.bytes(32); op.supply = r.varint(); op.decimals = r.u8(); break; // AssetData follows
+    case 2: case 33: case 35: op.asset = r.hash(); r.bytes(32); op.supply = r.varint(); op.decimals = r.u8(); break; // AssetData, logo, display name follow
+    case 32: op.asset = r.hash(); op.logoBytes = r.varBytes().length; break;
+    case 34: op.asset = r.hash(); op.displayName = r.string(); break;
     case 3: op.asset = r.hash(); op.amount = r.varint(); break;
     case 4: op.asset = r.hash(); break;
     case 5: op.tokens = r.vector(() => ({ kind: TOKEN_KINDS[r.u8()] ?? '?', id: r.hash(), amount: r.varint() })); break;
@@ -191,6 +195,33 @@ export function ledgerRoutes(app: Application, prefix: string, ctx: ChainModuleC
     }
     return { ...e, amounts, labels: Object.fromEntries(Object.entries(e.ids).map(([k, id]) => [k, lab(id as string)])) };
   };
+
+  /**
+   * GET asset/:id/logo   the asset's logo as an image (getassetlogo: PNG or JPEG, at most 32 KB). Served with its own
+   * MIME type only, cached for good when asked by hash (?h=<sha256>, which changes when the logo does).
+   */
+  app.get(prefix + 'asset/:id/logo', ctx.handler(async (req, res) => {
+    const id = await resolveAsset(String(req.params.id));
+    if (!id || id === LEDGER_CHN) { return ctx.fail(req, res, 404, 'No logo'); }
+    const logo: any = await ctx.cached('logo:' + id + ':' + (req.query.h ?? ''), 300000, () => ctx.node.call('getassetlogo', '0x' + id)).catch(() => null);
+    if (!logo?.base64 || !/^image\/(png|jpeg)$/.test(logo.mime)) { return ctx.fail(req, res, 404, 'No logo'); }
+    res.setHeader('Content-Type', logo.mime);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'");
+    res.setHeader('Cache-Control', req.query.h === logo.hash ? 'public, max-age=31536000, immutable' : 'public, max-age=300');
+    res.send(Buffer.from(logo.base64, 'base64'));
+  }));
+
+  /** GET asset-meta   every asset's ticker, display name, decimals and logo hash, for the pages to show them (one request) */
+  app.get(prefix + 'asset-meta', ctx.handler(async (req, res) => {
+    const meta = await L.assetMeta();
+    const out: Record<string, any> = {};
+    for (const [id, a] of meta) {
+      if (id === LEDGER_CHN) { continue; }
+      out[id] = { ticker: a.name ?? null, label: a.label, display: a.display_name ?? null, decimals: a.decimals, logo: a.logo?.hash ?? null };
+    }
+    res.json(out);
+  }));
 
   app.get(prefix + 'ledger', ctx.handler(async (req, res) => {
     res.json({ ready: L.isReady(), height: L.height, tokens: L.tokens.size, pools: L.pools.size, auctions: L.auctions.size, events: L.events.length, dexHeight: L.dexHeight === Infinity ? null : L.dexHeight, verify: L.verify });

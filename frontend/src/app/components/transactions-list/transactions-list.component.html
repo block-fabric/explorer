@@ -637,7 +637,8 @@
 <ng-template #chainToken let-tk let-chn="chn">
   <span class="chain-token" [title]="tk.kind + ' ' + tk.id">
     <span class="ct-amount">{{ tk.amount }}</span>
-    <a class="ct-unit" [routerLink]="[(tk.kind === 'lp' ? '/pool' : '/asset') | relativeUrl, tk.id]">{{ tk.label }}</a>
+    <app-asset-badge *ngIf="tk.kind === 'asset'; else otherToken" [id]="tk.id" [label]="tk.label" [size]="16"></app-asset-badge>
+    <ng-template #otherToken><a class="ct-unit" [routerLink]="[(tk.kind === 'lp' ? '/pool' : '/asset') | relativeUrl, tk.id]">{{ tk.label }}</a></ng-template>
   </span>
   <div *ngIf="chn" class="ct-chn"><app-amount [satoshis]="chn"></app-amount></div>
 </ng-template>

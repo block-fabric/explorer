@@ -15,13 +15,14 @@ import { MiniLineChartComponent } from './line-chart.component';
   imports: [CommonModule, RouterModule, SharedModule, ActivityTableComponent, MiniLineChartComponent],
   styleUrls: ['../../components/module-page.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  styles: [`.pair-title { gap: 10px; flex-wrap: wrap; font-size: 1.6rem; } .sep { color: var(--transparent-fg); margin: 0 4px; } .addr { max-width: 300px; }`],
   template: `
   <div class="container-xl mp">
     <ng-container *ngIf="data$ | async as d; else loading">
       <ng-container *ngIf="d.pool as p; else unknown">
-        <h1><app-svg-images name="chain-mark" [fill]="profile.id" width="30" height="30" class="cmark"></app-svg-images>
-          <a [routerLink]="['/asset' | relativeUrl, p.asset_a_id || 'CHN']">{{ p.asset_a }}</a> / <a [routerLink]="['/asset' | relativeUrl, p.asset_b_id || 'CHN']">{{ p.asset_b }}</a> pool</h1>
-        <div class="sub mono">{{ p.pool }} <span *ngIf="p.abandoned" class="pill">abandoned</span></div>
+        <h1 class="pair-title"><app-asset-badge [id]="p.asset_a_id" [label]="p.asset_a" [size]="36"></app-asset-badge><span class="sep">/</span>
+          <app-asset-badge [id]="p.asset_b_id" [label]="p.asset_b" [size]="36"></app-asset-badge><span class="sep">pool</span></h1>
+        <div class="sub mono"><app-truncate [text]="p.pool" [lastChars]="12"></app-truncate> <span *ngIf="p.abandoned" class="pill">abandoned</span></div>
         <div class="kpis">
           <div class="kpi"><div class="l">Price</div><div class="v">{{ p.price | number:'1.0-8' }}</div><div class="s">{{ p.asset_b }} per {{ p.asset_a }}</div></div>
           <div class="kpi"><div class="l">{{ p.asset_a }} reserve</div><div class="v">{{ p.reserve_a | number:'1.0-4' }}</div></div>
@@ -41,7 +42,7 @@ import { MiniLineChartComponent } from './line-chart.component';
             <table class="table table-borderless table-sm" *ngIf="d.history">
               <thead><tr><th>Address</th><th class="text-right">Shares</th><th>Share of the pool</th></tr></thead>
               <tbody><tr *ngFor="let lp of d.history.providers">
-                <td class="mono"><a *ngIf="lp.address" [routerLink]="['/address' | relativeUrl, lp.address]">{{ lp.address | slice:0:22 }}…</a></td>
+                <td class="mono addr"><app-truncate *ngIf="lp.address" [text]="lp.address" [link]="['/address' | relativeUrl, lp.address]" [lastChars]="6"></app-truncate></td>
                 <td class="text-right">{{ lp.shares | number }}</td>
                 <td><div class="bar"><div class="fill" [style.width.%]="100 * lp.share"></div></div> <span class="muted">{{ lp.share * 100 | number:'1.0-2' }}%</span></td>
               </tr></tbody>

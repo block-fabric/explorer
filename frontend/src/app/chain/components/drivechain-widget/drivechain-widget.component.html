@@ -74,8 +74,8 @@
             <div class="b-top">
               <span class="sc" [style.color]="colorOf(b.slot)"><app-svg-images name="chain-mark" [fill]="profileId(b.slot)" width="14" height="14"></app-svg-images></span>
               <b>{{ b.name }}</b>
-              <span class="mono">{{ short(b.hash) }}</span>
-              <span class="ml-auto"><app-amount [satoshis]="b.total" digitsInfo="1.2-4" [noFiat]="true"></app-amount></span>
+              <span class="mono"><app-truncate [text]="b.hash" [lastChars]="8"></app-truncate></span>
+              <span class="ms-auto"><app-amount [satoshis]="b.total" digitsInfo="1.2-4" [noFiat]="true"></app-amount></span>
             </div>
             <div class="b-bar"><span class="b-fill" [style.width.%]="100 * progress(d, b)" [style.background]="canMake(d, b) ? colorOf(b.slot) : '#ff6b6b88'"></span><span class="b-txt">{{ b.score }} / {{ d.live.info.withdrawalminscore }}</span></div>
             <div class="b-meta">{{ b.blocksleft }} blocks left · {{ canMake(d, b) ? 'payable in ≥ ' + (d.live.info.withdrawalminscore - b.score) + ' blocks' : 'cannot reach the score in time' }} · {{ b.payouts.length }} payout{{ b.payouts.length === 1 ? '' : 's' }}</div>

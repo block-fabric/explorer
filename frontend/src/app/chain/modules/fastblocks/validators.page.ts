@@ -15,6 +15,7 @@ import { PROFILE } from '@app/chain/profiles';
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [`
     .leader { color: var(--chain-accent); font-weight: 700; }
+    .key { max-width: 420px; }
     .sched { display: flex; gap: 3px; flex-wrap: wrap; }
     .split { display: flex; height: 26px; border-radius: 6px; overflow: hidden; gap: 2px; font-size: 0.78rem; font-weight: 600; color: #11131f;
       div { display: flex; align-items: center; justify-content: center; } .bid { background: #b5f27e; } .val { background: var(--chain-accent); } }
@@ -57,7 +58,7 @@ import { PROFILE } from '@app/chain/profiles';
         <thead><tr><th>Validator</th><th class="text-right">Stake</th><th>Share</th><th class="text-right">Slots this epoch</th><th>Status</th></tr></thead>
         <tbody>
           <tr *ngFor="let v of d.validators?.validators">
-            <td class="mono" [class.leader]="v.pubkey === d.info?.leader" [title]="v.pubkey">{{ v.pubkey | slice:0:16 }}…{{ v.pubkey === d.info?.leader ? '  ◀ leader' : '' }}</td>
+            <td class="mono key" [class.leader]="v.pubkey === d.info?.leader"><app-truncate [text]="v.pubkey" [lastChars]="8">{{ v.pubkey === d.info?.leader ? ' ◀ leader' : '' }}</app-truncate></td>
             <td class="text-right">{{ v.stake / 1e8 | number:'1.0-2' }} CHN</td>
             <td><div class="bar"><div class="fill" [style.width.%]="100 * v.stake / (d.validators.totalstake || 1)"></div></div></td>
             <td class="text-right">{{ v.slots }}</td>
@@ -78,7 +79,7 @@ import { PROFILE } from '@app/chain/profiles';
     <div class="box">
       <p *ngIf="!d.evidence?.length" class="muted mb-0">No validator has signed two blocks for the same slot.</p>
       <table class="table table-borderless table-sm" *ngIf="d.evidence?.length">
-        <tbody><tr *ngFor="let e of d.evidence"><td class="mono">{{ e.pubkey | slice:0:16 }}…</td><td>slot {{ e.slot }}</td><td class="mono muted">{{ e.hashes?.join(' / ') }}</td></tr></tbody>
+        <tbody><tr *ngFor="let e of d.evidence"><td class="mono key"><app-truncate [text]="e.pubkey" [lastChars]="8"></app-truncate></td><td>slot {{ e.slot }}</td><td class="mono muted">{{ e.hashes?.join(' / ') }}</td></tr></tbody>
       </table>
     </div>
   </div>`,

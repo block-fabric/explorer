@@ -15,6 +15,9 @@ import { ActivityTableComponent } from './activity-table.component';
   styleUrls: ['../../components/module-page.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [`
+    .id-row { display: flex; gap: 12px; align-items: baseline; } .id-row app-truncate { min-width: 0; } .seq { flex: 0 0 auto; }
+    .asset-title { gap: 14px; flex-wrap: wrap; } .asset-title .display { font-size: 1.1rem; color: var(--transparent-fg); font-weight: normal; }
+    .addr { max-width: 340px; } .pair { white-space: nowrap; } .sep { margin: 0 8px; color: var(--transparent-fg); }
     .dist { display: flex; height: 14px; border-radius: 7px; overflow: hidden; gap: 2px; margin: 6px 0 4px; }
     .dist span { min-width: 2px; }
     .legend { display: flex; gap: 14px; font-size: 0.75rem; color: var(--transparent-fg); flex-wrap: wrap; i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; } }
@@ -23,8 +26,9 @@ import { ActivityTableComponent } from './activity-table.component';
   <div class="container-xl mp">
     <ng-container *ngIf="data$ | async as d; else loading">
       <ng-container *ngIf="d.info?.asset as a; else unknown">
-        <h1><app-svg-images name="chain-mark" [fill]="profile.id" width="30" height="30" class="cmark"></app-svg-images> {{ a.label }}</h1>
-        <div class="sub mono">{{ a.asset }} · #{{ a.seq }}</div>
+        <h1 class="asset-title"><app-asset-badge [id]="a.asset" [label]="a.label" [size]="48" [link]="false"></app-asset-badge>
+          <span *ngIf="a.display_name" class="display">{{ a.display_name }}</span></h1>
+        <div class="sub mono id-row"><app-truncate [text]="a.asset" [lastChars]="12"></app-truncate><span class="seq">#{{ a.seq }}</span></div>
         <div class="kpis">
           <div class="kpi"><div class="l">Supply</div><div class="v">{{ a.supply | number:'1.0-' + a.decimals }}</div><div class="s">minted {{ a.minted | number:'1.0-' + a.decimals }} · burned {{ a.burned | number:'1.0-' + a.decimals }}</div></div>
           <div class="kpi"><div class="l">Holders</div><div class="v">{{ d.holders?.holders ?? '…' | number }}</div><div class="s">addresses with a balance</div></div>
@@ -52,7 +56,7 @@ import { ActivityTableComponent } from './activity-table.component';
               </div>
             </ng-container>
             <table class="table table-borderless table-sm mt-3">
-              <tr *ngIf="d.holders?.controller"><td class="muted">Controlled by</td><td class="mono"><a [routerLink]="['/address' | relativeUrl, d.holders.controller]">{{ d.holders.controller }}</a></td></tr>
+              <tr *ngIf="d.holders?.controller"><td class="muted">Controlled by</td><td class="mono addr"><app-truncate [text]="d.holders.controller" [link]="['/address' | relativeUrl, d.holders.controller]" [lastChars]="6"></app-truncate></td></tr>
               <tr *ngFor="let kv of entries(a.data)"><td class="muted">{{ kv[0] }}</td><td>{{ kv[1] }}</td></tr>
             </table>
           </div>
@@ -63,7 +67,7 @@ import { ActivityTableComponent } from './activity-table.component';
               <thead><tr><th>Address</th><th class="text-right">Balance</th><th>Share</th></tr></thead>
               <tbody>
                 <tr *ngFor="let h of d.holders.top.slice(0, 15)">
-                  <td class="mono"><a *ngIf="h.address" [routerLink]="['/address' | relativeUrl, h.address]">{{ h.address | slice:0:22 }}…</a><span *ngIf="!h.address" class="muted">non-standard</span></td>
+                  <td class="mono addr"><app-truncate *ngIf="h.address" [text]="h.address" [link]="['/address' | relativeUrl, h.address]" [lastChars]="6"></app-truncate><span *ngIf="!h.address" class="muted">non-standard</span></td>
                   <td class="text-right">{{ h.amount }}</td>
                   <td><div class="bar"><div class="fill" [style.width.%]="100 * h.share"></div></div></td>
                 </tr>
@@ -77,7 +81,8 @@ import { ActivityTableComponent } from './activity-table.component';
           <table class="table table-borderless table-sm">
             <thead><tr><th>Pool</th><th class="text-right">Reserves</th><th class="text-right">Price</th><th class="text-right">Swaps</th></tr></thead>
             <tbody><tr *ngFor="let p of d.info.pools">
-              <td><a [routerLink]="['/pool' | relativeUrl, p.pool]"><b>{{ p.asset_a }} / {{ p.asset_b }}</b></a></td>
+              <td class="pair"><app-asset-badge [id]="p.asset_a_id" [label]="p.asset_a" [link]="false"></app-asset-badge><span class="sep">/</span><app-asset-badge [id]="p.asset_b_id" [label]="p.asset_b" [link]="false"></app-asset-badge>
+                <a class="ms-2" [routerLink]="['/pool' | relativeUrl, p.pool]">pool</a></td>
               <td class="text-right">{{ p.reserve_a | number:'1.0-4' }} {{ p.asset_a }} · {{ p.reserve_b | number:'1.0-4' }} {{ p.asset_b }}</td>
               <td class="text-right">{{ p.price | number:'1.0-8' }} {{ p.asset_b }}</td>
               <td class="text-right">{{ p.swaps }}</td>
@@ -89,7 +94,8 @@ import { ActivityTableComponent } from './activity-table.component';
         <div class="box" *ngIf="d.info.auctions?.length">
           <table class="table table-borderless table-sm">
             <tbody><tr *ngFor="let x of d.info.auctions">
-              <td><a [routerLink]="['/auction' | relativeUrl, x.auction]"><b>{{ x.base }}</b> for {{ x.quote }}</a></td>
+              <td class="pair"><app-asset-badge [id]="x.base_id" [label]="x.base" [link]="false"></app-asset-badge><span class="sep">for</span><app-asset-badge [id]="x.quote_id" [label]="x.quote" [link]="false"></app-asset-badge>
+                <a class="ms-2" [routerLink]="['/auction' | relativeUrl, x.auction]">auction</a></td>
               <td class="text-right">{{ x.remaining | number:'1.0-4' }} / {{ x.amount | number:'1.0-4' }} left</td>
               <td class="text-right">{{ x.price | number:'1.0-8' }} {{ x.quote }}</td>
               <td><span class="pill" [class.on]="x.status === 'open'">{{ x.status }}</span></td>

@@ -138,6 +138,7 @@ import { GithubLogin } from '@components/github-login.component/github-login.com
 import { SidechainChipComponent } from '@app/chain/components/sidechain-chip/sidechain-chip.component';
 import { ChainBlockPanelComponent } from '@app/chain/components/chain-block-panel/chain-block-panel.component';
 import { ChainBlockMarksComponent } from '@app/chain/components/block-marks/block-marks.component';
+import { AssetBadgeComponent } from '@app/chain/components/asset-badge/asset-badge.component';
 import { AddressTokensComponent } from '@app/chain/components/address-tokens/address-tokens.component';
 import { ChainTxPanelComponent } from '@app/chain/components/chain-tx-panel/chain-tx-panel.component';
 import { DrivechainWidgetComponent } from '@app/chain/components/drivechain-widget/drivechain-widget.component';
@@ -196,6 +197,7 @@ import { DrivechainWidgetComponent } from '@app/chain/components/drivechain-widg
     DrivechainWidgetComponent,
     ChainTxPanelComponent,
     AddressTokensComponent,
+    AssetBadgeComponent,
     AddressGroupComponent,
     SearchFormComponent,
     AddressLabelsComponent,
@@ -357,6 +359,7 @@ import { DrivechainWidgetComponent } from '@app/chain/components/drivechain-widg
     DrivechainWidgetComponent,
     ChainTxPanelComponent,
     AddressTokensComponent,
+    AssetBadgeComponent,
     AddressGroupComponent,
     SearchFormComponent,
     AddressLabelsComponent,

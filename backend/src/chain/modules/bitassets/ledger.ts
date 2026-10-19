@@ -29,13 +29,14 @@ const MAX = (1n << 63n) - 1n;
 const MIN_LIQUIDITY = 1000n;
 const MIN_CHN_PAYOUT = 50000n;
 const UNDO_DEPTH = 100;
-const CACHE_VERSION = 4; // 4: the tokens every output was created with (outs)
+const CACHE_VERSION = 5; // 5: logos and display names (marker kinds 32-35)
 
 export const TOKEN_KINDS = ['asset', 'control', 'reservation', 'lp', 'receipt'];
 export const OP_KINDS: Record<number, string> = {
   0: 'transfer', 1: 'reserve', 2: 'register', 3: 'mint', 4: 'update', 5: 'burn', 6: 'swap', 7: 'add-liquidity',
   8: 'remove-liquidity', 9: 'create-auction', 10: 'bid', 11: 'collect', 12: 'release', 13: 'route',
   14: 'register-oracle', 15: 'attest', 16: 'create-oracle-contract', 17: 'settle-oracle-contract',
+  32: 'set-logo', 33: 'register', 34: 'set-display-name', 35: 'register',
 };
 
 export interface Token { k: number; id: string; a: bigint; s: string | null; h: number }
@@ -77,13 +78,19 @@ export function parseMarker(payload: Buffer): Marker {
   const op: any = {};
   switch (kind) {
     case 1: op.commitment = r.hex(32); break;
-    case 2: {
+    case 2:
+    case 33:   // a registration with a logo: the registration, then the logo (bitassets/src/bitassets/state.cpp)
+    case 35: { // ... with a display name: the registration, the logo (empty if none), then the display name
       op.asset = id32(r); r.bytes(32); op.supply = varint(r); op.decimals = r.u8();
       opt(r, () => r.bytes(32)); opt(r, () => r.bytes(6)); opt(r, () => r.bytes(18)); opt(r, () => r.bytes(33)); opt(r, () => r.bytes(32));
       op.info = opt(r, () => r.string());
       op.name = opt(r, () => r.string());
+      if (kind === 33 || kind === 35) { op.logoBytes = r.varBytes().length; }
+      if (kind === 35) { op.displayName = r.string(); }
       break;
     }
+    case 32: op.asset = id32(r); op.logoBytes = r.varBytes().length; break;
+    case 34: op.asset = id32(r); op.displayName = r.string(); break;
     case 3: op.asset = id32(r); op.amount = varint(r); break;
     case 4: op.asset = id32(r); upd(r, () => r.bytes(32)); upd(r, () => r.bytes(6)); upd(r, () => r.bytes(18)); upd(r, () => r.bytes(33)); upd(r, () => r.bytes(32)); upd(r, () => r.string()); break;
     case 5: op.tokens = r.vector(() => ({ k: r.u8(), id: id32(r), a: varint(r) })); break;
@@ -401,7 +408,11 @@ export class BitassetsLedger {
         break;
       }
       case 1: ev({}); break;
-      case 2: ev({ ids: { asset: op.asset }, amounts: { supply: s(op.supply) }, note: op.name ?? undefined }); break;
+      case 2:
+      case 33:
+      case 35: ev({ ids: { asset: op.asset }, amounts: { supply: s(op.supply) }, note: op.displayName ?? op.name ?? undefined }); break;
+      case 32: ev({ ids: { asset: op.asset }, note: op.logoBytes ? `${op.logoBytes} bytes` : 'removed' }); break;
+      case 34: ev({ ids: { asset: op.asset }, note: op.displayName }); break;
       case 3: ev({ ids: { asset: op.asset }, amounts: { amount: s(op.amount) } }); break;
       case 4: ev({ ids: { asset: op.asset } }); break;
       case 5: {

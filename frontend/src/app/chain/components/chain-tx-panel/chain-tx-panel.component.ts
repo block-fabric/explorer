@@ -32,15 +32,15 @@ import { MODULE, PROFILE, explorerUrl, profileBySlot, sideBlockPath } from '@app
             <span class="ct-tag">M6</span>
             <span class="ct-main">Withdrawal of <b><app-amount [satoshis]="w.amount" digitsInfo="1.2-8" [noFiat]="true"></app-amount></b> from
               <app-sidechain-chip [slot]="w.slot" [name]="w.name" path=""></app-sidechain-chip></span>
-            <span class="ct-sub">{{ w.payouts.length }} payout{{ w.payouts.length === 1 ? '' : 's' }} · bundle <span class="mono">{{ w.bundle.slice(0, 16) }}…</span> paid in block {{ i.height | number }} after the miners' vote</span>
+            <span class="ct-sub">{{ w.payouts.length }} payout{{ w.payouts.length === 1 ? '' : 's' }} · bundle <app-truncate class="mono" [inline]="true" [text]="w.bundle" [lastChars]="8"></app-truncate> paid in block {{ i.height | number }} after the miners' vote</span>
           </div>
           <div *ngIf="i.bmmRequest as r" class="ct-row">
             <span class="ct-tag">M8</span>
             <span class="ct-main">BMM bid of <b>{{ r.bid | number }} sats</b> for a
               <app-sidechain-chip [slot]="r.slot" [name]="r.name" path=""></app-sidechain-chip> block</span>
             <span class="ct-sub">
-              <a *ngIf="sideUrl(r.slot, sideBlockPath(r.slot, r.sideBlock)) as u; else plainSb" [href]="u" class="mono">{{ r.sideBlock.slice(0, 16) }}…</a>
-              <ng-template #plainSb><span class="mono">{{ r.sideBlock.slice(0, 16) }}…</span></ng-template>
+              <a *ngIf="sideUrl(r.slot, sideBlockPath(r.slot, r.sideBlock)) as u; else plainSb" [href]="u" class="mono"><app-truncate [inline]="true" [text]="r.sideBlock" [lastChars]="8"></app-truncate></a>
+              <ng-template #plainSb><app-truncate class="mono" [inline]="true" [text]="r.sideBlock" [lastChars]="8"></app-truncate></ng-template>
               · <span [class.pos]="r.accepted" [class.neg]="!r.accepted">{{ r.accepted ? 'accepted (M7) by the miner of block ' + (i.height | number) : 'not accepted: the miner of block ' + (i.height | number) + ' took the fee and committed to another block' }}</span>
             </span>
           </div>

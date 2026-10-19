@@ -13,6 +13,11 @@ import { ActivityTableComponent } from './activity-table.component';
   standalone: true,
   imports: [CommonModule, RouterModule, SharedModule, ActivityTableComponent],
   styleUrls: ['../../components/module-page.scss'],
+  styles: [`
+    .asset-cell { min-width: 220px; max-width: 380px; }
+    .hash { font-family: monospace; font-size: 0.72rem; color: var(--transparent-fg); margin-top: 2px; max-width: 100%; }
+    .pair { white-space: nowrap; } .sep { margin: 0 8px; color: var(--transparent-fg); }
+  `],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
   <div class="container-xl mp" *ngIf="data$ | async as d">
@@ -37,7 +42,10 @@ import { ActivityTableComponent } from './activity-table.component';
         <thead><tr><th>Asset</th><th class="text-right">Supply</th><th class="text-right">Minted</th><th class="text-right">Burned</th><th>Supply</th><th>Registered</th><th>Info</th></tr></thead>
         <tbody>
           <tr *ngFor="let a of d.assets">
-            <td><a [routerLink]="['/asset' | relativeUrl, a.asset]"><b>{{ a.label || a.name }}</b></a> <span class="muted mono">{{ a.asset | slice:0:8 }}</span></td>
+            <td class="asset-cell">
+              <app-asset-badge [id]="a.asset" [label]="a.label" [showName]="true" [size]="22"></app-asset-badge>
+              <div class="hash"><app-truncate [text]="a.asset" [lastChars]="8"></app-truncate></div>
+            </td>
             <td class="text-right">{{ a.supply | number:'1.0-' + a.decimals }}</td>
             <td class="text-right muted">{{ a.minted | number:'1.0-' + a.decimals }}</td>
             <td class="text-right muted">{{ a.burned | number:'1.0-' + a.decimals }}</td>
@@ -54,7 +62,8 @@ import { ActivityTableComponent } from './activity-table.component';
         <thead><tr><th>Pool</th><th class="text-right">Reserve</th><th class="text-right">Reserve</th><th class="text-right">Price</th><th>Depth</th><th class="text-right">Swaps</th><th class="text-right">Volume</th><th>Created</th></tr></thead>
         <tbody>
           <tr *ngFor="let p of d.pools">
-            <td><a [routerLink]="['/pool' | relativeUrl, p.pool]"><b>{{ p.asset_a }}</b> / <b>{{ p.asset_b }}</b></a> <span *ngIf="p.abandoned" class="pill">abandoned</span></td>
+            <td class="pair"><app-asset-badge [id]="p.asset_a_id" [label]="p.asset_a" [link]="false"></app-asset-badge><span class="sep">/</span><app-asset-badge [id]="p.asset_b_id" [label]="p.asset_b" [link]="false"></app-asset-badge>
+              <a class="ms-2" [routerLink]="['/pool' | relativeUrl, p.pool]">pool</a><span *ngIf="p.abandoned" class="pill ms-2">abandoned</span></td>
             <td class="text-right">{{ p.reserve_a | number:'1.0-4' }} <span class="muted">{{ p.asset_a }}</span></td>
             <td class="text-right">{{ p.reserve_b | number:'1.0-4' }} <span class="muted">{{ p.asset_b }}</span></td>
             <td class="text-right">{{ p.price | number:'1.0-8' }} <span class="muted">{{ p.asset_b }}/{{ p.asset_a }}</span></td>
@@ -74,7 +83,8 @@ import { ActivityTableComponent } from './activity-table.component';
         <thead><tr><th>Auction</th><th class="text-right">Selling</th><th>Sold</th><th class="text-right">Price now</th><th class="text-right">Start → end</th><th>Blocks</th><th class="text-right">Bids</th><th>Status</th></tr></thead>
         <tbody>
           <tr *ngFor="let a of d.auctions">
-            <td><a [routerLink]="['/auction' | relativeUrl, a.auction]"><b>{{ a.base }}</b> for {{ a.quote }}</a></td>
+            <td class="pair"><app-asset-badge [id]="a.base_id" [label]="a.base"></app-asset-badge><span class="sep">for</span><app-asset-badge [id]="a.quote_id" [label]="a.quote"></app-asset-badge>
+              <a class="ms-2" [routerLink]="['/auction' | relativeUrl, a.auction]">auction</a></td>
             <td class="text-right">{{ a.amount | number:'1.0-4' }}</td>
             <td><div class="bar"><div class="fill" [style.width.%]="a.amount ? 100 * (a.amount - a.remaining) / a.amount : 0"></div></div></td>
             <td class="text-right">{{ a.price | number:'1.0-8' }} <span class="muted">{{ a.quote }}</span></td>

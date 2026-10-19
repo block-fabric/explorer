@@ -15,7 +15,11 @@ import { MODULE } from '@app/chain/profiles';
           <thead><tr><th>Token</th><th>Kind</th><th class="text-right">Balance</th><th class="text-right">Outputs</th></tr></thead>
           <tbody>
             <tr *ngFor="let t of tokens">
-              <td><a [routerLink]="[(t.kind === 'lp' ? '/pool' : t.kind === 'receipt' ? '/auction' : '/asset') | relativeUrl, t.id]"><b>{{ t.label }}</b></a></td>
+              <td>
+                <app-asset-badge *ngIf="t.kind === 'asset' || t.kind === 'control'; else otherTok" [id]="t.id" [label]="t.label" [showName]="true" [size]="22"></app-asset-badge>
+                <span *ngIf="t.kind === 'control'" class="text-muted"> control</span>
+                <ng-template #otherTok><a [routerLink]="[(t.kind === 'lp' ? '/pool' : t.kind === 'receipt' ? '/auction' : '/asset') | relativeUrl, t.id]"><b>{{ t.label }}</b></a></ng-template>
+              </td>
               <td class="text-muted">{{ kindName(t.kind) }}</td>
               <td class="text-right"><b>{{ t.amount }}</b><span *ngIf="t.poolShare !== undefined" class="text-muted"> · {{ t.poolShare * 100 | number:'1.0-2' }}% of the pool</span></td>
               <td class="text-right text-muted">{{ t.outputs.length }}</td>

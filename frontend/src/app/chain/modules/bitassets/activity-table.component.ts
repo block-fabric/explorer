@@ -18,6 +18,7 @@ import { describeActivity } from './activity-text';
     .k.burn { background: color-mix(in srgb, #ff6b6b 25%, transparent); }
     .muted { color: var(--transparent-fg); } .mono { font-family: monospace; font-size: 0.8rem; }
     .what b { font-weight: 600; }
+    .tx { width: 22%; max-width: 260px; }
   `],
   template: `
     <p *ngIf="!events?.length" class="muted mb-0">No operation yet.</p>
@@ -28,7 +29,7 @@ import { describeActivity } from './activity-text';
           <td class="muted"><app-time kind="since" [time]="e.t" [fastRender]="true"></app-time></td>
           <td><span class="k" [class]="e.kind">{{ e.kind.replace('-', ' ') }}</span></td>
           <td class="what" [innerHTML]="describe(e)"></td>
-          <td class="mono text-right"><a [routerLink]="['/tx' | relativeUrl, e.tx]">{{ e.tx | slice:0:10 }}…</a></td>
+          <td class="mono tx"><app-truncate [text]="e.tx" [link]="['/tx' | relativeUrl, e.tx]" [lastChars]="6" textAlign="end"></app-truncate></td>
         </tr>
       </tbody>
     </table>

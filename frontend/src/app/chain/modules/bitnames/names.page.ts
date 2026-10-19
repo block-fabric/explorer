@@ -31,11 +31,11 @@ import { PROFILE } from '@app/chain/profiles';
           <thead><tr><th>Name</th><th>Seq</th><th>Registered</th><th>Points to</th><th>Owner</th></tr></thead>
           <tbody>
             <tr *ngFor="let n of names$ | async">
-              <td><a [routerLink]="['/name' | relativeUrl, n.name || ('0x' + n.namehash)]"><b>{{ n.name || (n.namehash | slice:0:16) + '…' }}</b></a></td>
+              <td><a [routerLink]="['/name' | relativeUrl, n.name || ('0x' + n.namehash)]"><b>{{ n.name || n.namehash }}</b></a></td>
               <td class="mono muted">{{ n.seq }}</td>
               <td><a [routerLink]="['/tx' | relativeUrl, n.registration]">{{ n.registered | number }}</a></td>
               <td class="muted">{{ pointsTo(n) }}</td>
-              <td class="mono"><a *ngIf="n.owner?.address" [routerLink]="['/address' | relativeUrl, n.owner.address]">{{ n.owner.address | slice:0:14 }}…</a></td>
+              <td class="mono addr"><app-truncate *ngIf="n.owner?.address" [text]="n.owner.address" [link]="['/address' | relativeUrl, n.owner.address]" [lastChars]="6"></app-truncate></td>
             </tr>
           </tbody>
         </table>
@@ -51,8 +51,8 @@ import { PROFILE } from '@app/chain/profiles';
             <div class="box">
               <table class="table table-borderless table-sm">
                 <tr><td class="muted">Sequence</td><td>{{ n.seq }}</td></tr>
-                <tr><td class="muted">Registered</td><td>block {{ n.registered | number }} · <a [routerLink]="['/tx' | relativeUrl, n.registration]" class="mono">{{ n.registration | slice:0:16 }}…</a></td></tr>
-                <tr *ngIf="n.parent"><td class="muted">Parent</td><td><a [routerLink]="['/name' | relativeUrl, '0x' + n.parent]" class="mono">{{ n.parent | slice:0:16 }}…</a> · label {{ n.label }}</td></tr>
+                <tr><td class="muted">Registered</td><td>block {{ n.registered | number }} · <app-truncate class="mono" [inline]="true" [text]="n.registration" [link]="['/tx' | relativeUrl, n.registration]" [lastChars]="8"></app-truncate></td></tr>
+                <tr *ngIf="n.parent"><td class="muted">Parent</td><td><app-truncate class="mono" [inline]="true" [text]="n.parent" [link]="['/name' | relativeUrl, '0x' + n.parent]" [lastChars]="8"></app-truncate> · label {{ n.label }}</td></tr>
                 <tr><td class="muted">Owner</td><td><a *ngIf="n.owner?.address" [routerLink]="['/address' | relativeUrl, n.owner.address]" class="mono">{{ n.owner.address }}</a></td></tr>
                 <tr *ngFor="let kv of entries(n.data)"><td class="muted">{{ kv[0] }}</td><td class="mono">{{ kv[1] }}</td></tr>
               </table>

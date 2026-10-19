@@ -11,7 +11,7 @@
         Chains block <b>{{ data.live.height | number }}</b>
         <span class="dot">·</span> {{ data.totals.blocks | number }} blocks analysed ({{ windowLabel() }})
         <span class="dot">·</span> slot {{ mainchain ? (slot === null ? 'all' : slot) : profile.slot }}
-        <span *ngIf="!data.indexReady" class="badge badge-warning ml-2">indexing…</span>
+        <span *ngIf="!data.indexReady" class="badge badge-warning ms-2">indexing…</span>
       </div>
     </div>
     <div class="cp-controls">
@@ -143,7 +143,7 @@
       </div>
       <div class="cov-legend">
         <span><i class="lg dep"></i>deposit</span><span><i class="lg wd"></i>withdrawal</span><span><i class="lg vote"></i>vote cast</span>
-        <span class="ml-auto">← older · block {{ d.coverage[0]?.height | number }} … {{ d.coverage[d.coverage.length - 1]?.height | number }} · newer →</span>
+        <span class="ms-auto">← older · block {{ d.coverage[0]?.height | number }} … {{ d.coverage[d.coverage.length - 1]?.height | number }} · newer →</span>
       </div>
     </div>
 
@@ -183,7 +183,7 @@
         <div class="bundle" *ngFor="let b of d.live.bundles" [style.--sc]="colorOf(b.slot)">
           <div class="b-head">
             <app-sidechain-chip [slot]="b.slot" [name]="b.name"></app-sidechain-chip>
-            <span class="mono" [title]="b.hash">{{ short(b.hash) }}</span>
+            <span class="mono" [title]="b.hash"><app-truncate [text]="b.hash" [lastChars]="8"></app-truncate></span>
             <span class="b-amt"><app-amount [satoshis]="b.total" digitsInfo="1.2-8" [noFiat]="true"></app-amount> · {{ b.payouts.length }} payout{{ b.payouts.length === 1 ? '' : 's' }}</span>
           </div>
           <ng-container *ngIf="bundleProgress(b) as p">
@@ -275,7 +275,7 @@
           <div><span>Upvote expiry</span><b>{{ d.live.info.upvoteexpiryblocks }} blocks</b></div>
           <div><span>Max pending bundles</span><b>{{ d.live.info.maxpendingbundles }} per sidechain</b></div>
           <div><span>Escrow total</span><b>{{ d.live.info.escrowtotal | number:'1.2-2' }} CHN</b></div>
-          <div class="wide"><span>Drivechain state hash</span><b class="mono">{{ short(d.live.info.statehash) }}</b></div>
+          <div class="wide"><span>Drivechain state hash</span><b class="mono"><app-truncate [text]="d.live.info.statehash" [lastChars]="8"></app-truncate></b></div>
         </div>
       </div>
       <div class="box">
@@ -311,13 +311,13 @@
             <ng-container [ngSwitch]="feed">
               <ng-container *ngSwitchCase="'bmm'">
                 <td class="mono">
-                  <a *ngIf="sideUrl(e.slot, sideBlockPath(e.slot, e.sideBlock)) as u; else sb" [href]="u">{{ short(e.sideBlock) }}</a>
-                  <ng-template #sb>{{ short(e.sideBlock) }}</ng-template>
+                  <a *ngIf="sideUrl(e.slot, sideBlockPath(e.slot, e.sideBlock)) as u; else sb" [href]="u"><app-truncate [text]="e.sideBlock" [lastChars]="8"></app-truncate></a>
+                  <ng-template #sb><app-truncate [text]="e.sideBlock" [lastChars]="8"></app-truncate></ng-template>
                 </td>
                 <td class="text-right">{{ e.bid !== undefined && e.bid !== null ? (e.bid | number) + ' sats' : 'no bid' }}</td>
               </ng-container>
               <ng-container *ngSwitchCase="'bmm-requests'">
-                <td class="mono">{{ short(e.sideBlock) }}</td>
+                <td class="mono"><app-truncate [text]="e.sideBlock" [lastChars]="8"></app-truncate></td>
                 <td class="text-right">{{ e.bid | number }} sats <span class="badge" [class.badge-success]="e.accepted" [class.badge-secondary]="!e.accepted">{{ e.accepted ? 'accepted' : 'not accepted' }}</span></td>
               </ng-container>
               <ng-container *ngSwitchCase="'deposits'">
@@ -325,22 +325,22 @@
                 <td class="text-right pos"><app-amount [satoshis]="e.amount" digitsInfo="1.2-8" [noFiat]="true"></app-amount></td>
               </ng-container>
               <ng-container *ngSwitchCase="'withdrawals'">
-                <td class="mono">{{ short(e.bundle) }} · {{ e.payouts?.length }} payouts</td>
+                <td class="mono"><app-truncate [text]="e.bundle" [lastChars]="8"></app-truncate> · {{ e.payouts?.length }} payouts</td>
                 <td class="text-right neg"><app-amount [satoshis]="e.amount" digitsInfo="1.2-8" [noFiat]="true"></app-amount></td>
               </ng-container>
               <ng-container *ngSwitchCase="'bundles'">
-                <td class="mono">{{ short(e.hash) }}</td>
+                <td class="mono"><app-truncate [text]="e.hash" [lastChars]="8"></app-truncate></td>
                 <td class="text-right"><span class="badge" [class.badge-success]="e.type === 'paid'" [class.badge-danger]="e.type === 'failed'" [class.badge-secondary]="e.type === 'proposed'">{{ e.type }}</span></td>
               </ng-container>
               <ng-container *ngSwitchCase="'proposals'">
                 <td>{{ e.type === 'M1' ? 'proposed' : 'ack' }} <b>{{ e.title || '' }}</b></td>
-                <td class="mono text-right">{{ short(e.hash) }}</td>
+                <td class="mono text-right"><app-truncate [text]="e.hash" [lastChars]="8"></app-truncate></td>
               </ng-container>
             </ng-container>
             <td class="mono ev-tx">
               <ng-container *ngIf="e.txid || e.requestTxid">
-                <a *ngIf="mainchain; else extTx" [routerLink]="['/tx' | relativeUrl, e.txid || e.requestTxid]">{{ short(e.txid || e.requestTxid) }}</a>
-                <ng-template #extTx><a [href]="mainUrl('/tx/' + (e.txid || e.requestTxid))">{{ short(e.txid || e.requestTxid) }}</a></ng-template>
+                <a *ngIf="mainchain; else extTx" [routerLink]="['/tx' | relativeUrl, e.txid || e.requestTxid]"><app-truncate [text]="e.txid || e.requestTxid" [lastChars]="8"></app-truncate></a>
+                <ng-template #extTx><a [href]="mainUrl('/tx/' + (e.txid || e.requestTxid))"><app-truncate [text]="e.txid || e.requestTxid" [lastChars]="8"></app-truncate></a></ng-template>
               </ng-container>
             </td>
           </tr>

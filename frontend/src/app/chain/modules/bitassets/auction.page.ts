@@ -15,13 +15,13 @@ import { MiniLineChartComponent } from './line-chart.component';
   imports: [CommonModule, RouterModule, SharedModule, ActivityTableComponent, MiniLineChartComponent],
   styleUrls: ['../../components/module-page.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  styles: [`.pair-title { gap: 10px; flex-wrap: wrap; font-size: 1.6rem; }`],
   template: `
   <div class="container-xl mp">
     <ng-container *ngIf="data$ | async as d; else loading">
       <ng-container *ngIf="d.auction as a; else unknown">
-        <h1><app-svg-images name="chain-mark" [fill]="profile.id" width="30" height="30" class="cmark"></app-svg-images>
-          Auction of <a [routerLink]="['/asset' | relativeUrl, a.base_id || 'CHN']">{{ a.base }}</a> for <a [routerLink]="['/asset' | relativeUrl, a.quote_id || 'CHN']">{{ a.quote }}</a></h1>
-        <div class="sub mono"><a [routerLink]="['/tx' | relativeUrl, a.auction]">{{ a.auction }}</a> <span class="pill" [class.on]="a.status === 'open'">{{ a.status }}</span></div>
+        <h1 class="pair-title">Auction of <app-asset-badge [id]="a.base_id" [label]="a.base" [size]="36"></app-asset-badge> for <app-asset-badge [id]="a.quote_id" [label]="a.quote" [size]="36"></app-asset-badge></h1>
+        <div class="sub mono"><app-truncate [text]="a.auction" [link]="['/tx' | relativeUrl, a.auction]" [lastChars]="12"></app-truncate> <span class="pill" [class.on]="a.status === 'open'">{{ a.status }}</span></div>
         <div class="kpis">
           <div class="kpi"><div class="l">Selling</div><div class="v">{{ a.amount | number:'1.0-4' }}</div><div class="s">{{ a.base }} · {{ a.remaining | number:'1.0-4' }} left</div></div>
           <div class="kpi"><div class="l">Unit price now</div><div class="v">{{ a.unit_price | number:'1.0-8' }}</div><div class="s">{{ a.quote }} per {{ a.base }}</div></div>

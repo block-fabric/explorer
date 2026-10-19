@@ -21,11 +21,11 @@
             <tr *ngFor="let a of block.bmm">
               <td><app-sidechain-chip [slot]="a.slot" [name]="a.name" path=""></app-sidechain-chip></td>
               <td class="mono">
-                <a *ngIf="sideExplorer(a.slot, sideBlockPath(a.slot, a.sideBlock)) as url; else plainSide" [href]="url">{{ short(a.sideBlock) }}</a>
-                <ng-template #plainSide><span [title]="a.sideBlock">{{ short(a.sideBlock) }}</span></ng-template>
+                <a *ngIf="sideExplorer(a.slot, sideBlockPath(a.slot, a.sideBlock)) as url; else plainSide" [href]="url"><app-truncate [text]="a.sideBlock" [lastChars]="8"></app-truncate></a>
+                <ng-template #plainSide><span [title]="a.sideBlock"><app-truncate [text]="a.sideBlock" [lastChars]="8"></app-truncate></span></ng-template>
               </td>
               <td class="text-right"><ng-container *ngIf="a.bid !== undefined && a.bid !== null; else noBid"><app-amount [satoshis]="a.bid" digitsInfo="1.0-8" [noFiat]="true"></app-amount></ng-container><ng-template #noBid><span class="text-muted">no bid</span></ng-template></td>
-              <td class="mono d-none d-md-table-cell"><a *ngIf="a.requestTxid" [routerLink]="['/tx' | relativeUrl, a.requestTxid]">{{ short(a.requestTxid) }}</a></td>
+              <td class="mono d-none d-md-table-cell"><a *ngIf="a.requestTxid" [routerLink]="['/tx' | relativeUrl, a.requestTxid]"><app-truncate [text]="a.requestTxid" [lastChars]="8"></app-truncate></a></td>
             </tr>
           </tbody>
         </table>
@@ -38,9 +38,9 @@
           <tbody>
             <tr *ngFor="let r of unaccepted">
               <td><app-sidechain-chip [slot]="r.slot" [name]="r.name"></app-sidechain-chip></td>
-              <td class="mono" [title]="r.sideBlock">{{ short(r.sideBlock) }}</td>
+              <td class="mono" [title]="r.sideBlock"><app-truncate [text]="r.sideBlock" [lastChars]="8"></app-truncate></td>
               <td class="text-right"><app-amount [satoshis]="r.bid" digitsInfo="1.0-8" [noFiat]="true"></app-amount></td>
-              <td class="mono"><a [routerLink]="['/tx' | relativeUrl, r.txid]">{{ short(r.txid) }}</a></td>
+              <td class="mono"><a [routerLink]="['/tx' | relativeUrl, r.txid]"><app-truncate [text]="r.txid" [lastChars]="8"></app-truncate></a></td>
             </tr>
           </tbody>
         </table>
@@ -56,7 +56,7 @@
               <td><app-sidechain-chip [slot]="d.slot" [name]="d.name"></app-sidechain-chip></td>
               <td class="mono dest" [title]="d.destination">{{ d.destination }}</td>
               <td class="text-right"><app-amount [satoshis]="d.amount" digitsInfo="1.2-8" [noFiat]="true"></app-amount></td>
-              <td class="mono"><a [routerLink]="['/tx' | relativeUrl, d.txid]">{{ short(d.txid) }}</a></td>
+              <td class="mono"><a [routerLink]="['/tx' | relativeUrl, d.txid]"><app-truncate [text]="d.txid" [lastChars]="8"></app-truncate></a></td>
             </tr>
           </tbody>
         </table>
@@ -70,9 +70,9 @@
           <tbody>
             <tr *ngFor="let w of block.withdrawals">
               <td><app-sidechain-chip [slot]="w.slot" [name]="w.name"></app-sidechain-chip></td>
-              <td class="mono" [title]="w.bundle">{{ short(w.bundle) }} <span class="text-muted">· {{ w.payouts.length }} payout{{ w.payouts.length === 1 ? '' : 's' }}</span></td>
+              <td class="mono" [title]="w.bundle"><app-truncate [text]="w.bundle" [lastChars]="8"></app-truncate> <span class="text-muted">· {{ w.payouts.length }} payout{{ w.payouts.length === 1 ? '' : 's' }}</span></td>
               <td class="text-right"><app-amount [satoshis]="w.amount" digitsInfo="1.2-8" [noFiat]="true"></app-amount></td>
-              <td class="mono"><a [routerLink]="['/tx' | relativeUrl, w.txid]">{{ short(w.txid) }}</a></td>
+              <td class="mono"><a [routerLink]="['/tx' | relativeUrl, w.txid]"><app-truncate [text]="w.txid" [lastChars]="8"></app-truncate></a></td>
             </tr>
           </tbody>
         </table>
@@ -89,7 +89,7 @@
             <tr *ngFor="let v of castVotes">
               <td><app-sidechain-chip [slot]="v.slot" [name]="v.name"></app-sidechain-chip></td>
               <td><span class="vote" [class.up]="v.vote === 'upvote'" [class.down]="v.vote === 'downvote'">{{ v.vote === 'upvote' ? '▲ upvote' : '▼ downvote all' }}</span></td>
-              <td class="mono" [title]="v.bundle || ''">{{ v.bundle ? short(v.bundle) : (v.vote === 'upvote' ? '#' + v.value : '') }}</td>
+              <td class="mono"><app-truncate *ngIf="v.bundle; else bundleIndex" [text]="v.bundle" [lastChars]="8"></app-truncate><ng-template #bundleIndex>{{ v.vote === 'upvote' ? '#' + v.value : '' }}</ng-template></td>
               <td class="text-right">{{ scoreAfter(v.slot, v.bundle) ?? '' }}</td>
             </tr>
           </tbody>
@@ -104,12 +104,12 @@
             <tr *ngFor="let b of block.bundlesProposed">
               <td><app-sidechain-chip [slot]="b.slot" [name]="b.name"></app-sidechain-chip></td>
               <td><span class="badge badge-secondary">proposed</span></td>
-              <td class="mono" [title]="b.hash">{{ short(b.hash) }}</td>
+              <td class="mono" [title]="b.hash"><app-truncate [text]="b.hash" [lastChars]="8"></app-truncate></td>
             </tr>
             <tr *ngFor="let b of block.bundlesClosed">
               <td><app-sidechain-chip [slot]="b.slot" [name]="b.name"></app-sidechain-chip></td>
               <td><span class="badge" [class.badge-success]="b.paid" [class.badge-danger]="!b.paid">{{ b.paid ? 'paid' : 'failed' }}</span></td>
-              <td class="mono" [title]="b.hash">{{ short(b.hash) }}</td>
+              <td class="mono" [title]="b.hash"><app-truncate [text]="b.hash" [lastChars]="8"></app-truncate></td>
             </tr>
           </tbody>
         </table>
@@ -124,13 +124,13 @@
               <td>Slot {{ p.slot }}</td>
               <td><span class="badge badge-secondary">proposed</span></td>
               <td><b>{{ p.title || '(undeclared)' }}</b> <span class="text-muted small">{{ p.description }}</span></td>
-              <td class="mono" [title]="p.hash">{{ short(p.hash) }}</td>
+              <td class="mono" [title]="p.hash"><app-truncate [text]="p.hash" [lastChars]="8"></app-truncate></td>
             </tr>
             <tr *ngFor="let a of block.acks">
               <td>Slot {{ a.slot }}</td>
               <td><span class="badge badge-info">ack</span></td>
               <td>{{ a.title || '' }}</td>
-              <td class="mono" [title]="a.hash">{{ short(a.hash) }}</td>
+              <td class="mono" [title]="a.hash"><app-truncate [text]="a.hash" [lastChars]="8"></app-truncate></td>
             </tr>
           </tbody>
         </table>
@@ -152,7 +152,7 @@
       <table class="table table-borderless table-sm dc-table mb-0">
         <tbody>
           <tr><td class="lbl">Kind</td><td><span class="badge" [class.badge-primary]="p.kind === 'pos'" [class.badge-success]="p.kind === 'bmm'">{{ p.kind === 'pos' ? 'proof of stake' : 'blind merged mining' }}</span>
-            <span *ngIf="p.ack" class="badge badge-success ml-1">BMM anchor</span></td></tr>
+            <span *ngIf="p.ack" class="badge badge-success ms-1">BMM anchor</span></td></tr>
           <tr *ngIf="p.slot !== undefined && p.slot !== null"><td class="lbl">Slot</td><td>{{ p.slot | number }} </td></tr>
           <tr *ngIf="p.proposer"><td class="lbl">Proposer</td><td class="mono"><a [routerLink]="['/validators' | relativeUrl]">{{ p.proposer }}</a></td></tr>
           <tr *ngIf="p.finality"><td class="lbl">Finality</td>
@@ -192,7 +192,7 @@
             <td>
               <a *ngIf="mainExplorer('/block/' + (carrier.hash || carrier.height)) as url; else plainMain" [href]="url">{{ carrier.height }}</a>
               <ng-template #plainMain><span [title]="carrier.hash">{{ carrier.height }}</span></ng-template>
-              <span class="text-muted mono small ml-2">{{ short(carrier.hash) }}</span>
+              <span class="text-muted mono small ms-2"><app-truncate [text]="carrier.hash" [lastChars]="8"></app-truncate></span>
             </td>
           </tr>
           <tr>
@@ -202,8 +202,8 @@
               <ng-template #noBid2><span class="text-muted">none found</span></ng-template>
               <ng-container *ngIf="carrier.requestTxid">
                 &middot; request
-                <a *ngIf="mainExplorer('/tx/' + carrier.requestTxid) as url; else plainReq" [href]="url" class="mono">{{ short(carrier.requestTxid) }}</a>
-                <ng-template #plainReq><span class="mono" [title]="carrier.requestTxid">{{ short(carrier.requestTxid) }}</span></ng-template>
+                <a *ngIf="mainExplorer('/tx/' + carrier.requestTxid) as url; else plainReq" [href]="url" class="mono"><app-truncate [text]="carrier.requestTxid" [lastChars]="8"></app-truncate></a>
+                <ng-template #plainReq><span class="mono" [title]="carrier.requestTxid"><app-truncate [text]="carrier.requestTxid" [lastChars]="8"></app-truncate></span></ng-template>
               </ng-container>
             </td>
           </tr>
