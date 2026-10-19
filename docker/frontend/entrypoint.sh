@@ -39,8 +39,9 @@ __BLOCK_WEIGHT_UNITS__=${BLOCK_WEIGHT_UNITS:=4000000}
 __MEMPOOL_BLOCKS_AMOUNT__=${MEMPOOL_BLOCKS_AMOUNT:=8}
 __BASE_MODULE__=${BASE_MODULE:=mempool}
 __ROOT_NETWORK__=${ROOT_NETWORK:=}
-__MEMPOOL_WEBSITE_URL__=${MEMPOOL_WEBSITE_URL:=https://mempool.space}
-__LIQUID_WEBSITE_URL__=${LIQUID_WEBSITE_URL:=https://liquid.network}
+# Chains Explorer: '=' not ':=', so that an empty value stays empty instead of falling back to mempool.space
+__MEMPOOL_WEBSITE_URL__=${MEMPOOL_WEBSITE_URL=https://mempool.space}
+__LIQUID_WEBSITE_URL__=${LIQUID_WEBSITE_URL=https://liquid.network}
 __MINING_DASHBOARD__=${MINING_DASHBOARD:=true}
 __LIGHTNING__=${LIGHTNING:=false}
 __AUDIT__=${AUDIT:=false}
@@ -56,7 +57,7 @@ __SIGNET_TX_FIRST_SEEN_START_HEIGHT__=${SIGNET_TX_FIRST_SEEN_START_HEIGHT:=0}
 __REGTEST_TX_FIRST_SEEN_START_HEIGHT__=${REGTEST_TX_FIRST_SEEN_START_HEIGHT:=0}
 __ACCELERATOR__=${ACCELERATOR:=false}
 __ACCELERATOR_BUTTON__=${ACCELERATOR_BUTTON:=true}
-__SERVICES_API__=${SERVICES_API:=https://mempool.space/api/v1/services}
+__SERVICES_API__=${SERVICES_API=https://mempool.space/api/v1/services}
 __PUBLIC_ACCELERATIONS__=${PUBLIC_ACCELERATIONS:=false}
 __HISTORICAL_PRICE__=${HISTORICAL_PRICE:=true}
 __ADDITIONAL_CURRENCIES__=${ADDITIONAL_CURRENCIES:=false}
@@ -69,6 +70,14 @@ __CHAIN_EXPLORER_URLS__=${CHAIN_EXPLORER_URLS:=}
 export __CHAIN_PROFILE__
 export __CHAIN_NETWORK__
 export __CHAIN_EXPLORER_URLS__
+
+# Chains Explorer: the chain's name in the page title and link previews (index.html says "Chains Explorer")
+case "${CHAIN_PROFILE:-chains}" in
+  bitnames) __CHAIN_NAME__=BitNames ;; bitassets) __CHAIN_NAME__=BitAssets ;; fastblocks) __CHAIN_NAME__=FastBlocks ;;
+  zside) __CHAIN_NAME__=zSide ;; thunder) __CHAIN_NAME__=Thunder ;; hivemind) __CHAIN_NAME__=Hivemind ;;
+  layers) __CHAIN_NAME__=Layers ;; *) __CHAIN_NAME__=Chains ;;
+esac
+for f in $(find /var/www/mempool -name index.html); do sed -i "s/Chains Explorer/${__CHAIN_NAME__} Explorer/g" "$f"; done
 
 # Export as environment variables to be used by envsubst
 export __MAINNET_ENABLED__

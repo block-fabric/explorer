@@ -26,9 +26,6 @@
         }
         <div class="site-options language-selector d-flex justify-content-center align-items-center" [class]="{'services': isServicesPage}">
           <div class="selector">
-            <app-language-selector></app-language-selector>
-          </div>
-          <div class="selector">
             <app-timezone-selector></app-timezone-selector>
           </div>
           <div class="selector d-none" [ngClass]="isServicesPage ? 'd-lg-flex' : 'd-md-flex'">
@@ -85,7 +82,7 @@
           <p class="category">About</p>
           <p><a [routerLink]="['/about']">About this explorer</a></p>
           <p><a href="https://github.com/mempool/mempool" target="_blank" rel="noopener">Built on mempool (AGPL-3.0)</a></p>
-          <p><a href="/3rdpartylicenses.txt">Third-party Licenses</a></p>
+          <p><a href="3rdpartylicenses.txt">Third-party Licenses</a></p>
         </div>
     </div>
     <div class="row version" [style]="{'background-color': isServicesPage ? 'var(--bg)' : ''}">

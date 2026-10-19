@@ -248,7 +248,7 @@
         @if (!officialMempoolSpace && (error.status === 413 || error.status === 405 || error.status === 504)) {
         <ng-container i18n="Electrum server limit exceeded error">
           <br>
-          <i>There are too many transactions on this address, more than your backend can handle. See more on <a href="/docs/faq#address-lookup-issues">setting up a stronger backend</a>.</i>
+          <i>The address index is not ready yet (it is built when the explorer starts), or this address has more transactions than it can serve. Try again in a few minutes.</i>
           <br><br>
           Consider viewing this address on the official Mempool website instead:
         </ng-container>

@@ -67,7 +67,7 @@ import { SeoService } from '@app/services/seo.service';
     <p>This explorer is a modified version of the <a href="https://github.com/mempool/mempool" target="_blank" rel="noopener">mempool</a>
       open-source explorer, used under the GNU Affero General Public License v3.0; its modifications are under the same license.
       It reads the chain from its own node over RPC. "mempool" is a trademark of Mempool Space K.K.; this explorer is not affiliated with it.</p>
-    <p><a href="/3rdpartylicenses.txt">Third-party licenses</a></p>
+    <p><a href="3rdpartylicenses.txt">Third-party licenses</a></p>
   </div>`,
 })
 export class ChainAboutPage implements OnInit {

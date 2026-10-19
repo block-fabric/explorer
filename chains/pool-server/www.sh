@@ -16,6 +16,9 @@ for p in $PROFILES; do
   cp -r "$OUT/en-US.tmp" "$OUT/www/$p"
   sed -i -e "s#<base href=\"/\">#<base href=\"/$p/\">#" -e "s#src=\"/resources/config.js\"#src=\"/$p/resources/config.js\"#" "$OUT/www/$p/index.html"
   grep -q "<base href=\"/$p/\">" "$OUT/www/$p/index.html"
+  # the chain's name in the page title and link previews (index.html says "Chains Explorer")
+  case $p in bitnames) n=BitNames ;; bitassets) n=BitAssets ;; fastblocks) n=FastBlocks ;; zside) n=zSide ;; *) n=${p^} ;; esac
+  sed -i "s/Chains Explorer/$n Explorer/g" "$OUT/www/$p/index.html"
   w=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['MEMPOOL']['BLOCK_WEIGHT_UNITS'])" "$CFG/$p.json")
   docker run --rm -e CHAIN_PROFILE=$p -e CHAIN_NETWORK=testnet -e CHAIN_EXPLORER_URLS="$URLS" -e BLOCK_WEIGHT_UNITS=$w \
     -e MINING_DASHBOARD=false -e HISTORICAL_PRICE=false -e ACCELERATOR_BUTTON=false -e NGINX_PROTOCOL=https -e NGINX_PORT=443 \
