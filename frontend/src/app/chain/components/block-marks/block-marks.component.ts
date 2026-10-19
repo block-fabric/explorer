@@ -24,13 +24,13 @@ import { PROFILE, explorerUrl, profileBySlot } from '@app/chain/profiles';
       </div>
 
       <!-- the miner alone (block and transaction pages) -->
-      <span *ngIf="mode === 'miner' && m.summary as s" class="badge miner-badge" [title]="'From the coinbase of this block'">{{ s.miner || 'Unknown' }}</span>
+      <span *ngIf="mode === 'miner' && m.summary as s" class="badge miner-badge" [title]="'From the coinbase of this block' + (s.datum ? ' (DATUM: pool tag and miner tag)' : '')">{{ s.miner || 'Unknown' }}{{ s.datum && s.minerTag ? ' · ' + s.minerTag : '' }}</span>
       <span *ngIf="mode === 'miner' && !m.pos && !m.summary && m.carrier as c" class="badge miner-badge" title="A sidechain block: made by its BMM bidder, committed by this Chains block">BMM · Chains block {{ c.height | number }}</span>
       <span *ngIf="mode === 'miner' && m.pos as p" class="badge miner-badge" [title]="posTitle(p)">{{ p.kind === 'pos' ? 'Validator ' + (p.proposer || '?').slice(0, 12) + '…' : 'BMM block (no validator)' }}</span>
 
       <div *ngIf="mode === 'below' || mode === 'inline'" class="marks" [class.inline]="mode === 'inline'">
         <ng-container *ngIf="m.summary as s">
-          <span *ngIf="mode === 'below'" class="miner" [title]="'Mined by ' + (s.miner || 'an unknown miner')">{{ s.miner || 'Unknown' }}</span>
+          <span *ngIf="mode === 'below'" class="miner" [title]="'Mined by ' + (s.miner || 'an unknown miner') + (s.datum ? ', DATUM miner ' + (s.minerTag || 'without a tag') : '')">{{ s.miner || 'Unknown' }}</span>
           <span class="icons">
             <span *ngFor="let a of s.bmm" class="sc" [style.color]="colorOf(a.slot)" [title]="a.name + ' block carried' + (a.bid != null ? ', bid ' + a.bid + ' sats' : '')">
               <app-svg-images name="chain-mark" [fill]="profileId(a.slot)" [width]="px" [height]="px"></app-svg-images>

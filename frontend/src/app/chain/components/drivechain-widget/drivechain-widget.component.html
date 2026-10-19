@@ -1,6 +1,6 @@
 <div class="card dc-card">
   <div class="card-body">
-    <ng-container *ngIf="kind !== 'peg' && kind !== 'stake'">
+    <ng-container *ngIf="kind !== 'peg' && kind !== 'stake' && kind !== 'mining'">
       <ng-container *ngIf="data$ | async as d; else loading">
 
         <!-- treasury -->
@@ -84,6 +84,30 @@
         </ng-container>
 
         <a class="more" [routerLink]="[cockpitPath | relativeUrl]">{{ profile.mainchain ? 'Drivechain cockpit' : 'BMM and peg' }} →</a>
+      </ng-container>
+    </ng-container>
+
+    <!-- mining (Chains): hashrate, aserti3, pools by coinbase tag, halving -->
+    <ng-container *ngIf="kind === 'mining'">
+      <ng-container *ngIf="mining$ | async as m; else loading">
+        <div class="big-row">
+          <div class="big"><div class="big-value">{{ hashrate(m.totals.hashrate) }}</div><div class="big-label">hashrate, 144 blocks</div></div>
+          <div class="big"><div class="big-value">{{ diff(m.asert?.nextDifficulty ?? m.totals.difficulty) }}</div><div class="big-label">next block difficulty</div></div>
+          <div class="big" *ngIf="m.asert && !m.asert.bootstrap">
+            <div class="big-value" [class.pos]="m.asert.drift < 0" [class.neg]="m.asert.drift > 0">{{ m.asert.blocksBehind > 0 ? '-' : '+' }}{{ (m.asert.blocksBehind < 0 ? -m.asert.blocksBehind : m.asert.blocksBehind) | number:'1.0-0' }}</div>
+            <div class="big-label">blocks {{ m.asert.drift > 0 ? 'behind' : 'ahead of' }} schedule</div></div>
+        </div>
+        <div class="list">
+          <div class="li" *ngFor="let p of m.pools.slice(0, 5)">
+            <span class="nm" [title]="p.tag">{{ p.tag }}</span>
+            <span class="bar"><span class="fill" [style.width.%]="100 * p.share" [style.background]="profile.color"></span></span>
+            <span class="num">{{ pct(p.share, 0) }}</span>
+            <span class="flow">{{ p.datum ? 'DATUM · ' + p.miners.length + (p.miners.length === 1 ? ' miner' : ' miners') : p.blocks + ' blocks' }}</span>
+          </div>
+        </div>
+        <div class="b-bar mt-2"><span class="b-fill" [style.width.%]="100 * m.halving.progress" [style.background]="profile.color"></span>
+          <span class="b-txt">halving: {{ m.halving.blocksLeft | number }} blocks to {{ m.halving.nextHalving | number }}</span></div>
+        <a class="more" [routerLink]="['/mining' | relativeUrl]">Mining →</a>
       </ng-container>
     </ng-container>
 

@@ -11,6 +11,8 @@ const chains: ChainFrontendModule = {
     mark: ['M11 16h10'], markRects: [{ x: 3, y: 9, w: 12, h: 14, rx: 3.5 }, { x: 17, y: 9, w: 12, h: 14, rx: 3.5 }],
     bech32: { main: 'chn', testnet: 'tchn', regtest: 'rchn' }, blockWeightUnits: 800000,
   },
+  nav: [{ path: '/mining', title: 'Mining: pools, DATUM miners, hashrate, difficulty', icon: 'nav-pickaxe' }],
+  routes: [{ path: 'mining', loadChildren: () => import('./mining/mining.module').then(m => m.ChainMiningModule) }],
 };
 
 export default chains;

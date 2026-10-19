@@ -77,6 +77,8 @@ export interface DrivechainBlockSummary {
   bundlesClosed: number;
   bids: number;
   miner: string | null;
+  minerTag?: string | null;
+  datum?: boolean;
   fees: number | null;
 }
 

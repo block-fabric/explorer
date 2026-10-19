@@ -19,19 +19,23 @@ import { PROFILE, explorerUrl, profileBySlot } from '@app/chain/profiles';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DrivechainWidgetComponent implements OnInit {
-  @Input() kind: 'treasury' | 'bmm' | 'bundles' | 'peg' | 'stake' = 'treasury';
+  @Input() kind: 'treasury' | 'bmm' | 'bundles' | 'peg' | 'stake' | 'mining' = 'treasury';
 
   profile = PROFILE;
   cockpitPath = PROFILE.mainchain ? '/drivechain' : '/bmm';
   data$: Observable<any>;
   peg$: Observable<any[]>;
   stake$: Observable<any>;
+  mining$: Observable<any>;
 
   constructor(private live: DrivechainLiveService, private api: ChainApiService) {}
 
   ngOnInit(): void {
     this.data$ = this.live.cockpit$;
     this.peg$ = this.live.peg$;
+    if (this.kind === 'mining') {
+      this.mining$ = timer(0, 30000).pipe(switchMap(() => this.api.get<any>('drivechain/mining', { window: 144 }).pipe(catchError(() => of(null)))));
+    }
     if (this.kind === 'stake') {
       this.stake$ = timer(0, 15000).pipe(
         switchMap(() => combineLatest([
@@ -100,6 +104,21 @@ export class DrivechainWidgetComponent implements OnInit {
   epochProgress(pos: any, vals: any): number {
     const first = vals?.firstslot ?? (pos.epoch * 40);
     return Math.min(1, Math.max(0, (pos.slot - first + 1) / 40));
+  }
+
+  hashrate(h: number): string {
+    if (!h) { return '0 H/s'; }
+    const u = ['H/s', 'kH/s', 'MH/s', 'GH/s', 'TH/s', 'PH/s', 'EH/s'];
+    let i = 0;
+    while (h >= 1000 && i < u.length - 1) { h /= 1000; i++; }
+    return h.toFixed(h < 10 ? 2 : 1) + ' ' + u[i];
+  }
+
+  diff(d: number): string {
+    if (d === null || d === undefined) { return '–'; }
+    const u: [number, string][] = [[1e12, ' T'], [1e9, ' G'], [1e6, ' M'], [1e3, ' k']];
+    for (const [x, s] of u) { if (d >= x) { return (d / x).toFixed(2) + s; } }
+    return d.toFixed(d < 10 ? 3 : 1);
   }
 
   keyShort(k: string): string { return k ? k.slice(0, 10) + '…' : '?'; }

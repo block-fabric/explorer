@@ -7,6 +7,7 @@ import { MODULE, PROFILE, SIDECHAIN_PROFILES, profileBySlot } from './profile';
 import drivechain from './drivechain';
 import { ChainModuleContext } from './module';
 import { cockpit } from './cockpit';
+import { AsertParams, miningStats } from './mining';
 import { anchorAckedIn, anchorOf, anchorOfTicket } from './anchors';
 
 // Read-only JSON for the chain profiles. Rate limiting is nginx's, as for every /api/v1 route.
@@ -107,7 +108,8 @@ class DrivechainRoutes {
         .get(prefix + 'drivechain/summary', wrap(this.$getSummary))
         .get(prefix + 'drivechain/blocks', wrap(this.$getBlocks))
         .get(prefix + 'drivechain/block/:id', wrap(this.$getBlock))
-        .get(prefix + 'drivechain/tx/:txid', wrap(this.$getTx));
+        .get(prefix + 'drivechain/tx/:txid', wrap(this.$getTx))
+        .get(prefix + 'drivechain/mining', wrap(this.$getMining));
     } else {
       app
         .get(prefix + 'sidechain/summary', wrap(this.$getSidechainSummary))
@@ -247,6 +249,39 @@ class DrivechainRoutes {
       },
       indexReady: drivechain.isReady(),
     });
+  };
+
+  private asert: AsertParams | null = null;
+
+  /** the aserti3 anchor (chains/src/kernel/chainparams.cpp: height 2016, half-life 2 h, 60 s spacing), read once */
+  private async asertParams(): Promise<AsertParams | null> {
+    if (this.asert) { return this.asert; }
+    try {
+      const ANCHOR = 2016;
+      const [anchor, parent, info] = await Promise.all([
+        bitcoinClient.getBlockHash(ANCHOR).then((h: string) => bitcoinClient.getBlockHeader(h, true)),
+        bitcoinClient.getBlockHash(ANCHOR - 1).then((h: string) => bitcoinClient.getBlockHeader(h, true)),
+        bitcoinClient.getBlockchainInfo(),
+      ]);
+      this.asert = {
+        anchorHeight: ANCHOR, anchorDifficulty: anchor.difficulty, anchorParentTime: parent.time,
+        spacing: 60, halfLife: 7200, minDifficultyBlocks: info.chain !== 'main',
+      };
+    } catch (e) {
+      return null; // not past the anchor yet
+    }
+    return this.asert;
+  }
+
+  /** GET drivechain/mining?window=   pools by coinbase tag (DATUM miners), hashrate, difficulty, aserti3, epochs */
+  private $getMining = async (req: Request, res: Response): Promise<void> => {
+    const window = intParam(req.query.window, 1440, 0, 1e7) as number;
+    const asert = await this.asertParams();
+    res.json(await cached('mining:' + window + ':' + drivechain.tipHeight(), 10000, async () => {
+      const stats = miningStats(window, asert);
+      const mining: any = await cached('mininginfo', 10000, () => bitcoinClient.getMiningInfo().catch(() => null));
+      return { ...stats, node: mining ? { difficulty: mining.difficulty, networkhashps: mining.networkhashps } : null, indexReady: drivechain.isReady() };
+    }));
   };
 
   private $getSummary = async (req: Request, res: Response): Promise<void> => {

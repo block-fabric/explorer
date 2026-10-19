@@ -80,6 +80,12 @@ export interface MinerInfo {
   subsidy: number;             // sats: reward - fees
   txCount: number;
   weight: number;
+  difficulty: number;
+  bits: string;
+  minDifficulty: boolean;      // mined at the proof-of-work limit (bootstrap, or a test network's min-difficulty rule)
+  datum: boolean;              // a DATUM coinbase: pool tag and miner tag separated by 0x0f
+  poolTag: string | null;      // the first coinbase tag (DATUM: the pool's)
+  minerTag: string | null;     // DATUM: the miner's own tag
 }
 
 export interface DrivechainBlock {
@@ -116,6 +122,8 @@ export interface DrivechainBlockSummary {
   bundlesClosed: number;
   bids: number;
   miner: string | null;
+  minerTag: string | null;
+  datum: boolean;
   fees: number | null;
 }
 
@@ -125,7 +133,7 @@ interface SlotInfo {
   activationheight: number;
 }
 
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3; // 3: difficulty and DATUM tags of the miner
 
 function slotName(slot: number, sidechains: SlotInfo[]): string {
   return sidechains.find(s => s.slot === slot)?.title || profileBySlot(slot)?.name || `Slot ${slot}`;
@@ -155,20 +163,53 @@ export function coinbaseText(hex: string): string[] {
   return runs.filter(r => r.length >= 4);
 }
 
+/**
+ * The tags of a coinbase: the push after the block height. DATUM (OCEAN's protocol, BlockFabric) writes the pool's
+ * tag and the miner's own tag in it, separated by 0x0f (as upstream's parseDATUMTemplateCreator reads it).
+ */
+export function coinbaseTags(hex: string): { datum: boolean; pool: string | null; miner: string | null } {
+  const none = { datum: false, pool: null, miner: null };
+  const b = Buffer.from(hex || '', 'hex');
+  if (b.length < 2) { return none; }
+  let i = 1 + b[0];                 // skip the height push
+  if (i >= b.length) { return none; }
+  let n = b[i];
+  if (n === 0x4c) { i++; n = b[i]; }
+  if (!n || i + 1 + n > b.length) { return none; }
+  const raw = b.subarray(i + 1, i + 1 + n);
+  const clean = (x: Buffer) => x.toString('latin1').replace(/[^\x20-\x7e]/g, '').trim() || null;
+  const sep = raw.indexOf(0x0f);
+  if (sep >= 0) {
+    return { datum: true, pool: clean(raw.subarray(0, sep)), miner: clean(raw.subarray(sep + 1)) };
+  }
+  return { datum: false, pool: clean(raw), miner: null };
+}
+
+/** The compact proof-of-work limit of Chains (all networks): a block at it was mined at the minimum difficulty */
+const POW_LIMIT_BITS = '1d00ffff';
+
 function minerInfo(block: any): MinerInfo {
   const cb = block.tx[0];
   const runs = coinbaseText(cb.vin?.[0]?.coinbase);
   const text = runs.join(' · ');
+  const tags = coinbaseTags(cb.vin?.[0]?.coinbase);
   let tag: string | null = null;
   for (const [re, name] of KNOWN_TAGS) {
     if (re.test(text)) { tag = name; break; }
+  }
+  if (!tag && tags.pool && tags.pool.length >= 3) {
+    tag = tags.pool.slice(0, 32);
   }
   if (!tag && runs.length) {
     tag = runs.reduce((a, r) => r.length > a.length ? r : a, '').slice(0, 32);
   }
   const reward = (cb.vout as any[]).reduce((a, o) => a + sats(o.value), 0);
   const fees = (block.tx as any[]).slice(1).reduce((a, t) => a + sats(t.fee), 0);
-  return { tag, coinbaseText: text.slice(0, 120), reward, fees, subsidy: reward - fees, txCount: block.tx.length, weight: block.weight };
+  return {
+    tag, coinbaseText: text.slice(0, 120), reward, fees, subsidy: reward - fees, txCount: block.tx.length, weight: block.weight,
+    difficulty: block.difficulty, bits: block.bits, minDifficulty: block.bits === POW_LIMIT_BITS,
+    datum: tags.datum, poolTag: tags.pool, minerTag: tags.miner,
+  };
 }
 
 async function mapLimit<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R>): Promise<R[]> {
@@ -622,6 +663,8 @@ class Drivechain {
       bundlesClosed: b.bundlesClosed.length,
       bids: b.bmm.reduce((a, x) => a + (x.bid ?? 0), 0),
       miner: b.miner?.tag ?? null,
+      minerTag: b.miner?.minerTag ?? null,
+      datum: b.miner?.datum ?? false,
       fees: b.miner?.fees ?? null,
     };
   }

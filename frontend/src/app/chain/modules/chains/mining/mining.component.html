@@ -1,0 +1,136 @@
+<div class="container-xl mn" [style.--accent]="profile.color">
+  <div class="mn-head">
+    <div>
+      <h1><app-svg-images name="nav-pickaxe" width="28" height="28" class="mn-icon"></app-svg-images> Mining</h1>
+      <div class="mn-sub" *ngIf="data">{{ data.blocks | number }} blocks, {{ data.from | number }}–{{ data.to | number }} ({{ windowLabel() }}) · pools named by their coinbase tag</div>
+    </div>
+    <div class="btn-group btn-group-sm">
+      <button *ngFor="let w of windows" class="btn" [class.btn-primary]="window === w.blocks" [class.btn-secondary]="window !== w.blocks" (click)="setWindow(w.blocks)">{{ w.label }}</button>
+    </div>
+  </div>
+
+  <div *ngIf="error && !data" class="alert alert-warning">Mining statistics are not available: {{ error }}</div>
+  <div *ngIf="!data && !error" class="skeleton-loader" style="height: 300px"></div>
+
+  <ng-container *ngIf="data as d">
+    <div class="kpis">
+      <div class="kpi">
+        <div class="k-label">Hashrate</div>
+        <div class="k-value">{{ hashrate(d.totals.hashrate) }}</div>
+        <div class="k-sub">from the work of the blocks · node: {{ hashrate(d.node?.networkhashps) }}</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">Difficulty</div>
+        <div class="k-value">{{ diff(d.totals.regularDifficulty ?? d.totals.difficulty) }}</div>
+        <div class="k-sub">{{ d.totals.minDifficultyTip ? 'last regular block (the tip is a min-difficulty one)' : 'of the tip' }} · {{ d.totals.minDifficultyBlocks | number }} min-difficulty blocks</div>
+      </div>
+      <div class="kpi" *ngIf="d.asert && !d.asert.bootstrap">
+        <div class="k-label">Next block</div>
+        <div class="k-value">{{ diff(d.asert.nextDifficulty) }}</div>
+        <div class="k-sub" *ngIf="d.totals.regularDifficulty as r">{{ (d.asert.nextDifficulty / r - 1) * 100 | number:'1.1-1' }}% vs the last regular block · aserti3</div>
+      </div>
+      <div class="kpi" *ngIf="d.asert && !d.asert.bootstrap">
+        <div class="k-label">Schedule</div>
+        <div class="k-value" [class.pos]="d.asert.drift < 0" [class.neg]="d.asert.drift > 0">{{ d.asert.drift > 0 ? 'behind' : 'ahead' }} {{ secs(d.asert.drift) }}</div>
+        <div class="k-sub">{{ (d.asert.blocksBehind < 0 ? -d.asert.blocksBehind : d.asert.blocksBehind) | number:'1.0-1' }} blocks {{ d.asert.drift > 0 ? 'behind' : 'ahead of' }} 60 s/block since the anchor</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">Block time</div>
+        <div class="k-value">{{ d.totals.avgBlockTime | number:'1.0-0' }} s</div>
+        <div class="k-sub">median {{ d.totals.medianBlockTime | number:'1.0-0' }} s · target 60 s</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">Pools</div>
+        <div class="k-value">{{ d.totals.pools }}</div>
+        <div class="k-sub">{{ d.pools[0]?.tag }} {{ pct(d.pools[0]?.share, 0) }} of blocks</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">DATUM</div>
+        <div class="k-value">{{ pct(d.totals.datumShare, 0) }}</div>
+        <div class="k-sub">of blocks · {{ d.totals.datumMiners }} miner{{ d.totals.datumMiners === 1 ? '' : 's' }} building their own templates</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">Halving</div>
+        <div class="k-value">{{ d.halving.blocksLeft | number }}</div>
+        <div class="k-sub">blocks to {{ d.halving.nextHalving | number }} · ~{{ d.halving.eta * 1000 | date:'MMM d, y' }}</div>
+      </div>
+    </div>
+
+    <div class="row-2">
+      <div class="box">
+        <h5>Pools <small>inner: pools by coinbase tag · outer: the miners of DATUM pools</small></h5>
+        <div class="chart tall" *browserOnly echarts [initOpts]="chartInitOptions" [options]="charts.donut"></div>
+      </div>
+      <div class="box">
+        <h5>Pool dominance <small>share of blocks over the window</small></h5>
+        <div class="chart" *browserOnly echarts [initOpts]="chartInitOptions" [options]="charts.dominance"></div>
+        <h5 class="mt-3">Fees paid to miners</h5>
+        <div class="chart short" *browserOnly echarts [initOpts]="chartInitOptions" [options]="charts.fees"></div>
+      </div>
+    </div>
+
+    <h2 class="mn-h2">Pools <span class="sub2">{{ windowLabel() }}</span></h2>
+    <div class="box table-box">
+      <table class="table table-borderless table-sm mn-table">
+        <thead><tr><th>Pool</th><th class="text-right">Blocks</th><th>Share</th><th class="text-right">Hashrate</th><th class="text-right">Fees</th>
+          <th class="text-right">Empty</th><th class="text-right">Sidechains / block</th><th class="text-right">Last block</th></tr></thead>
+        <tbody>
+          <ng-container *ngFor="let p of d.pools">
+            <tr>
+              <td><span class="dot" [style.background]="colorOf(p.tag)"></span><b>{{ p.tag }}</b> <span *ngIf="p.datum" class="datum" title="DATUM: miners build their own block templates; the coinbase carries the pool's tag and the miner's">DATUM</span></td>
+              <td class="text-right">{{ p.blocks | number }}</td>
+              <td><div class="bar"><div class="fill" [style.width.%]="100 * p.share" [style.background]="colorOf(p.tag)"></div></div> {{ pct(p.share) }}</td>
+              <td class="text-right">{{ hashrate(p.hashrate) }}</td>
+              <td class="text-right">{{ p.fees / 1e8 | number:'1.0-8' }}</td>
+              <td class="text-right">{{ p.empty | number }}</td>
+              <td class="text-right">{{ p.bmmPerBlock | number:'1.1-1' }}</td>
+              <td class="text-right"><a [routerLink]="['/block' | relativeUrl, p.lastHeight]">{{ p.lastHeight | number }}</a></td>
+            </tr>
+            <tr *ngFor="let m of p.miners.slice(0, 12)" class="miner-row">
+              <td class="miner">↳ {{ m.tag }}</td>
+              <td class="text-right">{{ m.blocks | number }}</td>
+              <td><div class="bar"><div class="fill" [style.width.%]="100 * m.share" [style.background]="colorOf(p.tag)" style="opacity: 0.6"></div></div> {{ pct(m.share) }}</td>
+              <td colspan="5"></td>
+            </tr>
+          </ng-container>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="row-2">
+      <div class="box">
+        <h5>Hashrate and difficulty</h5>
+        <div class="chart" *browserOnly echarts [initOpts]="chartInitOptions" [options]="charts.hashrate"></div>
+      </div>
+      <div class="box">
+        <h5>Difficulty per block <small>aserti3 retargets every block; orange: a test network's min-difficulty blocks</small></h5>
+        <div class="chart" *browserOnly echarts [initOpts]="chartInitOptions" [options]="charts.difficulty"></div>
+      </div>
+    </div>
+
+    <div class="row-2">
+      <div class="box">
+        <h5>Time between blocks <small>target 60 s</small></h5>
+        <div class="chart" *browserOnly echarts [initOpts]="chartInitOptions" [options]="charts.blocktimes"></div>
+      </div>
+      <div class="box">
+        <h5>Difficulty adjustment and epochs</h5>
+        <div class="rules">
+          <div><span>Algorithm</span><b>aserti3, every block</b></div>
+          <div><span>Half-life</span><b>{{ (d.asert?.halfLife || 7200) / 3600 }} h ({{ (d.asert?.halfLife || 7200) / 60 }} blocks)</b></div>
+          <div *ngIf="d.asert && !d.asert.bootstrap"><span>Anchor</span><b>block {{ d.asert.anchorHeight | number }} · difficulty {{ diff(d.asert.anchorDifficulty) }}</b></div>
+          <div *ngIf="d.asert?.bootstrap"><span>Bootstrap</span><b>{{ d.asert.blocksToAnchor | number }} blocks to the anchor</b></div>
+          <div *ngIf="d.asert && !d.asert.bootstrap"><span>Next block</span><b>{{ diff(d.asert.nextDifficulty) }}</b></div>
+          <div *ngIf="d.asert?.minDifficultyAfter"><span>Min-difficulty block allowed</span><b>if none is found by {{ d.asert.minDifficultyAfter * 1000 | date:'HH:mm:ss' }} (2 min after the tip)</b></div>
+          <div><span>Halving epoch</span><b>{{ d.halving.epoch + 1 }} · {{ d.halving.subsidy }} CHN per block</b></div>
+          <div><span>Next halving</span><b>block {{ d.halving.nextHalving | number }}</b></div>
+          <div class="wide"><span>Epoch progress</span>
+            <div class="bar big"><div class="fill" [style.width.%]="100 * d.halving.progress"></div></div>
+            <small class="text-muted">{{ pct(d.halving.progress, 2) }} · {{ d.halving.blocksLeft | number }} blocks left at 60 s each</small></div>
+        </div>
+        <p class="text-muted small mt-2 mb-0">With aserti3 the difficulty falls by half for every 2 hours the chain is behind schedule since the anchor and doubles for every
+          2 hours ahead. It only depends on the last block, so the next block's difficulty is known as soon as the last one is found.</p>
+      </div>
+    </div>
+  </ng-container>
+</div>

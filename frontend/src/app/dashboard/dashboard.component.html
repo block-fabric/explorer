@@ -10,8 +10,11 @@
           </div>
         </div>
       </div>
-      <div class="col" *ngIf="!profile.pos">
-        <app-difficulty></app-difficulty>
+      <!-- Chains Explorer: aserti3 retargets every block (no 2016-block epochs): Chains gets its own mining widget;
+           the sidechains have no proof of work to show -->
+      <div class="col card-wrapper" *ngIf="profile.mainchain">
+        <div class="main-title">Mining</div>
+        <app-drivechain-widget kind="mining"></app-drivechain-widget>
       </div>
       <!-- Chains Explorer: blocks of stake have no difficulty; their slot clock and finality instead -->
       <div class="col card-wrapper" *ngIf="profile.pos">
