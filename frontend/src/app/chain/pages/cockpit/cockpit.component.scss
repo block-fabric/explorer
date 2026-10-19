@@ -47,9 +47,9 @@ h5 { font-size: 0.95rem; margin-bottom: 8px; small { color: var(--transparent-fg
 .sc-open { color: var(--sc); font-size: 1.1rem; text-decoration: none; }
 .sc-escrow { font-size: 1.5rem; font-weight: 600; margin: 10px 0 6px; .sc-share { font-size: 0.75rem; color: var(--transparent-fg); font-weight: normal; margin-left: 8px; } }
 .sc-bar {
-  position: relative; height: 18px; border-radius: 9px; background: #ffffff10; overflow: hidden; margin-bottom: 10px;
+  position: relative; display: flex; align-items: center; height: 18px; border-radius: 9px; background: #ffffff10; overflow: hidden; margin-bottom: 10px;
   .sc-bar-fill { position: absolute; inset: 0 auto 0 0; background: color-mix(in srgb, var(--sc) 60%, transparent); }
-  span { position: relative; font-size: 0.72rem; padding-left: 8px; line-height: 18px; }
+  span { position: relative; font-size: 0.72rem; padding-left: 8px; line-height: 1; }
 }
 .sc-stats {
   display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px 8px;
