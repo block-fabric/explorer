@@ -57,5 +57,10 @@ function callRpc (cmd, args, rpc) {
   }
 })();
 
+// Chains Explorer: any RPC by name, as a promise (the chain modules call their chain's own RPCs with it)
+Client.prototype.call = function (method, ...params) {
+  return this.rpc.call(method, params);
+};
+
 // Export!
 module.exports.Client = Client;

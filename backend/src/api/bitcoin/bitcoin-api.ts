@@ -7,6 +7,7 @@ import mempool from '../mempool';
 import { TransactionExtended } from '../../mempool.interfaces';
 import transactionUtils from '../transaction-utils';
 import { Common } from '../common';
+import addressIndex from '../../chain/address-index';
 import indexer from '../../indexer';
 
 class BitcoinApi implements AbstractBitcoinApi {
@@ -153,28 +154,66 @@ class BitcoinApi implements AbstractBitcoinApi {
       .then((block: IBitcoinApi.Block) => BitcoinApi.convertBlock(block));
   }
 
-  $getAddress(address: string): Promise<IEsploraApi.Address> {
-    throw new Error('Method getAddress not supported by the Bitcoin RPC API.');
+  // Chains Explorer: address and scripthash lookups from our address index (chain/address-index.ts); upstream has none
+  // without electrs. A script the index does not know (never used) has empty stats.
+  private indexed(): typeof addressIndex {
+    if (!addressIndex.enabled) {
+      throw new Error('Method not supported by the Bitcoin RPC API.');
+    }
+    if (!addressIndex.isReady()) {
+      throw new Error('The address index is still being built');
+    }
+    return addressIndex;
   }
 
-  $getAddressTransactions(address: string, lastSeenTxId: string): Promise<IEsploraApi.Transaction[]> {
-    throw new Error('Method getAddressTransactions not supported by the Bitcoin RPC API.');
+  private async $txs(txids: string[]): Promise<IEsploraApi.Transaction[]> {
+    const out: IEsploraApi.Transaction[] = [];
+    for (const txid of txids) {
+      try {
+        out.push(await this.$getRawTransaction(txid, false, true));
+      } catch (e) {
+        // left the mempool meanwhile
+      }
+    }
+    return out;
   }
 
-  $getAddressUtxos(address: string): Promise<IEsploraApi.UTXO[]> {
-    throw new Error('Method getAddressUtxos not supported by the Bitcoin RPC API.');
+  async $getAddress(address: string): Promise<IEsploraApi.Address> {
+    const idx = this.indexed();
+    const script = idx.scriptOf(address);
+    const empty = { funded_txo_count: 0, funded_txo_sum: 0, spent_txo_count: 0, spent_txo_sum: 0, tx_count: 0 };
+    return script ? { address, ...idx.stats(script) } : { address, chain_stats: { ...empty }, mempool_stats: { ...empty } };
   }
 
-  $getScriptHash(scripthash: string): Promise<IEsploraApi.ScriptHash> {
-    throw new Error('Method getScriptHash not supported by the Bitcoin RPC API.');
+  async $getAddressTransactions(address: string, lastSeenTxId: string): Promise<IEsploraApi.Transaction[]> {
+    const idx = this.indexed();
+    const script = idx.scriptOf(address);
+    return script ? this.$txs(idx.txids(script, lastSeenTxId)) : [];
   }
 
-  $getScriptHashTransactions(scripthash: string, lastSeenTxId: string): Promise<IEsploraApi.Transaction[]> {
-    throw new Error('Method getScriptHashTransactions not supported by the Bitcoin RPC API.');
+  async $getAddressUtxos(address: string): Promise<IEsploraApi.UTXO[]> {
+    const idx = this.indexed();
+    const script = idx.scriptOf(address);
+    return script ? idx.utxos(script) : [];
   }
 
-  $getScriptHashUtxos(scripthash: string): Promise<IEsploraApi.UTXO[]> {
-    throw new Error('Method getScriptHashUtxos not supported by the Bitcoin RPC API.');
+  async $getScriptHash(scripthash: string): Promise<IEsploraApi.ScriptHash> {
+    const idx = this.indexed();
+    const script = idx.scriptOfHash(scripthash);
+    const empty = { funded_txo_count: 0, funded_txo_sum: 0, spent_txo_count: 0, spent_txo_sum: 0, tx_count: 0 };
+    return script ? { scripthash, ...idx.stats(script) } : { scripthash, chain_stats: { ...empty }, mempool_stats: { ...empty } };
+  }
+
+  async $getScriptHashTransactions(scripthash: string, lastSeenTxId: string): Promise<IEsploraApi.Transaction[]> {
+    const idx = this.indexed();
+    const script = idx.scriptOfHash(scripthash);
+    return script ? this.$txs(idx.txids(script, lastSeenTxId)) : [];
+  }
+
+  async $getScriptHashUtxos(scripthash: string): Promise<IEsploraApi.UTXO[]> {
+    const idx = this.indexed();
+    const script = idx.scriptOfHash(scripthash);
+    return script ? idx.utxos(script) : [];
   }
 
   $getRawMempool(): Promise<IEsploraApi.Transaction['txid'][]> {
@@ -183,6 +222,10 @@ class BitcoinApi implements AbstractBitcoinApi {
 
   $getAddressPrefix(prefix: string): string[] {
     const found: { [address: string]: string } = {};
+    if (addressIndex.enabled) { // Chains Explorer: every address ever used, not only the mempool's
+      for (const a of addressIndex.prefix(prefix)) { found[a] = ''; }
+      if (Object.keys(found).length >= 10) { return Object.keys(found); }
+    }
     const mp = mempool.getMempool();
     for (const tx in mp) {
       for (const vout of mp[tx].vout) {
@@ -310,7 +353,15 @@ class BitcoinApi implements AbstractBitcoinApi {
   }
 
   async $getAddressTransactionSummary(address: string): Promise<IEsploraApi.AddressTxSummary[]> {
-    throw new Error('Method getAddressTransactionSummary not supported by the Bitcoin RPC API.');
+    const idx = this.indexed(); // Chains Explorer
+    const script = idx.scriptOf(address);
+    return script ? idx.summary(script) : [];
+  }
+
+  async $getScriptHashTransactionSummary(scripthash: string): Promise<IEsploraApi.AddressTxSummary[]> {
+    const idx = this.indexed(); // Chains Explorer
+    const script = idx.scriptOfHash(scripthash);
+    return script ? idx.summary(script) : [];
   }
 
   $getEstimatedHashrate(blockHeight: number): Promise<number> {
@@ -367,7 +418,13 @@ class BitcoinApi implements AbstractBitcoinApi {
       };
     }
 
-    if (esploraTransaction.vin[0].is_coinbase) {
+    if (esploraTransaction.vin[0]?.is_coinbase) {
+      return esploraTransaction;
+    }
+    // Chains Explorer (zSide): a shielded transaction can have no inputs at all (its value comes out of the shielded
+    // pool); the node reports its fee, which the inputs cannot give
+    if (!esploraTransaction.vin.length) {
+      esploraTransaction.fee = Math.round(((transaction as any).fee ?? 0) * 100000000);
       return esploraTransaction;
     }
 
@@ -467,8 +524,8 @@ class BitcoinApi implements AbstractBitcoinApi {
 
   /** @asyncUnsafe */
   private async $calculateFeeFromInputs(transaction: IEsploraApi.Transaction, addPrevout: boolean, lazyPrevouts: boolean): Promise<IEsploraApi.Transaction> {
-    if (transaction.vin[0].is_coinbase) {
-      transaction.fee = 0;
+    if (transaction.vin[0]?.is_coinbase || !transaction.vin.length) { // Chains Explorer: no inputs (zSide shielded)
+      transaction.fee = transaction.vin.length ? 0 : (transaction.fee ?? 0);
       return transaction;
     }
     let totalIn = 0;

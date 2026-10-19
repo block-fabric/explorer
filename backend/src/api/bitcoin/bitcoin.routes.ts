@@ -2,6 +2,7 @@ import { Application, Request, Response } from 'express';
 import axios from 'axios';
 import * as bitcoinjs from 'bitcoinjs-lib';
 import config from '../../config';
+import addressIndex from '../../chain/address-index';
 import websocketHandler from '../websocket-handler';
 import mempool from '../mempool';
 import feeApi from '../fee-api';
@@ -730,7 +731,7 @@ class BitcoinRoutes {
   }
 
   private async getAddress(req: Request, res: Response) {
-    if (config.MEMPOOL.BACKEND === 'none') {
+    if (config.MEMPOOL.BACKEND === 'none' && !addressIndex.enabled) { // Chains Explorer: chain/address-index.ts
       handleError(req, res, 405, 'Address lookups cannot be used with bitcoind as backend.');
       return;
     }
@@ -756,7 +757,7 @@ class BitcoinRoutes {
   }
 
   private async getAddressTransactions(req: Request, res: Response): Promise<void> {
-    if (config.MEMPOOL.BACKEND === 'none') {
+    if (config.MEMPOOL.BACKEND === 'none' && !addressIndex.enabled) { // Chains Explorer: chain/address-index.ts
       handleError(req, res, 405, 'Address lookups cannot be used with bitcoind as backend.');
       return;
     }
@@ -786,7 +787,7 @@ class BitcoinRoutes {
   }
 
   private async getAddressUtxo(req: Request, res: Response): Promise<void> {
-    if (config.MEMPOOL.BACKEND === 'none') {
+    if (config.MEMPOOL.BACKEND === 'none' && !addressIndex.enabled) { // Chains Explorer: chain/address-index.ts
       handleError(req, res, 405, 'Address lookups cannot be used with bitcoind as backend.');
       return;
     }
@@ -812,6 +813,14 @@ class BitcoinRoutes {
   }
 
   private async getAddressTransactionSummary(req: Request, res: Response): Promise<void> {
+    if (config.MEMPOOL.BACKEND === 'none' && addressIndex.enabled) { // Chains Explorer: chain/address-index.ts
+      try {
+        res.json(await (bitcoinApi as any).$getAddressTransactionSummary(req.params.address));
+      } catch (e) {
+        handleError(req, res, 503, e instanceof Error ? e.message : 'Address index unavailable');
+      }
+      return;
+    }
     if (config.MEMPOOL.BACKEND !== 'esplora') {
       handleError(req, res, 405, 'Address summary lookups require mempool/electrs backend.');
       return;
@@ -819,7 +828,7 @@ class BitcoinRoutes {
   }
 
   private async getScriptHash(req: Request, res: Response) {
-    if (config.MEMPOOL.BACKEND === 'none') {
+    if (config.MEMPOOL.BACKEND === 'none' && !addressIndex.enabled) { // Chains Explorer: chain/address-index.ts
       handleError(req, res, 405, 'Address lookups cannot be used with bitcoind as backend.');
       return;
     }
@@ -843,7 +852,7 @@ class BitcoinRoutes {
   }
 
   private async getScriptHashTransactions(req: Request, res: Response): Promise<void> {
-    if (config.MEMPOOL.BACKEND === 'none') {
+    if (config.MEMPOOL.BACKEND === 'none' && !addressIndex.enabled) { // Chains Explorer: chain/address-index.ts
       handleError(req, res, 405, 'Address lookups cannot be used with bitcoind as backend.');
       return;
     }
@@ -871,7 +880,7 @@ class BitcoinRoutes {
   }
 
   private async getScriptHashUtxo(req: Request, res: Response): Promise<void> {
-    if (config.MEMPOOL.BACKEND === 'none') {
+    if (config.MEMPOOL.BACKEND === 'none' && !addressIndex.enabled) { // Chains Explorer: chain/address-index.ts
       handleError(req, res, 405, 'Address lookups cannot be used with bitcoind as backend.');
       return;
     }
@@ -895,6 +904,14 @@ class BitcoinRoutes {
   }
 
   private async getScriptHashTransactionSummary(req: Request, res: Response): Promise<void> {
+    if (config.MEMPOOL.BACKEND === 'none' && addressIndex.enabled) { // Chains Explorer: chain/address-index.ts
+      try {
+        res.json(await (bitcoinApi as any).$getScriptHashTransactionSummary(req.params.scripthash));
+      } catch (e) {
+        handleError(req, res, 503, e instanceof Error ? e.message : 'Address index unavailable');
+      }
+      return;
+    }
     if (config.MEMPOOL.BACKEND !== 'esplora') {
       handleError(req, res, 405, 'Scripthash summary lookups require mempool/electrs backend.');
       return;

@@ -1,6 +1,7 @@
 import config from '../../config';
 const bitcoin = require('../../rpc-api/index');
 import { BitcoinRpcCredentials } from './bitcoin-api-abstract-factory';
+import { withTxLocator } from '../../chain/tx-locator';
 
 const nodeRpcCredentials: BitcoinRpcCredentials = {
   host: config.CORE_RPC.HOST,
@@ -11,4 +12,5 @@ const nodeRpcCredentials: BitcoinRpcCredentials = {
   cookie: config.CORE_RPC.COOKIE ? config.CORE_RPC.COOKIE_PATH : undefined,
 };
 
-export default new bitcoin.Client(nodeRpcCredentials);
+// Chains Explorer: finds the transactions of blocks of stake, which the FastBlocks/Layers txindex misses (chain/tx-locator.ts)
+export default withTxLocator(new bitcoin.Client(nodeRpcCredentials));

@@ -1,0 +1,186 @@
+<!-- Chains mainchain: what this block did for the drivechain -->
+<ng-container *ngIf="profile.mainchain">
+  <div class="title-row">
+    <h2 class="dc-title">Drivechain</h2>
+    <span class="dc-sub" *ngIf="block">BIP300 / BIP301 messages and escrow changes of block {{ block.height }}</span>
+  </div>
+  <div class="box dc-box">
+    <div *ngIf="loading" class="skeleton-loader"></div>
+    <div *ngIf="!loading && error && !block" class="text-muted">{{ error }}</div>
+
+    <ng-container *ngIf="block">
+      <p *ngIf="isEmpty" class="text-muted mb-0">This block committed to no sidechain block, moved nothing in or out of the sidechains and cast no vote.</p>
+
+      <!-- M7 + M8: blind merged mining -->
+      <section *ngIf="block.bmm.length">
+        <h5>Blind merged mining <span class="tag">M7</span><span class="tag">M8</span></h5>
+        <p class="hint">Sidechain blocks this block committed to, and the bid each sidechain block producer paid this block's miner for it.</p>
+        <table class="table table-borderless table-sm dc-table">
+          <thead><tr><th>Sidechain</th><th>Sidechain block</th><th class="text-right">Bid</th><th class="d-none d-md-table-cell">Request (M8)</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let a of block.bmm">
+              <td><app-sidechain-chip [slot]="a.slot" [name]="a.name" path=""></app-sidechain-chip></td>
+              <td class="mono">
+                <a *ngIf="sideExplorer(a.slot, '/block/' + a.sideBlock) as url; else plainSide" [href]="url">{{ short(a.sideBlock) }}</a>
+                <ng-template #plainSide><span [title]="a.sideBlock">{{ short(a.sideBlock) }}</span></ng-template>
+              </td>
+              <td class="text-right"><ng-container *ngIf="a.bid !== undefined && a.bid !== null; else noBid"><app-amount [satoshis]="a.bid" digitsInfo="1.0-8" [noFiat]="true"></app-amount></ng-container><ng-template #noBid><span class="text-muted">no bid</span></ng-template></td>
+              <td class="mono d-none d-md-table-cell"><a *ngIf="a.requestTxid" [routerLink]="['/tx' | relativeUrl, a.requestTxid]">{{ short(a.requestTxid) }}</a></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section *ngIf="unaccepted.length">
+        <h5>BMM requests not accepted <span class="tag">M8</span></h5>
+        <p class="hint">Bids in this block for sidechain blocks it did not commit to; their fee went to the miner all the same.</p>
+        <table class="table table-borderless table-sm dc-table">
+          <tbody>
+            <tr *ngFor="let r of unaccepted">
+              <td><app-sidechain-chip [slot]="r.slot" [name]="r.name"></app-sidechain-chip></td>
+              <td class="mono" [title]="r.sideBlock">{{ short(r.sideBlock) }}</td>
+              <td class="text-right"><app-amount [satoshis]="r.bid" digitsInfo="1.0-8" [noFiat]="true"></app-amount></td>
+              <td class="mono"><a [routerLink]="['/tx' | relativeUrl, r.txid]">{{ short(r.txid) }}</a></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- M5: deposits -->
+      <section *ngIf="block.deposits.length">
+        <h5>Deposits <span class="tag">M5</span></h5>
+        <table class="table table-borderless table-sm dc-table">
+          <thead><tr><th>Sidechain</th><th>Destination</th><th class="text-right">Amount</th><th>Transaction</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let d of block.deposits">
+              <td><app-sidechain-chip [slot]="d.slot" [name]="d.name"></app-sidechain-chip></td>
+              <td class="mono dest" [title]="d.destination">{{ d.destination }}</td>
+              <td class="text-right"><app-amount [satoshis]="d.amount" digitsInfo="1.2-8" [noFiat]="true"></app-amount></td>
+              <td class="mono"><a [routerLink]="['/tx' | relativeUrl, d.txid]">{{ short(d.txid) }}</a></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- M6: withdrawals -->
+      <section *ngIf="block.withdrawals.length">
+        <h5>Withdrawals <span class="tag">M6</span></h5>
+        <table class="table table-borderless table-sm dc-table">
+          <thead><tr><th>Sidechain</th><th>Bundle</th><th class="text-right">Paid out</th><th>Transaction</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let w of block.withdrawals">
+              <td><app-sidechain-chip [slot]="w.slot" [name]="w.name"></app-sidechain-chip></td>
+              <td class="mono" [title]="w.bundle">{{ short(w.bundle) }} <span class="text-muted">· {{ w.payouts.length }} payout{{ w.payouts.length === 1 ? '' : 's' }}</span></td>
+              <td class="text-right"><app-amount [satoshis]="w.amount" digitsInfo="1.2-8" [noFiat]="true"></app-amount></td>
+              <td class="mono"><a [routerLink]="['/tx' | relativeUrl, w.txid]">{{ short(w.txid) }}</a></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- M4: votes -->
+      <section *ngIf="block.votes && (castVotes.length || block.votes.form === 0)">
+        <h5>Withdrawal votes <span class="tag">M4</span> <span class="form">{{ block.votes.formName }}</span></h5>
+        <p class="hint" *ngIf="block.votes.form === 0">This block repeated the previous block's votes.</p>
+        <p class="hint" *ngIf="block.votes.form === 3">This block upvoted, for every sidechain, the bundle leading the next one by 50 or more.</p>
+        <table class="table table-borderless table-sm dc-table" *ngIf="castVotes.length">
+          <thead><tr><th>Sidechain</th><th>Vote</th><th>Bundle</th><th class="text-right">Score after</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let v of castVotes">
+              <td><app-sidechain-chip [slot]="v.slot" [name]="v.name"></app-sidechain-chip></td>
+              <td><span class="vote" [class.up]="v.vote === 'upvote'" [class.down]="v.vote === 'downvote'">{{ v.vote === 'upvote' ? '▲ upvote' : '▼ downvote all' }}</span></td>
+              <td class="mono" [title]="v.bundle || ''">{{ v.bundle ? short(v.bundle) : (v.vote === 'upvote' ? '#' + v.value : '') }}</td>
+              <td class="text-right">{{ scoreAfter(v.slot, v.bundle) ?? '' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- M3 + closed bundles -->
+      <section *ngIf="block.bundlesProposed.length || block.bundlesClosed.length">
+        <h5>Withdrawal bundles <span class="tag">M3</span></h5>
+        <table class="table table-borderless table-sm dc-table">
+          <tbody>
+            <tr *ngFor="let b of block.bundlesProposed">
+              <td><app-sidechain-chip [slot]="b.slot" [name]="b.name"></app-sidechain-chip></td>
+              <td><span class="badge badge-secondary">proposed</span></td>
+              <td class="mono" [title]="b.hash">{{ short(b.hash) }}</td>
+            </tr>
+            <tr *ngFor="let b of block.bundlesClosed">
+              <td><app-sidechain-chip [slot]="b.slot" [name]="b.name"></app-sidechain-chip></td>
+              <td><span class="badge" [class.badge-success]="b.paid" [class.badge-danger]="!b.paid">{{ b.paid ? 'paid' : 'failed' }}</span></td>
+              <td class="mono" [title]="b.hash">{{ short(b.hash) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- M1 + M2 -->
+      <section *ngIf="block.proposals.length || block.acks.length">
+        <h5>Sidechain proposals <span class="tag">M1</span><span class="tag">M2</span></h5>
+        <table class="table table-borderless table-sm dc-table">
+          <tbody>
+            <tr *ngFor="let p of block.proposals">
+              <td>Slot {{ p.slot }}</td>
+              <td><span class="badge badge-secondary">proposed</span></td>
+              <td><b>{{ p.title || '(undeclared)' }}</b> <span class="text-muted small">{{ p.description }}</span></td>
+              <td class="mono" [title]="p.hash">{{ short(p.hash) }}</td>
+            </tr>
+            <tr *ngFor="let a of block.acks">
+              <td>Slot {{ a.slot }}</td>
+              <td><span class="badge badge-info">ack</span></td>
+              <td>{{ a.title || '' }}</td>
+              <td class="mono" [title]="a.hash">{{ short(a.hash) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </ng-container>
+  </div>
+  <br>
+</ng-container>
+
+<!-- A sidechain: the Chains block that carried this block -->
+<ng-container *ngIf="!profile.mainchain">
+  <div class="title-row">
+    <h2 class="dc-title">Blind merged mining</h2>
+  </div>
+  <div class="box dc-box">
+    <div *ngIf="loading" class="skeleton-loader"></div>
+    <ng-container *ngIf="!loading">
+      <table class="table table-borderless table-sm dc-table mb-0" *ngIf="carrier; else noCarrier">
+        <tbody>
+          <tr>
+            <td class="lbl">Carried by Chains block</td>
+            <td>
+              <a *ngIf="mainExplorer('/block/' + carrier.hash) as url; else plainMain" [href]="url">{{ carrier.height }}</a>
+              <ng-template #plainMain><span [title]="carrier.hash">{{ carrier.height }}</span></ng-template>
+              <span class="text-muted mono small ml-2">{{ short(carrier.hash) }}</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="lbl">Bid paid to the Chains miner</td>
+            <td>
+              <ng-container *ngIf="carrier.bid !== null; else noBid2"><app-amount [satoshis]="carrier.bid" digitsInfo="1.0-8" [noFiat]="true"></app-amount></ng-container>
+              <ng-template #noBid2><span class="text-muted">none found</span></ng-template>
+              <ng-container *ngIf="carrier.requestTxid">
+                &middot; request
+                <a *ngIf="mainExplorer('/tx/' + carrier.requestTxid) as url; else plainReq" [href]="url" class="mono">{{ short(carrier.requestTxid) }}</a>
+                <ng-template #plainReq><span class="mono" [title]="carrier.requestTxid">{{ short(carrier.requestTxid) }}</span></ng-template>
+              </ng-container>
+            </td>
+          </tr>
+          <tr>
+            <td class="lbl">Committed at</td>
+            <td><app-time kind="since" [time]="carrier.time" [fastRender]="true"></app-time></td>
+          </tr>
+        </tbody>
+      </table>
+      <ng-template #noCarrier>
+        <p class="text-muted mb-0" *ngIf="height === 0">The genesis block is not merged mined.</p>
+        <p class="text-muted mb-0" *ngIf="height > 0">No Chains block in the indexed range committed to this block (yet).</p>
+      </ng-template>
+    </ng-container>
+  </div>
+  <br>
+</ng-container>

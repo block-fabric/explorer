@@ -50,6 +50,10 @@ import aboutRoutes from './api/about.routes';
 import mempoolBlocks from './api/mempool-blocks';
 import walletApi from './api/services/wallets';
 import stratumApi from './api/services/stratum';
+import drivechain from './chain/drivechain';
+import addressIndex from './chain/address-index';
+import { chainDatabaseFixups } from './chain/db-fixups';
+import drivechainRoutes, { moduleNewBlock } from './chain/drivechain.routes';
 
 class Server {
   private wss: WebSocket.Server | undefined;
@@ -136,6 +140,7 @@ class Server {
           await databaseMigration.$blocksReindexingTruncate();
         }
         await databaseMigration.$initializeOrMigrateDatabase();
+        await chainDatabaseFixups(); // Chains Explorer: columns the chains need wider (chain/db-fixups.ts)
       } catch (e) {
         throw new Error(e instanceof Error ? e.message : 'Error');
       }
@@ -218,6 +223,14 @@ class Server {
     await chainTips.updateOrphanedBlocks();
 
     this.setUpHttpApiRoutes();
+    // Chains Explorer: the drivechain index (BIP300/301 on the mainchain; the BMM of this sidechain) and the chain module
+    drivechain.start();
+    addressIndex.start(); // Chains Explorer: address lookups without electrs
+    blocks.setNewBlockCallback((block) => {
+      drivechain.onNewBlock(block);
+      addressIndex.onNewBlock();
+      moduleNewBlock(block);
+    });
 
     if (config.MEMPOOL.ENABLED) {
       void this.runMainUpdateLoop();
@@ -409,6 +422,7 @@ class Server {
     if (!config.MEMPOOL.OFFICIAL) {
       aboutRoutes.initRoutes(this.app);
     }
+    drivechainRoutes.initRoutes(this.app); // Chains Explorer: /api/v1/chain, /api/v1/drivechain/*, /api/v1/sidechain/*
   }
 
   healthCheck(): void {

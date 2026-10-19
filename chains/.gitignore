@@ -1,0 +1,5 @@
+cookies/
+data/
+mysql/
+*.log
+logs/

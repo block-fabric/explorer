@@ -172,6 +172,24 @@ interface IConfig {
   STRATUM: {
     ENABLED: boolean;
     API: string;
+  },
+  CHAIN: {
+    PROFILE: string; // the chain module (chain/modules/<id>): chains | thunder | bitnames | bitassets | zside | hivemind | fastblocks
+    NETWORK: string; // main | testnet | regtest
+    // Sidechain profiles: the Chains mainchain node, for the BMM view (which Chains block carried each block)
+    MAINCHAIN_RPC: {
+      HOST: string;
+      PORT: number;
+      USERNAME: string;
+      PASSWORD: string;
+      COOKIE: boolean;
+      COOKIE_PATH: string;
+      TIMEOUT: number;
+    };
+    // Public URLs of the other explorers, for cross links (profile id -> URL); empty = no link
+    EXPLORER_URLS: { [profile: string]: string };
+    BACKFILL_BLOCKS: number; // newest mainchain blocks scanned at startup for the drivechain index
+    ADDRESS_INDEX: boolean; // address and scripthash lookups from our own index when MEMPOOL.BACKEND is none (chain/address-index.ts)
   }
 }
 
@@ -345,6 +363,22 @@ const defaults: IConfig = {
   'STRATUM': {
     'ENABLED': false,
     'API': 'http://localhost:1234',
+  },
+  'CHAIN': {
+    'PROFILE': 'chains',
+    'NETWORK': 'testnet',
+    'MAINCHAIN_RPC': {
+      'HOST': '127.0.0.1',
+      'PORT': 19554,
+      'USERNAME': '',
+      'PASSWORD': '',
+      'COOKIE': false,
+      'COOKIE_PATH': '',
+      'TIMEOUT': 60000,
+    },
+    'EXPLORER_URLS': {},
+    'BACKFILL_BLOCKS': 20000,
+    'ADDRESS_INDEX': true,
   }
 };
 
@@ -369,6 +403,7 @@ class Config implements IConfig {
   FIAT_PRICE: IConfig['FIAT_PRICE'];
   WALLETS: IConfig['WALLETS'];
   STRATUM: IConfig['STRATUM'];
+  CHAIN: IConfig['CHAIN'];
 
   constructor() {
     const configs = this.merge(configFromFile, defaults);
@@ -392,6 +427,7 @@ class Config implements IConfig {
     this.FIAT_PRICE = configs.FIAT_PRICE;
     this.WALLETS = configs.WALLETS;
     this.STRATUM = configs.STRATUM;
+    this.CHAIN = configs.CHAIN;
   }
 
   merge = (...objects: object[]): IConfig => {
