@@ -1,5 +1,11 @@
 #!/bin/sh
 
+# Chains Explorer: a complete config file mounted by docker-compose (chains/compose.py writes one per chain profile)
+# replaces the environment variables below
+if [ -n "${MEMPOOL_CONFIG_FILE:-}" ] && [ -f "${MEMPOOL_CONFIG_FILE}" ]; then
+  exec node /backend/package/index.js
+fi
+
 # MEMPOOL
 __MEMPOOL_NETWORK__=${MEMPOOL_NETWORK:=mainnet}
 __MEMPOOL_BACKEND__=${MEMPOOL_BACKEND:=electrum}

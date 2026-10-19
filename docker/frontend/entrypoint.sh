@@ -62,6 +62,14 @@ __HISTORICAL_PRICE__=${HISTORICAL_PRICE:=true}
 __ADDITIONAL_CURRENCIES__=${ADDITIONAL_CURRENCIES:=false}
 __STRATUM_ENABLED__=${STRATUM_ENABLED:=false}
 
+# Chains Explorer: the chain this container shows (frontend/src/app/chain/modules/<id>) and the other explorers' URLs
+__CHAIN_PROFILE__=${CHAIN_PROFILE:=chains}
+__CHAIN_NETWORK__=${CHAIN_NETWORK:=testnet}
+__CHAIN_EXPLORER_URLS__=${CHAIN_EXPLORER_URLS:=}
+export __CHAIN_PROFILE__
+export __CHAIN_NETWORK__
+export __CHAIN_EXPLORER_URLS__
+
 # Export as environment variables to be used by envsubst
 export __MAINNET_ENABLED__
 export __TESTNET_ENABLED__

@@ -14,7 +14,7 @@ SERVER=${SERVER:-root@144.202.17.53}
 SSH_PORT=${SSH_PORT:-22}
 LOCAL_BIND=${LOCAL_BIND:-127.0.0.1}
 COOKIES=${COOKIES:-$PWD/cookies}
-declare -A PORTS=([chains]=19554 [thunder]=19754 [bitnames]=19954 [bitassets]=19354 [zside]=19454 [hivemind]=19854 [fastblocks]=19154)
+declare -A PORTS=([chains]=19554 [thunder]=19754 [bitnames]=19954 [bitassets]=19354 [zside]=19454 [hivemind]=19854 [fastblocks]=19154 [layers]=19254)
 
 mkdir -p "$COOKIES"
 chmod 700 "$COOKIES"
