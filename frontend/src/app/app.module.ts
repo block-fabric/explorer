@@ -4,6 +4,7 @@ import { HTTP_INTERCEPTORS, provideHttpClient, withInterceptorsFromDi } from '@a
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { ZONE_SERVICE } from '@app/injection-tokens';
 import { AppRoutingModule } from './app-routing.module';
+import { BasePathInterceptor } from '@app/chain/base-path';
 import { AppComponent } from '@components/app/app.component';
 import { ElectrsApiService } from '@app/services/electrs-api.service';
 import { OrdApiService } from '@app/services/ord-api.service';
@@ -54,6 +55,7 @@ const providers = [
   ServicesApiServices,
   PreloadService,
   { provide: HTTP_INTERCEPTORS, useClass: HttpCacheInterceptor, multi: true },
+  { provide: HTTP_INTERCEPTORS, useClass: BasePathInterceptor, multi: true },
   { provide: ZONE_SERVICE, useClass: ZoneService },
 ];
 

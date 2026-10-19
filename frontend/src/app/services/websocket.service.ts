@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { basePath } from '@app/chain/base-path';
 import { webSocket, WebSocketSubject } from 'rxjs/webSocket';
 import { WebsocketResponse } from '@interfaces/websocket.interface';
 import { StateService } from '@app/services/state.service';
@@ -22,7 +23,7 @@ const initData = makeStateKey('/api/v1/init-data');
 })
 export class WebsocketService {
   private webSocketProtocol = (document.location.protocol === 'https:') ? 'wss:' : 'ws:';
-  private webSocketUrl = this.webSocketProtocol + '//' + document.location.hostname + ':' + document.location.port + '{network}/api/v1/ws';
+  private webSocketUrl = this.webSocketProtocol + '//' + document.location.hostname + ':' + document.location.port + basePath() + '{network}/api/v1/ws';
 
   private websocketSubject: WebSocketSubject<WebsocketResponse>;
   private goneOffline = false;
