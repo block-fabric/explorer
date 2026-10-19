@@ -21,7 +21,7 @@ for p in $PROFILES; do
   sed -i "s/Chains Explorer/$n Explorer/g" "$OUT/www/$p/index.html"
   w=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['MEMPOOL']['BLOCK_WEIGHT_UNITS'])" "$CFG/$p.json")
   docker run --rm -e CHAIN_PROFILE=$p -e CHAIN_NETWORK=testnet -e CHAIN_EXPLORER_URLS="$URLS" -e BLOCK_WEIGHT_UNITS=$w \
-    -e MINING_DASHBOARD=false -e HISTORICAL_PRICE=false -e ACCELERATOR_BUTTON=false -e NGINX_PROTOCOL=https -e NGINX_PORT=443 \
+    -e MINING_DASHBOARD=false -e HISTORICAL_PRICE=false -e MEMPOOL_WEBSITE_URL= -e LIQUID_WEBSITE_URL= -e SERVICES_API= -e ACCELERATOR_BUTTON=false -e NGINX_PROTOCOL=https -e NGINX_PORT=443 \
     "$IMG" cat /var/www/mempool/browser/resources/config.js 2>/dev/null | sed '1{/^\/var\/www/d}' > "$OUT/www-config/$p.js"
   grep -q "CHAIN_PROFILE = '$p'" "$OUT/www-config/$p.js"
 done
