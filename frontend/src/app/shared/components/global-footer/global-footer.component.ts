@@ -11,6 +11,7 @@ import { WebsocketService } from '@app/services/websocket.service';
 import { EnterpriseService } from '@app/services/enterprise.service';
 import { SERVICES_POPUP_ACTION } from '@app/shared/services-popup-action.token';
 
+import { MODULE, PROFILE, PROFILES, SIDECHAINS, explorerUrl } from '@app/chain/profiles';
 @Component({
   selector: 'app-global-footer',
   templateUrl: './global-footer.component.html',
@@ -24,6 +25,10 @@ export class GlobalFooterComponent implements OnInit, OnDestroy, OnChanges {
   private destroy$: Subject<any> = new Subject<any>();
   env: Env;
   officialMempoolSpace = this.stateService.env.OFFICIAL_MEMPOOL_SPACE;
+  profile = PROFILE; // Chains Explorer
+  moduleNav = MODULE.nav ?? [];
+  otherChains = [PROFILES.chains, ...SIDECHAINS].filter(c => c && c.id !== PROFILE.id && explorerUrl(c.id));
+  chainUrl = (id: string) => explorerUrl(id);
   mempoolSpaceBuild = window['isMempoolSpaceBuild'];
   backendInfo$: Observable<IBackendInfo>;
   servicesBackendInfo$: Observable<IBackendInfo>;

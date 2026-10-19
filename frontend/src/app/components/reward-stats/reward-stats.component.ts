@@ -4,6 +4,7 @@ import { map, switchMap, tap } from 'rxjs/operators';
 import { ApiService } from '@app/services/api.service';
 import { StateService } from '@app/services/state.service';
 
+import { PROFILE } from '@app/chain/profiles';
 @Component({
   selector: 'app-reward-stats',
   templateUrl: './reward-stats.component.html',
@@ -12,6 +13,7 @@ import { StateService } from '@app/services/state.service';
   standalone: false,
 })
 export class RewardStatsComponent implements OnInit {
+  unit = PROFILE.unit; // Chains Explorer
   public $rewardStats: Observable<any>;
   private lastBlockHeight: number;
 

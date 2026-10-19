@@ -70,6 +70,20 @@
     </div>
   </div>
 
+  <!-- Chains Explorer: switch to the explorer of another chain (those with a URL in CHAIN_EXPLORER_URLS) -->
+  <div ngbDropdown class="dropdown-container chain-switcher" *ngIf="otherChains.length">
+    <button ngbDropdownToggle type="button" class="btn btn-secondary dropdown-toggle-split d-flex justify-content-center align-items-center" aria-haspopup="true" aria-label="Other chains" title="Other chains">
+      <app-svg-images name="chain-mark" [fill]="profile.id" width="20" height="20" [style]="'color: ' + profile.color"></app-svg-images>
+    </button>
+    <div ngbDropdownMenu class="dropdown-menu-right">
+      <a ngbDropdownItem *ngFor="let p of otherChains" [href]="explorerUrl(p.id)" class="chain-switch-item">
+        <span class="cs-mark" [style.color]="p.color"><app-svg-images name="chain-mark" [fill]="p.id" width="20" height="20"></app-svg-images></span>
+        <span class="cs-name">{{ p.name }}</span>
+        <span class="cs-slot">{{ p.mainchain ? 'mainchain' : 'slot ' + p.slot }}</span>
+      </a>
+    </div>
+  </div>
+
   <div class="navbar-collapse" id="navbarCollapse">
     <ul class="navbar-nav {{ network.val }}">
 
@@ -96,6 +110,12 @@
       <li class="nav-item" routerLinkActive="active" id="btn-blocks" *ngIf="!stateService.env.MINING_DASHBOARD">
         <a class="nav-link" [routerLink]="['/blocks' | relativeUrl]" (click)="collapse()">
           <div class="svg-wrapper"><app-svg-images name="nav-cubes" width="21.59" height="100%"></app-svg-images></div>
+        </a>
+      </li>
+      <!-- Chains Explorer: the pages of this chain (Drivechain on Chains; BMM and peg on a sidechain) and of its module -->
+      <li class="nav-item" routerLinkActive="active" *ngFor="let item of chainNav" [id]="'btn-' + item.path.slice(1)">
+        <a class="nav-link" [routerLink]="[item.path | relativeUrl]" (click)="collapse()" [title]="item.title" [attr.aria-label]="item.title">
+          <div class="svg-wrapper"><app-svg-images [name]="item.icon" [fill]="profile.id" width="21.59" height="100%"></app-svg-images></div>
         </a>
       </li>
       <li class="nav-item" routerLinkActive="active" id="btn-graphs">

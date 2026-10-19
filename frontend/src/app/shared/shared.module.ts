@@ -135,6 +135,12 @@ import { BitcoinInvoiceComponent } from '@components/bitcoin-invoice/bitcoin-inv
 import { OnlyVsizeDirective, OnlyWeightDirective } from '@app/shared/components/weight-directives/weight-directives';
 import { GithubLogin } from '@components/github-login.component/github-login.component';
 
+import { SidechainChipComponent } from '@app/chain/components/sidechain-chip/sidechain-chip.component';
+import { ChainBlockPanelComponent } from '@app/chain/components/chain-block-panel/chain-block-panel.component';
+import { ChainBlockMarksComponent } from '@app/chain/components/block-marks/block-marks.component';
+import { AddressTokensComponent } from '@app/chain/components/address-tokens/address-tokens.component';
+import { ChainTxPanelComponent } from '@app/chain/components/chain-tx-panel/chain-tx-panel.component';
+import { DrivechainWidgetComponent } from '@app/chain/components/drivechain-widget/drivechain-widget.component';
 @NgModule({
   declarations: [
     ClipboardComponent,
@@ -184,6 +190,12 @@ import { GithubLogin } from '@components/github-login.component/github-login.com
     BlockOverviewTooltipComponent,
     BlockFiltersComponent,
     TransactionsListComponent,
+    SidechainChipComponent, // Chains Explorer (app/chain)
+    ChainBlockPanelComponent,
+    ChainBlockMarksComponent,
+    DrivechainWidgetComponent,
+    ChainTxPanelComponent,
+    AddressTokensComponent,
     AddressGroupComponent,
     SearchFormComponent,
     AddressLabelsComponent,
@@ -339,6 +351,12 @@ import { GithubLogin } from '@components/github-login.component/github-login.com
     BlockOverviewTooltipComponent,
     BlockFiltersComponent,
     TransactionsListComponent,
+    SidechainChipComponent, // Chains Explorer (app/chain)
+    ChainBlockPanelComponent,
+    ChainBlockMarksComponent,
+    DrivechainWidgetComponent,
+    ChainTxPanelComponent,
+    AddressTokensComponent,
     AddressGroupComponent,
     SearchFormComponent,
     AddressLabelsComponent,

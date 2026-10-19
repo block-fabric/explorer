@@ -421,3 +421,25 @@ h2 {
   50% { background-color: #8457bb; box-shadow: #ad7de5 0px 0px 18px -2px;}
   100% { background-color: #653b9c; box-shadow: #ad7de57f 0px 0px 12px -2px; }
 }
+// Chains Explorer: drivechain output labels
+.chain-label {
+  --cl: #b5f27e;
+  display: inline-flex; align-items: center; gap: 5px; max-width: 100%;
+  color: var(--fg); font-size: 0.85em; line-height: 1.4;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  .cl-tag {
+    font-size: 0.75em; font-weight: 700; padding: 0 5px; border-radius: 4px;
+    color: var(--cl); border: 1px solid color-mix(in srgb, var(--cl) 55%, transparent);
+    background: color-mix(in srgb, var(--cl) 12%, transparent);
+  }
+  .cl-mark { color: var(--cl); display: inline-flex; }
+  &.small-label { margin-top: 2px; font-size: 0.78em; }
+}
+
+// Chains Explorer: token amounts
+.chain-token { white-space: nowrap; font-weight: 600;
+  .ct-amount { margin-right: 4px; }
+  .ct-unit { font-size: 0.8em; font-weight: 700; padding: 0 5px; border-radius: 4px; color: var(--chain-accent, var(--title-fg));
+    border: 1px solid color-mix(in srgb, var(--chain-accent, #8f7cff) 55%, transparent); background: color-mix(in srgb, var(--chain-accent, #8f7cff) 12%, transparent); }
+}
+.ct-chn { font-size: 0.8em; opacity: 0.7; }

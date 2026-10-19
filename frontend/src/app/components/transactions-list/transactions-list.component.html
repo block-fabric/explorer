@@ -110,7 +110,15 @@
                           [similarity]="similarityMatches.get(tx.txid)?.get(vin.prevout.scriptpubkey_address)"
                         ></app-address-text>
                         <ng-template #vinScriptPubkeyType>
-                          {{ vin.prevout.scriptpubkey_type?.toUpperCase() }}
+                          <!-- Chains Explorer: a sidechain's escrow spent (by a deposit or a withdrawal) -->
+                          <ng-container *ngIf="escrowInputLabel(vin) as cl; else plainVinType">
+                            <span class="chain-label" [style.--cl]="cl.color" [ngbTooltip]="cl.help" placement="bottom">
+                              <span class="cl-tag">{{ cl.tag }}</span>
+                              <app-svg-images name="chain-mark" [fill]="chainProfileId(cl.slot)" width="13" height="13" class="cl-mark"></app-svg-images>
+                              {{ cl.text }}
+                            </span>
+                          </ng-container>
+                          <ng-template #plainVinType>{{ vin.prevout.scriptpubkey_type?.toUpperCase() }}</ng-template>
                         </ng-template>
                         <div>
                           <app-address-labels  [vin]="vin" [channel]="tx._channels && tx._channels.inputs[vindex] ? tx._channels.inputs[vindex] : null"></app-address-labels>
@@ -131,7 +139,11 @@
                   </ng-template>
                   <ng-template #defaultOutput>
                     <span *ngIf="vin.lazy" class="skeleton-loader"></span>
-                    <app-amount [blockConversion]="tx.price" *ngIf="vin.prevout" [satoshis]="vin.prevout.value"></app-amount>
+                    <!-- Chains Explorer: the tokens an input spends (BitAssets, Layers) -->
+                    <ng-container *ngIf="tokenOf(tx, 'vin', vindex) as tk; else vinChn">
+                      <ng-container *ngTemplateOutlet="chainToken; context: { $implicit: tk, chn: vin.prevout?.value }"></ng-container>
+                    </ng-container>
+                    <ng-template #vinChn><app-amount [blockConversion]="tx.price" *ngIf="vin.prevout" [satoshis]="vin.prevout.value"></app-amount></ng-template>
                   </ng-template>
                 </td>
               </tr>
@@ -335,14 +347,28 @@
                     [similarity]="similarityMatches.get(tx.txid)?.get(vout.scriptpubkey_address)"
                   ></app-address-text>
                   <ng-template #pubkey_type>
+                    <!-- Chains Explorer: a drivechain output (escrow, BIP300/301 message, deposit destination, sidechain marker) -->
+                    <ng-container *ngIf="chainLabels(tx)[vindex] as cl; else plainPubkeyType">
+                      <span class="chain-label" [style.--cl]="cl.color" [ngbTooltip]="cl.help" placement="bottom">
+                        <span class="cl-tag">{{ cl.tag }}</span>
+                        <app-svg-images *ngIf="cl.slot !== undefined" name="chain-mark" [fill]="chainProfileId(cl.slot)" width="13" height="13" class="cl-mark"></app-svg-images>
+                        {{ cl.text }}
+                      </span>
+                    </ng-container>
+                    <ng-template #plainPubkeyType>
                     <ng-container *ngIf="vout.scriptpubkey_type === 'p2pk'; else scriptpubkey_type">
                       P2PK <a class="address p2pk-address" [routerLink]="['/address/' | relativeUrl, vout.scriptpubkey.slice(2, -2)]" title="{{ vout.scriptpubkey.slice(2, -2) }}">
                         <app-truncate [text]="vout.scriptpubkey.slice(2, -2)" [lastChars]="8"></app-truncate>
                       </a>
                     </ng-container>
+                    </ng-template>
                   </ng-template>
                   <div>
                     <app-address-labels [vout]="vout" [channel]="tx._channels && tx._channels.outputs[vindex] ? tx._channels.outputs[vindex] : null"></app-address-labels>
+                    <!-- Chains Explorer: a payout of a withdrawal from a sidechain -->
+                    <span *ngIf="vout.scriptpubkey_address && chainLabels(tx)[vindex] as cl" class="chain-label small-label" [style.--cl]="cl.color" [ngbTooltip]="cl.help" placement="bottom">
+                      <span class="cl-tag">{{ cl.tag }}</span> {{ cl.text }}
+                    </span>
                   </div>
                   <ng-template #scriptpubkey_type>
                     <ng-template [ngIf]="vout.pegout" [ngIfElse]="defaultscriptpubkey_type">
@@ -396,7 +422,11 @@
                     </ng-template>
                   </ng-template>
                   <ng-template #defaultOutput>
-                    <app-amount [blockConversion]="tx.price" [satoshis]="vout.value"></app-amount>
+                    <!-- Chains Explorer: the tokens an output carries (BitAssets, Layers) -->
+                    <ng-container *ngIf="tokenOf(tx, 'vout', vindex) as tk; else voutChn">
+                      <ng-container *ngTemplateOutlet="chainToken; context: { $implicit: tk, chn: vout.value }"></ng-container>
+                    </ng-container>
+                    <ng-template #voutChn><app-amount [blockConversion]="tx.price" [satoshis]="vout.value"></app-amount></ng-template>
                   </ng-template>
                 </td>
                 <td class="arrow-td">
@@ -602,4 +632,12 @@
       <td>{{ scriptPath.merkleBranches.length }}</td>
     </tr>
   </table>
+</ng-template>
+<!-- Chains Explorer: a token amount and denomination, linked to the asset (or pool) page; the CHN amount under it if any -->
+<ng-template #chainToken let-tk let-chn="chn">
+  <span class="chain-token" [title]="tk.kind + ' ' + tk.id">
+    <span class="ct-amount">{{ tk.amount }}</span>
+    <a class="ct-unit" [routerLink]="[(tk.kind === 'lp' ? '/pool' : '/asset') | relativeUrl, tk.id]">{{ tk.label }}</a>
+  </span>
+  <div *ngIf="chn" class="ct-chn"><app-amount [satoshis]="chn"></app-amount></div>
 </ng-template>

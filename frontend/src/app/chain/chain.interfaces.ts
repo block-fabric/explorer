@@ -75,6 +75,9 @@ export interface DrivechainBlockSummary {
   acks: number;
   bundlesProposed: number;
   bundlesClosed: number;
+  bids: number;
+  miner: string | null;
+  fees: number | null;
 }
 
 export interface SlotStats {
@@ -149,10 +152,16 @@ export interface DrivechainSummary {
 
 export interface SidechainCarrier {
   height: number;
-  hash: string;
-  time: number;
+  hash: string | null;
+  time: number | null;
   bid: number | null;
   requestTxid: string | null;
+  /** chains of stake: 'ticket' = this block acknowledges the anchor Chains committed to; 'anchored' = this block was anchored */
+  role?: 'ticket' | 'anchored';
+  ticket?: string;
+  anchored?: string;
+  ackBlock?: string;
+  ackHeight?: number;
 }
 
 export interface SidechainSummary {

@@ -21,7 +21,7 @@
             <tr *ngFor="let a of block.bmm">
               <td><app-sidechain-chip [slot]="a.slot" [name]="a.name" path=""></app-sidechain-chip></td>
               <td class="mono">
-                <a *ngIf="sideExplorer(a.slot, '/block/' + a.sideBlock) as url; else plainSide" [href]="url">{{ short(a.sideBlock) }}</a>
+                <a *ngIf="sideExplorer(a.slot, sideBlockPath(a.slot, a.sideBlock)) as url; else plainSide" [href]="url">{{ short(a.sideBlock) }}</a>
                 <ng-template #plainSide><span [title]="a.sideBlock">{{ short(a.sideBlock) }}</span></ng-template>
               </td>
               <td class="text-right"><ng-container *ngIf="a.bid !== undefined && a.bid !== null; else noBid"><app-amount [satoshis]="a.bid" digitsInfo="1.0-8" [noFiat]="true"></app-amount></ng-container><ng-template #noBid><span class="text-muted">no bid</span></ng-template></td>
@@ -142,6 +142,43 @@
 
 <!-- A sidechain: the Chains block that carried this block -->
 <ng-container *ngIf="!profile.mainchain">
+  <!-- blocks of stake (FastBlocks, Layers) -->
+  <ng-container *ngIf="pos as p">
+    <div class="title-row">
+      <h2 class="dc-title">{{ p.kind === 'bmm' ? 'BMM fallback block' : p.ack ? 'Block of stake with a BMM anchor' : 'Block of stake' }}</h2>
+      <span class="dc-sub">{{ p.kind === 'bmm' ? 'made by blind merged mining, when no block of stake was made' : p.ack ? 'made by a bonded validator; it lands the anchor a Chains block committed to by BMM' : 'made by a bonded validator in its slot' }}</span>
+    </div>
+    <div class="box dc-box">
+      <table class="table table-borderless table-sm dc-table mb-0">
+        <tbody>
+          <tr><td class="lbl">Kind</td><td><span class="badge" [class.badge-primary]="p.kind === 'pos'" [class.badge-success]="p.kind === 'bmm'">{{ p.kind === 'pos' ? 'proof of stake' : 'blind merged mining' }}</span>
+            <span *ngIf="p.ack" class="badge badge-success ml-1">BMM anchor</span></td></tr>
+          <tr *ngIf="p.slot !== undefined && p.slot !== null"><td class="lbl">Slot</td><td>{{ p.slot | number }} </td></tr>
+          <tr *ngIf="p.proposer"><td class="lbl">Proposer</td><td class="mono"><a [routerLink]="['/validators' | relativeUrl]">{{ p.proposer }}</a></td></tr>
+          <tr *ngIf="p.finality"><td class="lbl">Finality</td>
+            <td><span [style.color]="finColor(p.finality.status)">{{ finGlyph(p.finality.status) }} {{ p.finality.status }}</span>
+              <span class="text-muted"> · {{ finHelp(p.finality.status) }}{{ p.finality.anchors ? ' · ' + p.finality.anchors + ' anchors' : '' }}</span></td></tr>
+          <ng-container *ngIf="p.ack">
+            <tr><td class="lbl">Committed by Chains block</td>
+              <td><a *ngIf="mainExplorerHeight(p.ack.mainheight) as u; else plainMh" [href]="u">{{ p.ack.mainheight | number }}</a><ng-template #plainMh>{{ p.ack.mainheight | number }}</ng-template>
+                <span class="text-muted"> · its BMM accept (M7) names the ticket below</span></td></tr>
+            <tr><td class="lbl">Anchor ticket (h*)</td><td class="mono">{{ p.ack.ticket }}</td></tr>
+            <tr><td class="lbl">Anchors block</td><td><a class="mono" [routerLink]="['/block' | relativeUrl, p.ack.anchored]">{{ p.ack.anchored }}</a>
+              <span class="text-muted"> · that block and everything before it are anchored in Chains</span></td></tr>
+            <tr *ngIf="p.ack.payee"><td class="lbl">Fee pot paid to</td><td class="mono">{{ p.ack.payee }}</td></tr>
+          </ng-container>
+          <tr *ngIf="p.mainheight"><td class="lbl">Chains height</td><td>{{ p.mainheight | number }}</td></tr>
+          <tr *ngIf="carrier?.role === 'anchored'"><td class="lbl">Anchored by</td>
+            <td>Chains block <a *ngIf="mainExplorerHeight(carrier.height) as u; else plainAh" [href]="u">{{ carrier.height | number }}</a><ng-template #plainAh>{{ carrier.height | number }}</ng-template>,
+              acknowledged in block <a [routerLink]="['/block' | relativeUrl, carrier.ackBlock]">{{ carrier.ackHeight | number }}</a></td></tr>
+          <tr *ngIf="p.evidence?.length"><td class="lbl">Evidence</td><td class="neg">{{ p.evidence.length }} double proposal(s) reported in this block</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <br>
+  </ng-container>
+
+  <ng-container *ngIf="!pos || carrier?.role === 'ticket' || pos?.kind === 'bmm'">
   <div class="title-row">
     <h2 class="dc-title">Blind merged mining</h2>
   </div>
@@ -151,9 +188,9 @@
       <table class="table table-borderless table-sm dc-table mb-0" *ngIf="carrier; else noCarrier">
         <tbody>
           <tr>
-            <td class="lbl">Carried by Chains block</td>
+            <td class="lbl">{{ carrier.role === 'ticket' ? 'Anchor committed by Chains block' : 'Carried by Chains block' }}</td>
             <td>
-              <a *ngIf="mainExplorer('/block/' + carrier.hash) as url; else plainMain" [href]="url">{{ carrier.height }}</a>
+              <a *ngIf="mainExplorer('/block/' + (carrier.hash || carrier.height)) as url; else plainMain" [href]="url">{{ carrier.height }}</a>
               <ng-template #plainMain><span [title]="carrier.hash">{{ carrier.height }}</span></ng-template>
               <span class="text-muted mono small ml-2">{{ short(carrier.hash) }}</span>
             </td>
@@ -183,4 +220,5 @@
     </ng-container>
   </div>
   <br>
+  </ng-container>
 </ng-container>

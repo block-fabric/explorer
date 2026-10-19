@@ -327,3 +327,14 @@ main {
   top: 65px;
   padding-bottom: 20px;
 }
+
+// Chains Explorer: the chain switcher's items: mark, name, then the slot on the right
+.chain-switch-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 220px;
+  .cs-mark { display: inline-flex; width: 20px; flex: 0 0 20px; }
+  .cs-name { flex: 1 1 auto; text-align: left; }
+  .cs-slot { flex: 0 0 auto; margin-left: 16px; font-size: 0.8em; color: var(--transparent-fg); }
+}

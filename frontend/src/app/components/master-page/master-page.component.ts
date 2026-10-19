@@ -9,6 +9,7 @@ import { MenuComponent } from '@components/menu/menu.component';
 import { StorageService } from '@app/services/storage.service';
 import { AuthServiceMempool } from '@app/services/auth.service';
 
+import { MODULE, PROFILE, PROFILES, SIDECHAINS, explorerUrl, NavItem } from '@app/chain/profiles';
 @Component({
   selector: 'app-master-page',
   templateUrl: './master-page.component.html',
@@ -16,6 +17,16 @@ import { AuthServiceMempool } from '@app/services/auth.service';
   standalone: false,
 })
 export class MasterPageComponent implements OnInit, OnDestroy {
+  // Chains Explorer: this explorer's chain, its pages, and the other explorers to switch to (those with a public URL)
+  profile = PROFILE;
+  chainNav: NavItem[] = [
+    PROFILE.mainchain
+      ? { path: '/drivechain', title: 'Drivechain: sidechains, BMM, deposits, withdrawals, votes', icon: 'nav-drivechain' }
+      : { path: '/bmm', title: `BMM and peg: the Chains blocks that carried ${PROFILE.name}, deposits and withdrawals`, icon: 'nav-drivechain' },
+    ...(MODULE.nav ?? []),
+  ];
+  otherChains = [PROFILES.chains, ...SIDECHAINS].filter(p => p && p.id !== PROFILE.id && explorerUrl(p.id));
+  explorerUrl = explorerUrl;
   @Input() headerVisible = true;
   @Input() footerVisibleOverride: boolean | null = null;
 

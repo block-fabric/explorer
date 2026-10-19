@@ -330,7 +330,10 @@
     @if (!isLoadingTx) {
       <tr>
         <td class="td-width" i18n="block.miner">Miner</td>
-        @if (pool) {
+        <!-- Chains Explorer: the miner from the coinbase tag (drivechain index); the pools list does not know Chains -->
+        @if (tx?.status?.block_hash) {
+          <td class="wrap-cell"><app-chain-block-marks [hash]="tx.status.block_hash" mode="miner"></app-chain-block-marks></td>
+        } @else if (false && pool) {
           <td class="wrap-cell">
             <a placement="bottom" [routerLink]="['/mining/pool' | relativeUrl, pool.slug]" class="badge" style="color: var(--fg);padding:0;">
               <ng-container *ngIf="pool.minerSlug && pool.minerName; else minerName">

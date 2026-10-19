@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, OnChanges
 import { Subscription, catchError, of, timer, switchMap, takeWhile } from 'rxjs';
 import { ChainApiService } from '@app/chain/chain-api.service';
 import { DrivechainBlock, SidechainCarrier } from '@app/chain/chain.interfaces';
-import { PROFILE, PROFILES, explorerUrl, profileBySlot } from '@app/chain/profiles';
+import { PROFILE, PROFILES, explorerUrl, profileBySlot, sideBlockPath } from '@app/chain/profiles';
 
 /**
  * The block page's drivechain box.
@@ -22,6 +22,7 @@ import { PROFILE, PROFILES, explorerUrl, profileBySlot } from '@app/chain/profil
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ChainBlockPanelComponent implements OnChanges, OnDestroy {
+  sideBlockPath = sideBlockPath;
   @Input() blockHash: string;
   @Input() height: number;
 
@@ -29,6 +30,8 @@ export class ChainBlockPanelComponent implements OnChanges, OnDestroy {
   mainchain = PROFILES.chains;
   block: DrivechainBlock | null = null;
   carrier: SidechainCarrier | null = null;
+  pos: any = null;
+  posSub: Subscription;
   loading = true;
   error: string | null = null;
   sub: Subscription;
@@ -43,6 +46,14 @@ export class ChainBlockPanelComponent implements OnChanges, OnDestroy {
     this.error = null;
     if (!this.blockHash) {
       return;
+    }
+    this.posSub?.unsubscribe();
+    this.pos = null;
+    if (PROFILE.pos) {
+      this.posSub = this.api.feature$<any>('block/' + this.blockHash + '/features').pipe(catchError(() => of(null))).subscribe((p) => {
+        this.pos = p?.kind ? p : null;
+        this.cd.markForCheck();
+      });
     }
     // A new block can be shown before the index has it: ask again a few times
     let tries = 0;
@@ -74,6 +85,19 @@ export class ChainBlockPanelComponent implements OnChanges, OnDestroy {
 
   ngOnDestroy(): void {
     this.sub?.unsubscribe();
+    this.posSub?.unsubscribe();
+  }
+
+  finColor(st: string): string { return st === 'final' ? '#3bd16f' : st === 'anchored' ? '#5aa6ff' : '#ffd166'; }
+  finGlyph(st: string): string { return st === 'final' ? '✔' : st === 'anchored' ? '⚓' : '○'; }
+  finHelp(st: string): string {
+    return st === 'final' ? 'anchored deep enough in Chains to be final'
+      : st === 'anchored' ? 'a Chains block committed to it (BMM); not final yet'
+      : 'signed by its validator only, waiting for a Chains anchor';
+  }
+
+  mainExplorerHeight(h: number): string | null {
+    return h ? explorerUrl('chains', '/block/' + h) : null;
   }
 
   get isEmpty(): boolean {

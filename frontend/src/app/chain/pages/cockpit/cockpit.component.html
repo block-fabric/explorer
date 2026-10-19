@@ -1,0 +1,352 @@
+<div class="container-xl cockpit" [style.--accent]="profile.color">
+
+  <!-- header: title, window and sidechain selectors -->
+  <div class="cp-head">
+    <div>
+      <h1>
+        <app-svg-images name="nav-drivechain" width="30" height="30" class="cp-icon"></app-svg-images>
+        {{ mainchain ? 'Drivechain cockpit' : profile.name + ' on Chains' }}
+      </h1>
+      <div class="cp-sub" *ngIf="data">
+        Chains block <b>{{ data.live.height | number }}</b>
+        <span class="dot">·</span> {{ data.totals.blocks | number }} blocks analysed ({{ windowLabel() }})
+        <span class="dot">·</span> slot {{ mainchain ? (slot === null ? 'all' : slot) : profile.slot }}
+        <span *ngIf="!data.indexReady" class="badge badge-warning ml-2">indexing…</span>
+      </div>
+    </div>
+    <div class="cp-controls">
+      <div class="btn-group btn-group-sm">
+        <button *ngFor="let w of windows" class="btn" [class.btn-primary]="window === w.blocks" [class.btn-secondary]="window !== w.blocks" (click)="setWindow(w.blocks)">{{ w.label }}</button>
+      </div>
+    </div>
+  </div>
+
+  <div *ngIf="error && !data" class="alert alert-warning">The drivechain index is not available: {{ error }}</div>
+  <div *ngIf="!data && !error" class="skeleton-loader cp-skel"></div>
+
+  <ng-container *ngIf="data as d">
+
+    <!-- sidechain filter (mainchain) -->
+    <div class="cp-chips" *ngIf="mainchain">
+      <button class="cp-chip" [class.on]="slot === null" (click)="setSlot(null)">All sidechains</button>
+      <button *ngFor="let s of d.live.allSidechains; trackBy: trackSlot" class="cp-chip" [class.on]="slot === s.slot" [style.--sc]="colorOf(s.slot)" (click)="setSlot(slot === s.slot ? null : s.slot)">
+        <app-svg-images name="chain-mark" [fill]="s.profile || 'chains'" width="14" height="14"></app-svg-images> {{ s.title }}
+      </button>
+    </div>
+
+    <!-- KPI strip -->
+    <div class="kpis">
+      <div class="kpi">
+        <div class="k-label">Locked in sidechains</div>
+        <div class="k-value"><app-amount [satoshis]="d.live.escrowTotal" digitsInfo="1.0-0" [noFiat]="true"></app-amount></div>
+        <div class="k-sub">{{ pct(d.live.escrowShareOfSupply, 2) }} of the {{ (d.live.supply / 1e8) | number:'1.0-0' }} CHN issued</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">BMM accepts</div>
+        <div class="k-value">{{ d.totals.accepts | number }}</div>
+        <div class="k-sub">in {{ pct(d.totals.blocks ? d.totals.bmmBlocks / d.totals.blocks : 0, 0) }} of blocks · {{ d.totals.rejected | number }} bids rejected</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">Bids paid to miners</div>
+        <div class="k-value"><app-amount [satoshis]="d.totals.bids" digitsInfo="1.2-4" [noFiat]="true"></app-amount></div>
+        <div class="k-sub">{{ d.totals.bids | number }} sats · avg {{ d.totals.bidAvg | number }} · {{ pct(d.totals.bidShareOfFees) }} of fees</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">Net peg flow</div>
+        <div class="k-value" [class.pos]="d.totals.netFlow > 0" [class.neg]="d.totals.netFlow < 0">
+          {{ d.totals.netFlow > 0 ? '+' : '' }}<app-amount [satoshis]="d.totals.netFlow" digitsInfo="1.2-2" [noFiat]="true"></app-amount>
+        </div>
+        <div class="k-sub">{{ d.totals.deposits }} deposits in · {{ d.totals.withdrawals }} withdrawals out</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">Pending bundles</div>
+        <div class="k-value">{{ d.live.bundles.length }}</div>
+        <div class="k-sub">{{ d.totals.bundlesPaid }} paid · {{ d.totals.bundlesFailed }} failed · {{ d.totals.bundlesProposed }} proposed</div>
+      </div>
+      <div class="kpi" *ngIf="mainchain">
+        <div class="k-label">Hashrate</div>
+        <div class="k-value">{{ hashrate(d.live.mining?.networkhashps) }}</div>
+        <div class="k-sub">{{ d.totals.minersSeen }} miners · {{ d.totals.avgBlockTime | number:'1.0-0' }} s/block</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">Votes cast</div>
+        <div class="k-value">{{ d.totals.upvotes | number }}<span class="k-small"> ▲</span> {{ d.totals.downvotes | number }}<span class="k-small"> ▼</span></div>
+        <div class="k-sub">{{ pct(d.totals.blocks ? d.totals.voteBlocks / d.totals.blocks : 0, 0) }} of blocks voted · {{ d.totals.repeatVotes }} repeats</div>
+      </div>
+      <div class="kpi" *ngIf="mainchain">
+        <div class="k-label">Subsidy</div>
+        <div class="k-value"><app-amount [satoshis]="d.live.subsidy" digitsInfo="1.0-8" [noFiat]="true"></app-amount></div>
+        <div class="k-sub">halving at {{ d.live.nextHalving | number }} (in {{ (d.live.nextHalving - d.live.height) | number }} blocks)</div>
+      </div>
+    </div>
+
+    <!-- sidechains -->
+    <h2 class="cp-h2">Sidechains</h2>
+    <div class="sc-grid">
+      <div class="sc-card" *ngFor="let s of d.live.sidechains; trackBy: trackSlot" [style.--sc]="colorOf(s.slot)" (click)="mainchain && setSlot(slot === s.slot ? null : s.slot)" [class.clickable]="mainchain">
+        <div class="sc-top">
+          <app-svg-images name="chain-mark" [fill]="s.profile || 'chains'" width="26" height="26" class="sc-mark"></app-svg-images>
+          <div class="sc-title">
+            <div class="sc-name">{{ s.title }} <span class="sc-slot">slot {{ s.slot }}</span></div>
+            <div class="sc-desc">{{ s.description }}</div>
+          </div>
+          <a *ngIf="s.explorer" [href]="s.explorer" class="sc-open" (click)="$event.stopPropagation()" title="Open the {{ s.title }} explorer">↗</a>
+        </div>
+        <div class="sc-escrow">
+          <app-amount [satoshis]="s.escrow" digitsInfo="1.2-2" [noFiat]="true"></app-amount>
+          <span class="sc-share">{{ pct(d.live.escrowTotal ? s.escrow / d.live.escrowTotal : 0, 0) }} of escrow</span>
+        </div>
+        <ng-container *ngIf="slotStats(s.slot) as st">
+          <div class="sc-bar" title="BMM coverage: blocks carrying a block of {{ s.title }}">
+            <div class="sc-bar-fill" [style.width.%]="st.coverage * 100"></div>
+            <span>{{ pct(st.coverage, 0) }} BMM coverage</span>
+          </div>
+          <div class="sc-stats">
+            <div><span>Blocks</span><b>{{ st.accepts | number }}</b></div>
+            <div><span>Median bid</span><b>{{ st.bidMedian | number }} <small>sats</small></b></div>
+            <div><span>Bids</span><b>{{ (st.bids / 1e8) | number:'1.0-6' }}</b></div>
+            <div><span>Longest gap</span><b>{{ st.longestGap | number }} <small>blk</small></b></div>
+            <div><span>In</span><b class="pos">{{ (st.depositAmount / 1e8) | number:'1.0-2' }}</b></div>
+            <div><span>Out</span><b class="neg">{{ (st.withdrawalAmount / 1e8) | number:'1.0-2' }}</b></div>
+            <div><span>Contested</span><b>{{ st.contested | number }}</b></div>
+            <div><span>Last block</span><b>{{ st.lastAcceptHeight !== null ? (d.live.height - st.lastAcceptHeight) + ' ago' : '—' }}</b></div>
+          </div>
+        </ng-container>
+        <div class="sc-foot">
+          <span>active since {{ s.activationheight | number }}</span>
+          <span *ngIf="s.pendingbundles" class="sc-pend">{{ s.pendingbundles }} bundle{{ s.pendingbundles > 1 ? 's' : '' }} pending</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- BMM coverage grid: the newest blocks x sidechains -->
+    <h2 class="cp-h2">Blind merged mining, block by block <span class="cp-h2-sub">the newest {{ d.coverage.length }} Chains blocks; a lit cell is a sidechain block carried, brighter = higher bid</span></h2>
+    <div class="box grid-box">
+      <div class="cov-row" *ngFor="let s of d.live.sidechains; trackBy: trackSlot" [style.--sc]="colorOf(s.slot)">
+        <div class="cov-name">{{ s.title }}</div>
+        <div class="cov-cells">
+          <ng-container *ngFor="let b of d.coverage; trackBy: trackHeight">
+            <a *ngIf="accepted(b, s.slot) as a; else emptyCell" class="cov-cell on" [routerLink]="mainchain ? ['/block' | relativeUrl, b.hash] : null" [href]="mainchain ? undefined : mainUrl('/block/' + b.hash)"
+               [style.opacity]="0.45 + 0.55 * (d.slots && slotStats(s.slot)?.bidMax ? (a.bid || 0) / slotStats(s.slot).bidMax : 1)"
+               [title]="'Block ' + b.height + ' carried ' + s.title + ' ' + short(a.sideBlock) + (a.bid !== null ? ' · bid ' + a.bid + ' sats' : '')"></a>
+            <ng-template #emptyCell><span class="cov-cell" [title]="'Block ' + b.height + ': no ' + s.title + ' block'"></span></ng-template>
+          </ng-container>
+        </div>
+      </div>
+      <div class="cov-row cov-meta">
+        <div class="cov-name">Events</div>
+        <div class="cov-cells">
+          <span *ngFor="let b of d.coverage; trackBy: trackHeight" class="cov-cell ev"
+            [class.dep]="b.deposits" [class.wd]="b.withdrawals" [class.vote]="b.voted && !b.deposits && !b.withdrawals"
+            [title]="'Block ' + b.height + (b.miner ? ' · ' + b.miner : '') + ' · ' + b.requests + ' BMM requests' + (b.deposits ? ' · ' + b.deposits + ' deposits' : '') + (b.withdrawals ? ' · ' + b.withdrawals + ' withdrawals' : '') + (b.voted ? ' · voted' : '')"></span>
+        </div>
+      </div>
+      <div class="cov-legend">
+        <span><i class="lg dep"></i>deposit</span><span><i class="lg wd"></i>withdrawal</span><span><i class="lg vote"></i>vote cast</span>
+        <span class="ml-auto">← older · block {{ d.coverage[0]?.height | number }} … {{ d.coverage[d.coverage.length - 1]?.height | number }} · newer →</span>
+      </div>
+    </div>
+
+    <!-- charts -->
+    <div class="chart-grid">
+      <div class="box chart-box">
+        <h5>BMM bids paid to Chains miners</h5>
+        <div class="chart" *browserOnly echarts [initOpts]="chartInitOptions" [options]="charts.bids"></div>
+      </div>
+      <div class="box chart-box">
+        <h5>BMM coverage <small>share of blocks carrying each sidechain</small></h5>
+        <div class="chart" *browserOnly echarts [initOpts]="chartInitOptions" [options]="charts.coverage"></div>
+      </div>
+      <div class="box chart-box">
+        <h5>Escrow <small>CHN locked in each sidechain</small></h5>
+        <div class="chart" *browserOnly echarts [initOpts]="chartInitOptions" [options]="charts.escrow"></div>
+      </div>
+      <div class="box chart-box">
+        <h5>Peg flows <small>deposits up, withdrawals down</small></h5>
+        <div class="chart" *browserOnly echarts [initOpts]="chartInitOptions" [options]="charts.flows"></div>
+      </div>
+      <div class="box chart-box" *ngIf="mainchain">
+        <h5>Miner fees <small>BMM bids against other fees</small></h5>
+        <div class="chart" *browserOnly echarts [initOpts]="chartInitOptions" [options]="charts.revenue"></div>
+      </div>
+      <div class="box chart-box">
+        <h5>Bid range per sidechain <small>min · median · average · max</small></h5>
+        <div class="chart" *browserOnly echarts [initOpts]="chartInitOptions" [options]="charts.bidRange"></div>
+      </div>
+    </div>
+
+    <!-- withdrawal bundles -->
+    <h2 class="cp-h2">Withdrawal bundles <span class="cp-h2-sub">a bundle is paid out when its score reaches {{ d.live.info.withdrawalminscore }} within {{ d.live.info.withdrawalperiod }} blocks; each upvote adds 1, any other vote takes 1</span></h2>
+    <div class="row-2">
+      <div class="box">
+        <p *ngIf="!d.live.bundles.length" class="text-muted mb-0">No withdrawal bundle is pending.</p>
+        <div class="bundle" *ngFor="let b of d.live.bundles" [style.--sc]="colorOf(b.slot)">
+          <div class="b-head">
+            <app-sidechain-chip [slot]="b.slot" [name]="b.name"></app-sidechain-chip>
+            <span class="mono" [title]="b.hash">{{ short(b.hash) }}</span>
+            <span class="b-amt"><app-amount [satoshis]="b.total" digitsInfo="1.2-8" [noFiat]="true"></app-amount> · {{ b.payouts.length }} payout{{ b.payouts.length === 1 ? '' : 's' }}</span>
+          </div>
+          <ng-container *ngIf="bundleProgress(b) as p">
+            <div class="b-bar"><div class="b-fill" [style.width.%]="p.pct * 100" [class.doomed]="!p.canMake"></div></div>
+            <div class="b-meta">
+              <span>score <b>{{ b.score }}</b> / {{ d.live.info.withdrawalminscore }}</span>
+              <span>{{ b.blocksleft }} blocks left</span>
+              <span *ngIf="p.canMake" class="pos">payable in ≥ {{ p.needed }} blocks</span>
+              <span *ngIf="!p.canMake" class="neg">cannot reach the score in time</span>
+              <span>last upvote {{ d.live.height - b.lastupvote }} blocks ago</span>
+              <span>proposed at {{ b.height | number }}</span>
+              <span *ngIf="b.vote">this node: {{ b.vote }}</span>
+            </div>
+          </ng-container>
+        </div>
+      </div>
+      <div class="box chart-box">
+        <h5>Bundle scores <small>over the window</small></h5>
+        <div class="chart" *browserOnly echarts [initOpts]="chartInitOptions" [options]="charts.bundles"></div>
+      </div>
+    </div>
+
+    <!-- per-sidechain table -->
+    <h2 class="cp-h2">Sidechain ledger <span class="cp-h2-sub">{{ windowLabel() }}</span></h2>
+    <div class="box table-box">
+      <table class="table table-borderless table-sm cp-table">
+        <thead>
+          <tr>
+            <th>Sidechain</th><th class="text-right">BMM blocks</th><th class="text-right">Coverage</th><th class="text-right">Requests</th>
+            <th class="text-right">Rejected</th><th class="text-right">Median bid</th><th class="text-right">Max bid</th><th class="text-right">Bids total</th>
+            <th class="text-right">Deposits</th><th class="text-right">Withdrawals</th><th class="text-right">Net</th>
+            <th class="text-right">▲ / ▼ / –</th><th class="text-right">Bundles P/✓/✗</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let s of d.slots; trackBy: trackSlot">
+            <td><app-sidechain-chip [slot]="s.slot" [name]="s.name" path=""></app-sidechain-chip></td>
+            <td class="text-right">{{ s.accepts | number }}</td>
+            <td class="text-right">{{ pct(s.coverage, 0) }}</td>
+            <td class="text-right">{{ s.requests | number }}</td>
+            <td class="text-right">{{ s.rejected | number }}</td>
+            <td class="text-right">{{ s.bidMedian | number }}</td>
+            <td class="text-right">{{ s.bidMax | number }}</td>
+            <td class="text-right">{{ (s.bids / 1e8) | number:'1.0-8' }}</td>
+            <td class="text-right pos">{{ s.deposits }} · {{ (s.depositAmount / 1e8) | number:'1.0-2' }}</td>
+            <td class="text-right neg">{{ s.withdrawals }} · {{ (s.withdrawalAmount / 1e8) | number:'1.0-2' }}</td>
+            <td class="text-right" [class.pos]="s.netFlow > 0" [class.neg]="s.netFlow < 0">{{ (s.netFlow / 1e8) | number:'1.0-2' }}</td>
+            <td class="text-right">{{ s.upvotes }} / {{ s.downvotes }} / {{ s.abstains }}</td>
+            <td class="text-right">{{ s.bundlesProposed }} / {{ s.bundlesPaid }} / {{ s.bundlesFailed }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- miners -->
+    <div class="row-2" *ngIf="mainchain">
+      <div class="box">
+        <h5>Miners <small>by coinbase tag, {{ windowLabel() }}</small></h5>
+        <table class="table table-borderless table-sm cp-table">
+          <thead><tr><th>Miner</th><th class="text-right">Blocks</th><th class="text-right">Share</th><th class="text-right">BMM / block</th><th class="text-right">Bids earned</th><th class="text-right">Voted</th></tr></thead>
+          <tbody>
+            <tr *ngFor="let m of d.miners.slice(0, 12)">
+              <td class="miner" [title]="m.tag">{{ m.tag }}</td>
+              <td class="text-right">{{ m.blocks | number }}</td>
+              <td class="text-right">{{ pct(m.share) }}</td>
+              <td class="text-right">{{ m.acceptsPerBlock | number:'1.1-1' }}</td>
+              <td class="text-right">{{ (m.bids / 1e8) | number:'1.0-8' }}</td>
+              <td class="text-right">{{ pct(m.blocks ? m.voteBlocks / m.blocks : 0, 0) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="box chart-box">
+        <h5>Share of blocks</h5>
+        <div class="chart" *browserOnly echarts [initOpts]="chartInitOptions" [options]="charts.miners"></div>
+      </div>
+    </div>
+
+    <!-- rules + proposals -->
+    <div class="row-2">
+      <div class="box">
+        <h5>Drivechain rules</h5>
+        <div class="rules">
+          <div><span>Sidechain slots</span><b>{{ d.live.info.activesidechains }} active of {{ d.live.info.maxsidechains }}</b></div>
+          <div><span>Activation</span><b>{{ d.live.info.activationperiod }} blocks, ≤ {{ d.live.info.activationmaxfailures }} misses</b></div>
+          <div><span>Replacement period</span><b>{{ d.live.info.replacementperiod }} blocks</b></div>
+          <div><span>Withdrawal period</span><b>{{ d.live.info.withdrawalperiod }} blocks</b></div>
+          <div><span>Payout score</span><b>{{ d.live.info.withdrawalminscore }}</b></div>
+          <div><span>Upvote expiry</span><b>{{ d.live.info.upvoteexpiryblocks }} blocks</b></div>
+          <div><span>Max pending bundles</span><b>{{ d.live.info.maxpendingbundles }} per sidechain</b></div>
+          <div><span>Escrow total</span><b>{{ d.live.info.escrowtotal | number:'1.2-2' }} CHN</b></div>
+          <div class="wide"><span>Drivechain state hash</span><b class="mono">{{ short(d.live.info.statehash) }}</b></div>
+        </div>
+      </div>
+      <div class="box">
+        <h5>Sidechain proposals <small>{{ d.totals.proposals }} proposed · {{ d.totals.acks }} acks {{ windowLabel() }}</small></h5>
+        <ng-container *ngIf="(d.live.proposals?.pending?.length || 0) + (d.live.proposals?.queued?.length || 0); else noProposals">
+          <div class="proposal" *ngFor="let p of (d.live.proposals.pending || []).concat(d.live.proposals.queued || [])">
+            <b>{{ p.title || ('slot ' + p.slot) }}</b> <span class="text-muted small">slot {{ p.slot }}</span>
+            <div class="small text-muted">{{ p.description }}</div>
+            <div class="small" *ngIf="p.acks !== undefined">acks {{ p.acks }} · fails {{ p.fails }}</div>
+          </div>
+        </ng-container>
+        <ng-template #noProposals><p class="text-muted mb-0">No sidechain is being proposed; every slot in use is active.</p></ng-template>
+      </div>
+    </div>
+
+    <!-- event feeds -->
+    <h2 class="cp-h2">Event log</h2>
+    <div class="box">
+      <div class="cp-tabs">
+        <button *ngFor="let f of feeds" class="cp-tab" [class.on]="feed === f.id" (click)="setFeed(f.id)">{{ f.label }}</button>
+      </div>
+      <div *ngIf="!feedItems" class="skeleton-loader"></div>
+      <p *ngIf="feedItems && !feedItems.length" class="text-muted mt-2 mb-0">Nothing of this kind in the indexed blocks.</p>
+      <table class="table table-borderless table-sm cp-table mt-2" *ngIf="feedItems?.length">
+        <tbody>
+          <tr *ngFor="let e of feedItems">
+            <td class="ev-h">
+              <a *ngIf="mainchain; else extH" [routerLink]="['/block' | relativeUrl, e.blockHash]">{{ e.height | number }}</a>
+              <ng-template #extH><a [href]="mainUrl('/block/' + e.blockHash)">{{ e.height | number }}</a></ng-template>
+            </td>
+            <td class="ev-t"><app-time kind="since" [time]="e.time" [fastRender]="true"></app-time></td>
+            <td><app-sidechain-chip *ngIf="e.slot >= 0" [slot]="e.slot" [name]="e.name || nameOf(e.slot)"></app-sidechain-chip></td>
+            <ng-container [ngSwitch]="feed">
+              <ng-container *ngSwitchCase="'bmm'">
+                <td class="mono">
+                  <a *ngIf="sideUrl(e.slot, sideBlockPath(e.slot, e.sideBlock)) as u; else sb" [href]="u">{{ short(e.sideBlock) }}</a>
+                  <ng-template #sb>{{ short(e.sideBlock) }}</ng-template>
+                </td>
+                <td class="text-right">{{ e.bid !== undefined && e.bid !== null ? (e.bid | number) + ' sats' : 'no bid' }}</td>
+              </ng-container>
+              <ng-container *ngSwitchCase="'bmm-requests'">
+                <td class="mono">{{ short(e.sideBlock) }}</td>
+                <td class="text-right">{{ e.bid | number }} sats <span class="badge" [class.badge-success]="e.accepted" [class.badge-secondary]="!e.accepted">{{ e.accepted ? 'accepted' : 'not accepted' }}</span></td>
+              </ng-container>
+              <ng-container *ngSwitchCase="'deposits'">
+                <td class="mono dest" [title]="e.destination">{{ e.destination }}</td>
+                <td class="text-right pos"><app-amount [satoshis]="e.amount" digitsInfo="1.2-8" [noFiat]="true"></app-amount></td>
+              </ng-container>
+              <ng-container *ngSwitchCase="'withdrawals'">
+                <td class="mono">{{ short(e.bundle) }} · {{ e.payouts?.length }} payouts</td>
+                <td class="text-right neg"><app-amount [satoshis]="e.amount" digitsInfo="1.2-8" [noFiat]="true"></app-amount></td>
+              </ng-container>
+              <ng-container *ngSwitchCase="'bundles'">
+                <td class="mono">{{ short(e.hash) }}</td>
+                <td class="text-right"><span class="badge" [class.badge-success]="e.type === 'paid'" [class.badge-danger]="e.type === 'failed'" [class.badge-secondary]="e.type === 'proposed'">{{ e.type }}</span></td>
+              </ng-container>
+              <ng-container *ngSwitchCase="'proposals'">
+                <td>{{ e.type === 'M1' ? 'proposed' : 'ack' }} <b>{{ e.title || '' }}</b></td>
+                <td class="mono text-right">{{ short(e.hash) }}</td>
+              </ng-container>
+            </ng-container>
+            <td class="mono ev-tx">
+              <ng-container *ngIf="e.txid || e.requestTxid">
+                <a *ngIf="mainchain; else extTx" [routerLink]="['/tx' | relativeUrl, e.txid || e.requestTxid]">{{ short(e.txid || e.requestTxid) }}</a>
+                <ng-template #extTx><a [href]="mainUrl('/tx/' + (e.txid || e.requestTxid))">{{ short(e.txid || e.requestTxid) }}</a></ng-template>
+              </ng-container>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </ng-container>
+</div>

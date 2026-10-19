@@ -3,6 +3,7 @@ import { UntypedFormBuilder, UntypedFormGroup } from '@angular/forms';
 import { StorageService } from '@app/services/storage.service';
 import { StateService } from '@app/services/state.service';
 
+import { PROFILE } from '@app/chain/profiles';
 @Component({
   selector: 'app-amount-selector',
   templateUrl: './amount-selector.component.html',
@@ -11,6 +12,7 @@ import { StateService } from '@app/services/state.service';
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class AmountSelectorComponent implements OnInit {
+  unit = PROFILE.unit; // Chains Explorer
   amountForm: UntypedFormGroup;
   modes = ['btc', 'sats', 'fiat'];
 

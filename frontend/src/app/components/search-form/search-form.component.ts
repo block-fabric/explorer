@@ -11,6 +11,7 @@ import { ApiService } from '@app/services/api.service';
 import { SearchResultsComponent } from '@components/search-form/search-results/search-results.component';
 import { Network, findOtherNetworks, getRegex, getTargetUrl, needBaseModuleChange } from '@app/shared/regex.utils';
 
+import { PROFILE } from '@app/chain/profiles';
 @Component({
   selector: 'app-search-form',
   templateUrl: './search-form.component.html',
@@ -19,6 +20,7 @@ import { Network, findOtherNetworks, getRegex, getTargetUrl, needBaseModuleChang
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class SearchFormComponent implements OnInit {
+  searchPlaceholder = `Search ${PROFILE.name} blocks, transactions, addresses`; // Chains Explorer
   @Input() hamburgerOpen = false;
   env: Env;
   network = '';

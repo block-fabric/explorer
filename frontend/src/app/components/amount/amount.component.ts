@@ -3,6 +3,7 @@ import { StateService } from '@app/services/state.service';
 import { Observable, Subscription } from 'rxjs';
 import { Price } from '@app/services/price.service';
 
+import { PROFILE } from '@app/chain/profiles';
 @Component({
   selector: 'app-amount',
   templateUrl: './amount.component.html',
@@ -11,6 +12,7 @@ import { Price } from '@app/services/price.service';
   standalone: false,
 })
 export class AmountComponent implements OnInit, OnDestroy {
+  unit = PROFILE.unit; // Chains Explorer: the chain's unit (chain/profiles.ts)
   conversions$: Observable<any>;
   currency: string;
   viewAmountMode$: Observable<'btc' | 'sats' | 'fiat'>;

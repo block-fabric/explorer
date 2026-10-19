@@ -10,10 +10,24 @@
           </div>
         </div>
       </div>
-      <div class="col">
+      <div class="col" *ngIf="!profile.pos">
         <app-difficulty></app-difficulty>
       </div>
+      <!-- Chains Explorer: blocks of stake have no difficulty; their slot clock and finality instead -->
+      <div class="col card-wrapper" *ngIf="profile.pos">
+        <div class="main-title">Proof of stake</div>
+        <app-drivechain-widget kind="stake"></app-drivechain-widget>
+      </div>
     </ng-container>
+    <!-- Chains Explorer: drivechain widgets -->
+    <div class="col card-wrapper">
+      <div class="main-title">{{ profile.mainchain ? 'Sidechain treasury' : 'Escrow on Chains' }}</div>
+      <app-drivechain-widget kind="treasury"></app-drivechain-widget>
+    </div>
+    <div class="col card-wrapper">
+      <div class="main-title">Blind merged mining</div>
+      <app-drivechain-widget kind="bmm"></app-drivechain-widget>
+    </div>
     <div class="col">
       <div class="card graph-card">
         <div class="card-body ps-lg-3 pe-lg-3 ps-2 pe-2">
@@ -109,6 +123,7 @@
                 <th class="table-cell-height" i18n="dashboard.latest-blocks.height">Height</th>
                 <th class="table-cell-mined" i18n="dashboard.latest-blocks.mined">Mined</th>
                 <th class="table-cell-transaction-count" i18n="dashboard.latest-blocks.transaction-count">TXs</th>
+                <th class="table-cell-chain">{{ profile.mainchain ? 'Sidechains' : 'Chains block' }}</th>
                 <th class="table-cell-size" i18n="dashboard.latest-blocks.size">Size</th>
               </thead>
               <tbody *ngIf="blocks$ | async as blocks; else blocksSkeleton">
@@ -116,6 +131,7 @@
                   <td class="table-cell-height" ><a [routerLink]="['/block' | relativeUrl, block.id]" [state]="{ data: { block: block } }">{{ block.height }}</a></td>
                   <td class="table-cell-mined" ><app-time kind="since" [time]="block.timestamp" [fastRender]="true" [showTooltip]="true"></app-time></td>
                   <td class="table-cell-transaction-count">{{ block.tx_count | number }}</td>
+                  <td class="table-cell-chain"><app-chain-block-marks [hash]="block.id" mode="inline" [size]="14"></app-chain-block-marks></td>
                   <td class="table-cell-size">
                     <div class="progress">
                       <div class="progress-bar progress-mempool {{ network$ | async }}" role="progressbar" [ngStyle]="{'width': (block.weight / stateService.env.BLOCK_WEIGHT_UNITS)*100 + '%' }">&nbsp;</div>
@@ -141,6 +157,14 @@
           <div class="">&nbsp;</div>
         </div>
       </div>
+    </div>
+    <div class="col card-wrapper">
+      <div class="main-title">Withdrawal bundles</div>
+      <app-drivechain-widget kind="bundles"></app-drivechain-widget>
+    </div>
+    <div class="col card-wrapper">
+      <div class="main-title">Peg activity</div>
+      <app-drivechain-widget kind="peg"></app-drivechain-widget>
     </div>
   </div>
 </div>

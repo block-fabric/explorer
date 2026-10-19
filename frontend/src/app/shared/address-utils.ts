@@ -4,6 +4,7 @@ import { Vin, Vout } from '@interfaces/electrs.interface';
 import { BECH32_CHARS_LW, BASE58_CHARS, HEX_CHARS } from '@app/shared/regex.utils';
 import { parseTaproot } from './transaction.utils';
 
+import { CHAIN_NETWORK, bech32Prefix } from '@app/chain/profiles';
 export type AddressType = 'fee'
   | 'empty'
   | 'provably_unspendable'
@@ -22,12 +23,10 @@ export type AddressType = 'fee'
   | 'unknown'
 
 const ADDRESS_PREFIXES = {
+  // Chains Explorer: the 'mainnet' slot is the explorer's own chain, with its profile's prefixes (chain/profiles.ts)
   mainnet: {
-    base58: {
-      pubkey: ['1'],
-      script: ['3'],
-    },
-    bech32: 'bc1',
+    base58: CHAIN_NETWORK === 'main' ? { pubkey: ['C'], script: ['c'] } : { pubkey: ['m', 'n'], script: ['2'] },
+    bech32: bech32Prefix() + '1',
   },
   testnet: {
     base58: {

@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
+import { PROFILE, PROFILES, ChainProfile } from '@app/chain/profiles';
 
 @Component({
   selector: 'app-svg-images',
@@ -16,4 +17,12 @@ export class SvgImagesComponent {
   @Input() height: string;
   @Input() viewBox: string;
   @Input() fill: string;
+
+  // Chains Explorer: the chain's logo and marks
+  profile = PROFILE;
+  nameLength = Math.min(370, Math.max(150, PROFILE.name.length * 46));
+
+  markOf(id: string): ChainProfile {
+    return PROFILES[id] ?? PROFILE;
+  }
 }

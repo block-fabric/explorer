@@ -206,10 +206,8 @@
           </a>
         </td>
         <td *ngIf="!stateService.env.MINING_DASHBOARD && stateService.env.BASE_MODULE === 'mempool'">
-          <span placement="bottom" class="badge"
-            [class]="block.extras.pool.slug === 'unknown' ? 'bg-secondary' : 'bg-primary'">
-            {{ block.extras.pool.name }}
-        </span>
+          <!-- Chains Explorer: the miner from the coinbase tag (drivechain index) -->
+          <app-chain-block-marks [hash]="block.id" mode="miner"></app-chain-block-marks>
         </td>
       </tr>
       @if (network !== 'liquid' && network !== 'liquidtestnet' && block.extras.coinbaseBip54) {
@@ -241,6 +239,9 @@
       </tr>
     </ng-template>
   </ng-template>
+
+  <!-- Chains Explorer: what this block did for the drivechain (Chains), or the Chains block that carried it (sidechains) -->
+  <app-chain-block-panel *ngIf="block && !error" [blockHash]="block.id" [height]="block.height"></app-chain-block-panel>
 
   <ng-container *ngIf="showComparison">
     <span id="overview"></span>

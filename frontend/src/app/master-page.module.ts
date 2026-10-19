@@ -22,6 +22,8 @@ const browserWindow = window || {};
 // @ts-ignore
 const browserWindowEnv = browserWindow.__env || {};
 
+import { MODULE, PROFILE } from '@app/chain/profiles';
+
 const routes: Routes = [
   {
     path: '',
@@ -46,7 +48,8 @@ const routes: Routes = [
       },
       {
         path: 'about',
-        loadChildren: () => import('@components/about/about.module').then(m => m.AboutModule),
+        // Chains Explorer: our own About page (upstream's is mempool.space's: its team, sponsors, services)
+        loadComponent: () => import('@app/chain/pages/about.page').then(m => m.ChainAboutPage),
       },
       {
         path: 'blocks/stale',
@@ -64,6 +67,15 @@ const routes: Routes = [
         path: 'rbf',
         component: RbfList,
       },
+      // Chains Explorer: the drivechain cockpit (every sidechain on Chains, this sidechain's BMM and peg on a sidechain)
+      {
+        path: PROFILE.mainchain ? 'drivechain' : 'bmm',
+        loadChildren: () => import('@app/chain/pages/cockpit/cockpit.module').then(m => m.ChainCockpitModule),
+      },
+      // Chains Explorer: the pages of the chain module (chain/modules/<id>)
+      // chains of stake: what a Chains block committed to (an anchor ticket) -> the block that acknowledged it
+      ...(PROFILE.pos ? [{ path: 'anchor/:ticket', loadComponent: () => import('@app/chain/pages/anchor-redirect.page').then(m => m.AnchorRedirectPage) }] : []),
+      ...(MODULE.routes ?? []),
       {
         path: 'txs',
         component: RecentTransactionsList,

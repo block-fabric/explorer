@@ -56,7 +56,7 @@
             </ng-template>
             <div [attr.data-cy]="'bitcoin-block-' + offset + '-index-' + i + '-total-fees'" *ngIf="blockDisplayMode === 'fees'; else noMiningInfo"
               class="block-size">
-              <app-amount [satoshis]="block.extras?.totalFees ?? 0" digitsInfo="1.2-3" [noFiat]="true"></app-amount>
+              <app-amount [satoshis]="block.extras?.totalFees ?? 0" digitsInfo="1.2-3" [noFiat]="true" [forceSats]="(block.extras?.totalFees ?? 0) < 1000000"></app-amount>
             </div>
             <ng-template #noMiningInfo>
             <div [attr.data-cy]="'bitcoin-block-' + offset + '-index-' + i + 'block-size'"
@@ -68,6 +68,7 @@
               <ng-template #transactionsSingular let-i i18n="shared.transaction-count.singular">{{ i }} transaction</ng-template>
               <ng-template #transactionsPlural let-i i18n="shared.transaction-count.plural">{{ i }} transactions</ng-template>
             </div>
+            <app-chain-block-marks *ngIf="profile.mainchain || profile.pos" [hash]="block.id" mode="stripe"></app-chain-block-marks>
             <div [attr.data-cy]="'bitcoin-block-' + offset + '-index-' + i + '-time'" class="time-difference">
               <app-time kind="since" [time]="block.timestamp" [fastRender]="true" [precision]="1" minUnit="minute"></app-time>
               <a *ngIf="!minimal && showIsEarlierThanParent(i)" [routerLink]="['/docs/faq' | relativeUrl ]" class="timestamp-info" fragment="why-block-timestamps-dont-always-increase">
@@ -76,7 +77,12 @@
             </div>
           </ng-container>
         </div>
-        <div class="animated" *ngIf="block.extras?.pool != undefined && showPools">
+        <!-- Chains Explorer: the drivechain marks (miner, sidechains carried, peg events; or the Chains block that carried
+             this sidechain block) in place of the mining pool, which the pools list does not know on Chains -->
+        <div class="animated chain-marks" *ngIf="showPools && !minimal">
+          <app-chain-block-marks [hash]="block.id" mode="below"></app-chain-block-marks>
+        </div>
+        <div class="animated" *ngIf="false && block.extras?.pool != undefined && showPools">
           <a [attr.data-cy]="'bitcoin-block-' + offset + '-index-' + i + '-pool'" class="badge" [class.miner-name]="block.extras.pool.minerNames?.length > 1 && block.extras.pool.minerNames[1] != ''" [routerLink]="[('/mining/pool/' + block.extras.pool.slug) | relativeUrl]">
             <ng-container *ngIf="block.extras.pool.minerNames?.length > 1 && block.extras.pool.minerNames[1] != ''; else centralisedPool">
               <ng-container *ngIf="block.extras.pool.minerSlug && block.extras.pool.minerName; else minerName">
