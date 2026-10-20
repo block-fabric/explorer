@@ -2,6 +2,7 @@ import { ChainModule, ChainModuleContext, sidechainProfile } from '../../module'
 import { findMarkers } from '../../marker';
 import { bitassetsDescribeTx, bitassetsRoutes, ledgerRoutes } from '../bitassets';
 import { getLedger } from '../bitassets/ledger';
+import { getFeeLedger } from '../fastblocks/fees';
 import { fastblocksDescribeBlock, fastblocksDescribeTx, fastblocksRoutes } from '../fastblocks';
 
 /**
@@ -33,8 +34,8 @@ const layers: ChainModule = {
   },
 
   describeBlock: fastblocksDescribeBlock,
-  start: (ctx) => getLedger().start(ctx),
-  onNewBlock: () => getLedger().onNewBlock(),
+  start: (ctx) => { getLedger().start(ctx); getFeeLedger().start(ctx); },
+  onNewBlock: () => { getLedger().onNewBlock(); getFeeLedger().onNewBlock(); },
 
   async describeTx(tx: any, ctx: ChainModuleContext) {
     const [assets, stake] = await Promise.all([bitassetsDescribeTx(tx, ctx), fastblocksDescribeTx(tx, ctx)]);

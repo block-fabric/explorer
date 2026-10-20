@@ -1,6 +1,7 @@
 import { Application } from 'express';
 import { ChainModule, ChainModuleContext, sidechainProfile } from '../../module';
 import { Reader, findMarkers, safeDecode } from '../../marker';
+import { getFeeLedger } from './fees';
 
 /**
  * FastBlocks: blocks of stake every 15 seconds from a bonded validator set, anchored and finalized by blind merged
@@ -34,6 +35,24 @@ export function fastblocksRoutes(app: Application, prefix: string, ctx: ChainMod
   simple('schedule', 'getleaderschedule');
   simple('anchors', 'getanchorinfo');
   simple('evidence', 'listevidence', 10000);
+  /**
+   * GET fees?window=   the fee flows (fees.ts): peg and ordinary fees, the bidder's and the validators' shares as each
+   * block paid them, the pot and its payouts at anchors, the pool shares per validator, the split curve now
+   */
+  app.get(prefix + 'fees', ctx.handler(async (req, res) => {
+    const L = getFeeLedger();
+    if (!L.isReady()) { return ctx.fail(req, res, 503, 'The fee ledger is still being built'); }
+    const window = ctx.intParam(req.query.window, 0, 0, 1e7) as number;
+    const [info, vals] = await Promise.all([
+      ctx.cached('info-pos', 3000, () => ctx.node.call('getposinfo')),
+      ctx.cached('validators', 3000, () => ctx.node.call('getvalidators')),
+    ]);
+    const owners = await Promise.all(((vals as any)?.validators ?? []).map((v: any) =>
+      ctx.cached('owner:' + v.pubkey, 60000, () => ctx.node.call('getvalidator', v.pubkey)).catch(() => null)
+        .then((d: any) => ({ pubkey: v.pubkey, stake: v.stake, slots: v.slots, owner: d?.bond?.owner ?? null }))));
+    res.json(L.summary(window, info, owners));
+  }));
+
   app.get(prefix + 'validators', ctx.handler(async (req, res) => {
     const epoch = ctx.intParam(req.query.epoch, null, 0, 1e9);
     res.json(await ctx.cached('validators:' + epoch, 3000, () => epoch === null ? ctx.node.call('getvalidators') : ctx.node.call('getvalidators', epoch)));
@@ -81,6 +100,8 @@ export async function fastblocksDescribeTx(tx: any, ctx: ChainModuleContext): Pr
 const fastblocks: ChainModule = {
   profile: sidechainProfile('fastblocks', 'FastBlocks', 5, 'fbl'),
   initRoutes: fastblocksRoutes,
+  start: (ctx) => getFeeLedger().start(ctx),
+  onNewBlock: () => getFeeLedger().onNewBlock(),
   describeBlock: fastblocksDescribeBlock,
   describeTx: fastblocksDescribeTx,
 };
