@@ -8,7 +8,9 @@ h5 { font-size: 1rem; margin-bottom: 4px; }
   color: var(--chain-accent, var(--info)); border: 1px solid color-mix(in srgb, var(--chain-accent, #d8b45a) 45%, transparent); }
 .form { font-size: 0.75rem; color: var(--transparent-fg); margin-left: 6px; font-weight: normal; }
 .hint { font-size: 0.8rem; color: var(--transparent-fg); margin-bottom: 4px; }
-.dc-table { margin-bottom: 0; font-size: 0.9rem; th { color: var(--transparent-fg); font-weight: normal; font-size: 0.8rem; } td { vertical-align: middle; } }
+.dc-table { margin-bottom: 0; font-size: 0.9rem; th { color: var(--transparent-fg); font-weight: normal; font-size: 0.8rem; } td { vertical-align: middle; }
+  // an auto-layout table widens a cell to its full hash; cap those cells so app-truncate can shorten
+  td:has(app-truncate) { max-width: 0; width: 50%; } }
 .mono { font-family: monospace; font-size: 0.85rem; }
 .dest { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vote.up { color: var(--green); }
