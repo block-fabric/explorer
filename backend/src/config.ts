@@ -188,6 +188,14 @@ interface IConfig {
     // address and scripthash lookups from our own index when MEMPOOL.BACKEND is none (chain/address-index.ts). Off
     // by default: it reads every block from genesis into memory, which suits a small test chain, not eCash
     ADDRESS_INDEX: boolean;
+    // A sidechain explorer (an l2 profile, chain/l2/): the sidechain node's read RPC, plain JSON-RPC 2.0
+    SIDECHAIN_RPC: {
+      URL: string;
+      TIMEOUT: number;
+      MAX_CONCURRENT: number;
+    };
+    // Public URL of the eCash explorer, for links from a sidechain explorer; empty = no links
+    MAINCHAIN_EXPLORER: string;
   }
 }
 
@@ -372,6 +380,12 @@ const defaults: IConfig = {
     },
     'EXPLORER_URLS': {},
     'ADDRESS_INDEX': false,
+    'SIDECHAIN_RPC': {
+      'URL': 'http://127.0.0.1:6009',
+      'TIMEOUT': 30000,
+      'MAX_CONCURRENT': 2,
+    },
+    'MAINCHAIN_EXPLORER': '',
   }
 };
 

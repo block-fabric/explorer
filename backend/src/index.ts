@@ -53,6 +53,8 @@ import stratumApi from './api/services/stratum';
 import drivechain from './chain/drivechain';
 import addressIndex from './chain/address-index';
 import drivechainRoutes, { moduleNewBlock } from './chain/drivechain.routes';
+import { PROFILE } from './chain/profile';
+import l2Routes from './chain/l2/routes';
 
 class Server {
   private wss: WebSocket.Server | undefined;
@@ -125,6 +127,12 @@ class Server {
       console.error(`unhandledRejection:`, reason, promise);
       this.forceExit('unhandledRejection', 1);
     });
+
+    // Chains Explorer: a sidechain explorer (kind l2) serves its own index of the sidechain node (chain/l2/) and
+    // nothing of upstream's: no database, node, mempool, websocket, statistics or block indexing
+    if (PROFILE.kind === 'l2') {
+      return this.startL2Server(worker);
+    }
 
     if (config.MEMPOOL.BACKEND === 'esplora') {
       bitcoinApi.startHealthChecks();
@@ -279,6 +287,24 @@ class Server {
   }
 
   /** @asyncSafe */
+  /** Chains Explorer: the server of a sidechain explorer, chains/L2-API.md */
+  startL2Server(worker: boolean): void {
+    this.app
+      .use((req: Request, res: Response, next: NextFunction) => {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+        next();
+      })
+      .use(express.json({ limit: '1mb' }));
+    l2Routes.initRoutes(this.app);
+    this.server = http.createServer(this.app);
+    this.server.listen(config.MEMPOOL.HTTP_PORT, () => {
+      logger.notice(`Sidechain explorer (${PROFILE.id}) is running on port ${config.MEMPOOL.HTTP_PORT}${worker ? ' (worker)' : ''}`);
+    });
+    this.server.keepAliveTimeout = 70 * 1000;
+    this.server.headersTimeout = 71 * 1000;
+  }
+
   async runMainUpdateLoop(): Promise<void> {
     const start = Date.now();
     try {

@@ -179,6 +179,7 @@ class DrivechainRoutes {
   private $getChain = async (req: Request, res: Response): Promise<void> => {
     res.json({
       id: PROFILE.id,
+      kind: PROFILE.kind,
       name: PROFILE.name,
       unit: PROFILE.unit,
       slot: PROFILE.slot,

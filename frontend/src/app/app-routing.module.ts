@@ -8,6 +8,7 @@ import { ClockComponent } from '@components/clock/clock.component';
 import { StatusViewComponent } from '@components/status-view/status-view.component';
 import { AddressGroupComponent } from '@components/address-group/address-group.component';
 import { TrackerGuard } from '@app/route-guards';
+import { PROFILE } from '@app/chain/profiles';
 
 const browserWindow = window as typeof window & { __env?: any };
 const browserWindowEnv = browserWindow.__env || {};
@@ -362,6 +363,17 @@ if (browserWindowEnv && browserWindowEnv.BASE_MODULE === 'liquid') {
       path: '',
       loadChildren: () => import('@app/liquid/liquid-graphs.module').then(m => m.LiquidGraphsModule),
       data: { preload: true },
+    },
+  ];
+}
+
+// eCash Explorer: a sidechain explorer (PROFILE.kind 'l2') has its own lean page set (chain/l2/), on its own API
+// (/api/v1/chain, /api/v1/l2/*): none of upstream's routes, so none of upstream's pages, websocket or APIs
+if (PROFILE.kind === 'l2') {
+  routes = [
+    {
+      path: '',
+      loadChildren: () => import('@app/chain/l2/l2.routes').then(m => m.L2_ROUTES),
     },
   ];
 }

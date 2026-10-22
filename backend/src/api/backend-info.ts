@@ -5,6 +5,7 @@ import { IBackendInfo } from '../mempool.interfaces';
 import config from '../config';
 import bitcoinClient from './bitcoin/bitcoin-client';
 import logger from '../logger';
+import { PROFILE } from '../chain/profile';
 
 class BackendInfo {
   private backendInfo: IBackendInfo;
@@ -33,6 +34,9 @@ class BackendInfo {
       osVersion: `${os.type()} ${os.release()}`,
     };
 
+    if (PROFILE.kind === 'l2') {
+      return; // Chains Explorer: a sidechain explorer has no Core node to ask
+    }
     this.timer = setInterval(async () => {
       try {
         await this.$updateCoreVersion();

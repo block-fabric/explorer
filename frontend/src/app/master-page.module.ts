@@ -23,6 +23,7 @@ const browserWindow = window || {};
 const browserWindowEnv = browserWindow.__env || {};
 
 import { MODULE } from '@app/chain/profiles';
+import { ChainSwitcherComponent } from '@app/chain/components/chain-switcher/chain-switcher.component';
 
 const routes: Routes = [
   {
@@ -187,6 +188,7 @@ export class MasterPageRoutingModule { }
     CommonModule,
     MasterPageRoutingModule,
     SharedModule,
+    ChainSwitcherComponent,
   ],
   declarations: [
     MasterPageComponent,

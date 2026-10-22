@@ -1,4 +1,5 @@
 import { Application, Request, Response } from 'express';
+import { L2Chain } from './l2/types';
 
 /**
  * Chain modules: everything chain-specific in the backend lives in one folder per chain,
@@ -10,6 +11,8 @@ import { Application, Request, Response } from 'express';
 export interface ChainProfile {
   /** the module id, the value of CHAIN.PROFILE */
   id: string;
+  /** l1: the eCash mainchain explorer (a node, upstream mempool); l2: a sidechain explorer (chain/l2/) */
+  kind: 'l1' | 'l2';
   name: string;
   unit: string;
   /** BIP300 slot on the eCash mainchain; null for the mainchain itself */
@@ -40,6 +43,8 @@ export interface RpcClient {
 
 export interface ChainModule {
   profile: ChainProfile;
+  /** a sidechain (kind l2): how to read its node, see chain/l2/types.ts */
+  l2?: L2Chain;
   /**
    * The module's own read-only routes. `prefix` is /api/v1/sidechain/ for a sidechain and /api/v1/chain/ for the
    * mainchain; register e.g. app.get(prefix + 'names', ...). The frontend module calls them with

@@ -6,7 +6,7 @@ import { ChainModule } from '../../module';
  * drivechain index (chain/drivechain.ts), served at /api/v1/drivechain/*.
  */
 const ecash: ChainModule = {
-  profile: { id: 'ecash', name: 'eCash', unit: 'ECX', slot: null, mainchain: true, subsidy: true },
+  profile: { id: 'ecash', kind: 'l1', name: 'eCash', unit: 'ECX', slot: null, mainchain: true, subsidy: true },
 };
 
 export default ecash;

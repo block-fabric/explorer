@@ -13,6 +13,10 @@ import { SERVICES_POPUP_ACTION } from '@app/shared/services-popup-action.token';
 
 import { CHAIN_NETWORK, MODULE, NETWORK_NAME, PROFILE } from '@app/chain/profiles';
 import { ChainApiService } from '@app/chain/chain-api.service';
+import { NavItem } from '@app/chain/chain-module';
+import { ChainLink, chainLinks } from '@app/chain/chain-links';
+import { L2ApiService } from '@app/chain/l2/l2-api.service';
+import { l2FeatureNav } from '@app/chain/l2/l2-nav';
 @Component({
   selector: 'app-global-footer',
   templateUrl: './global-footer.component.html',
@@ -29,6 +33,10 @@ export class GlobalFooterComponent implements OnInit, OnDestroy, OnChanges {
   profile = PROFILE; // eCash Explorer
   networkName = NETWORK_NAME;
   moduleNav = MODULE.nav ?? [];
+  /** a sidechain explorer (chain/l2/): its pages, and the other chains' explorers */
+  l2 = PROFILE.kind === 'l2';
+  l2Nav$: Observable<NavItem[]>;
+  chainLinks$: Observable<ChainLink[]>;
   /** the other eCash networks' explorers (GET /api/v1/chain) */
   otherNetworks$: Observable<{ id: string; name: string; explorer: string | null }[]>;
   mempoolSpaceBuild = window['isMempoolSpaceBuild'];
@@ -58,6 +66,7 @@ export class GlobalFooterComponent implements OnInit, OnDestroy, OnChanges {
     private websocketService: WebsocketService,
     private router: Router,
     private chainApi: ChainApiService,
+    private l2Api: L2ApiService,
     @Inject(SERVICES_POPUP_ACTION) private openServicesPopupAction: () => void
   ) {}
 
@@ -66,6 +75,11 @@ export class GlobalFooterComponent implements OnInit, OnDestroy, OnChanges {
     this.otherNetworks$ = this.chainApi.chain$().pipe(
       map(c => (c?.networks ?? []).filter(n => n.id !== (c?.network ?? CHAIN_NETWORK) && !!n.explorer)),
     );
+
+    if (this.l2) {
+      this.l2Nav$ = this.l2Api.features$.pipe(map(f => l2FeatureNav(f)));
+      this.chainLinks$ = this.chainApi.chain$().pipe(map(chainLinks));
+    }
 
     this.env = this.stateService.env;
     this.backendInfo$ = this.stateService.backendInfo$;

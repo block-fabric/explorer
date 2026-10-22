@@ -2,6 +2,6 @@
     <select formControlName="mode" class="form-select form-select-sm form-control-secondary form-control mx-auto" style="width: 75px;" (change)="changeMode()">
         <option value="btc">{{ unit }}</option>
         <option value="sats" i18n="shared.sats">sats</option>
-        <option value="fiat" i18n="shared.fiat|Fiat">Fiat</option>
+        <option *ngIf="showFiat" value="fiat" i18n="shared.fiat|Fiat">Fiat</option>
     </select>
 </div>

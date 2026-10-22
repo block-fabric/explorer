@@ -29,7 +29,9 @@ export class OpenGraphService {
     // save og:image tag from original template
     const initialOgImageTag = metaService.getTag('property=\'og:image\'');
     // eCash Explorer: the chain's own preview (resources/previews/chain-<id>.png; TODO: chain-ecash.png)
-    this.defaultImageUrl = document.location.origin + basePath() + '/resources/previews/chain-' + PROFILE.id + '.png';
+    // (the one the page came with: docker/frontend/entrypoint.sh falls back to chain-ecash.png for a chain without its own)
+    const preview = String(initialOgImageTag?.content ?? '').match(/chain-[a-z0-9]+\.png/)?.[0] ?? 'chain-' + PROFILE.id + '.png';
+    this.defaultImageUrl = document.location.origin + basePath() + '/resources/previews/' + preview;
     this.router.events.pipe(
       filter(event => event instanceof NavigationEnd),
       map(() => this.activatedRoute),

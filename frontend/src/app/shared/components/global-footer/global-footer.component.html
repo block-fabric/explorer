@@ -59,6 +59,26 @@
     </div>
     <!-- eCash Explorer: this chain's pages and the other networks' explorers, in place of mempool.space's links -->
     <div class="row col-md-12 link-tree" [class]="{'services': isServicesPage}">
+        @if (l2) {
+          <!-- a sidechain explorer (chain/l2/): its own pages, and the eCash and sibling sidechain explorers -->
+          <div class="links">
+            <p class="category">Explore {{ profile.name }}</p>
+            <p><a [routerLink]="['/']">Dashboard</a></p>
+            <p><a [routerLink]="['/blocks']">Blocks</a></p>
+            <p><a [routerLink]="['/deposits']">Deposits</a></p>
+            <p><a [routerLink]="['/withdrawals']">Withdrawals</a></p>
+            <p *ngFor="let item of l2Nav$ | async"><a [routerLink]="[item.path]">{{ item.title }}</a></p>
+          </div>
+          <ng-container *ngIf="chainLinks$ | async as chains">
+            <div class="links" *ngIf="chains.length > 1">
+              <p class="category">Chains</p>
+              <ng-container *ngFor="let c of chains">
+                <p *ngIf="c.here" class="text-muted small">{{ c.name }} (this explorer)</p>
+                <p *ngIf="!c.here"><a [href]="c.url">{{ c.name }} Explorer</a></p>
+              </ng-container>
+            </div>
+          </ng-container>
+        } @else {
         <div class="links">
           <p class="category">Explore</p>
           <p><a [routerLink]="['/blocks' | relativeUrl]">Recent Blocks</a></p>
@@ -68,6 +88,7 @@
           <p><a [routerLink]="['/tx/push' | relativeUrl]">Broadcast Transaction</a></p>
           <p><a [routerLink]="['/docs/api' | relativeUrl]">API Documentation</a></p>
         </div>
+        }
         <ng-container *ngIf="otherNetworks$ | async as nets">
           <div class="links" *ngIf="nets.length">
             <p class="category">Networks</p>
@@ -75,7 +96,7 @@
             <p *ngFor="let n of nets"><a [href]="n.explorer">{{ n.name }} Explorer</a></p>
           </div>
         </ng-container>
-        <div class="links">
+        <div class="links" *ngIf="!l2">
           <p class="category">Tools</p>
           <p><a [routerLink]="['/clock/mempool/0']">Clock (Mempool)</a></p>
           <p><a [routerLink]="['/clock/mined/0']">Clock (Mined)</a></p>
@@ -83,7 +104,7 @@
         </div>
         <div class="links">
           <p class="category">About</p>
-          <p><a [routerLink]="['/about']">About this explorer</a></p>
+          <p *ngIf="!l2"><a [routerLink]="['/about']">About this explorer</a></p>
           <p><a href="https://github.com/mempool/mempool" target="_blank" rel="noopener">Built on mempool (AGPL-3.0)</a></p>
           <p><a href="3rdpartylicenses.txt">Third-party Licenses</a></p>
         </div>

@@ -1,0 +1,17 @@
+// A sidechain explorer's search box (upstream's app-search-form queries upstream's APIs)
+.l2-search {
+  position: relative;
+  padding: 10px 0;
+  @media (min-width: 992px) {
+    width: 100%;
+    max-width: 500px;
+    padding-left: 15px;
+  }
+  .form-control { background: var(--bg); border-color: var(--search-button-border, #ffffff20); color: var(--fg); font-size: 0.9rem; }
+  .btn { min-width: 46px; }
+  .search-icon { display: inline-block; transform: rotate(-45deg); font-size: 1.1rem; line-height: 1; }
+  .search-error {
+    position: absolute; top: 100%; left: 15px; right: 0; z-index: 101; margin-top: -4px;
+    background: var(--box-bg); border: 1px solid #ffffff20; border-radius: 6px; padding: 6px 10px; font-size: 0.82rem; color: #ffd166;
+  }
+}

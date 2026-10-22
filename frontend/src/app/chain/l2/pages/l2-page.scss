@@ -1,0 +1,19 @@
+// The sidechain explorers' pages (on top of chain/components/module-page.scss)
+.head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.id { font-family: monospace; font-size: 0.9rem; word-break: break-all; color: var(--fg); }
+.kv { width: 100%; margin: 0; font-size: 0.86rem;
+  th { color: var(--transparent-fg); font-weight: normal; white-space: nowrap; padding: 4px 16px 4px 0; vertical-align: top; width: 1%; }
+  td { padding: 4px 0; vertical-align: top; overflow-wrap: anywhere; } }
+.table td, .table th { background: transparent; }
+.table a.mono, td.mono { word-break: normal; }
+.pager { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+.tx-card { background: var(--box-bg); border-radius: 8px; padding: 10px 14px; margin-bottom: 10px;
+  .tx-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; font-size: 0.85rem; } }
+.status { display: inline-block; font-size: 0.72rem; padding: 1px 8px; border-radius: 10px; background: #ffffff14;
+  &.paid, &.ok { background: color-mix(in srgb, #3bd16f 30%, transparent); }
+  &.bundled { background: color-mix(in srgb, #5aa6ff 30%, transparent); }
+  &.pending, &.wait { background: color-mix(in srgb, #f5b83d 30%, transparent); } }
+.nav-btns { display: flex; gap: 6px; }
+.note { font-size: 0.8rem; color: var(--transparent-fg); max-width: 900px; }
+.empty { color: var(--transparent-fg); font-size: 0.86rem; padding: 8px 0; }
+.text-end { text-align: right; }

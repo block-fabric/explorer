@@ -1,0 +1,64 @@
+<header class="sticky-header">
+  <nav class="navbar navbar-expand-md navbar-dark">
+    <!-- the chain's logo and name (app-svg-images 'mempoolSpace' draws the profile's), and the eCash network -->
+    <a class="navbar-brand d-flex" [routerLink]="['/']">
+      <app-svg-images name="mempoolSpace" viewBox="0 0 500 126" class="mempool-logo"></app-svg-images>
+      <div class="network-badge" [class.mainnet]="chainNetwork === 'ecash'" title="eCash network">{{ networkName }}</div>
+    </a>
+
+    <!-- the other eCash networks' explorers of this chain (GET /api/v1/chain: networks with an explorer URL) -->
+    <ng-container *ngIf="networks$ | async as nets">
+      <div ngbDropdown class="dropdown-container network-switcher" *ngIf="nets.others.length">
+        <button ngbDropdownToggle type="button" class="btn btn-secondary dropdown-toggle-split d-flex justify-content-center align-items-center" aria-haspopup="true" [attr.aria-label]="'Other eCash networks. Current: ' + networkName" [title]="'Other eCash networks. Current: ' + networkName">
+          <app-svg-images name="chain-mark" [fill]="profile.id" width="20" height="20" [style]="'color: ' + profile.color"></app-svg-images>
+        </button>
+        <div ngbDropdownMenu class="dropdown-menu-right">
+          <span ngbDropdownItem class="network-switch-item active" [disabled]="true">
+            <span class="ns-name">{{ networkName }}</span><span class="ns-id">this explorer</span>
+          </span>
+          <a ngbDropdownItem *ngFor="let n of nets.others" [href]="n.explorer" class="network-switch-item">
+            <span class="ns-name">{{ n.name }}</span><span class="ns-id">{{ n.id }}</span>
+          </a>
+        </div>
+      </div>
+    </ng-container>
+    <!-- the eCash explorer and the sibling sidechain explorers -->
+    <app-chain-switcher></app-chain-switcher>
+
+    <div class="navbar-collapse" id="navbarCollapse">
+      <ul class="navbar-nav">
+        <li class="nav-item" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" id="btn-home">
+          <a class="nav-link" [routerLink]="['/']" title="Dashboard" aria-label="Dashboard">
+            <div class="svg-wrapper"><app-svg-images name="nav-tachometer" width="21.59" height="100%"></app-svg-images></div>
+          </a>
+        </li>
+        <li class="nav-item" routerLinkActive="active" *ngFor="let item of nav$ | async" [id]="'btn-' + item.path.slice(1)">
+          <a class="nav-link" [routerLink]="[item.path]" [title]="item.title" [attr.aria-label]="item.title">
+            <div class="svg-wrapper"><app-svg-images [name]="item.icon" [fill]="profile.id" width="21.59" height="100%"></app-svg-images></div>
+          </a>
+        </li>
+      </ul>
+      <form class="l2-search search-form-container" (ngSubmit)="search()" role="search">
+        <div class="input-group">
+          <input type="text" class="form-control" name="q" [(ngModel)]="query" (input)="clearError()" autocomplete="off" spellcheck="false"
+            [placeholder]="'Search ' + profile.name + ': height, block hash, txid, address'" aria-label="Search">
+          <button type="submit" class="btn btn-primary" [disabled]="searching" title="Search" aria-label="Search">
+            <span class="search-icon">&#9906;</span>
+          </button>
+        </div>
+        <div class="search-error" *ngIf="searchError">{{ searchError }}</div>
+      </form>
+    </div>
+  </nav>
+</header>
+
+<div class="d-flex" style="overflow: clip">
+  <div class="empty-sidenav"></div>
+  <div class="flex-grow-1 d-flex flex-column">
+    <main style="min-width: 375px; max-width: 100vw">
+      <router-outlet></router-outlet>
+    </main>
+    <div class="flex-grow-1"></div>
+    <app-global-footer></app-global-footer>
+  </div>
+</div>

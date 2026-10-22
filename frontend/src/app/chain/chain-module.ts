@@ -18,6 +18,11 @@ export interface NavItem {
 
 export interface ChainProfile {
   id: string;
+  /**
+   * 'l1': the eCash mainchain, on upstream mempool's pages and APIs; 'l2': a sidechain explorer, on its own lean page
+   * set (chain/l2/) and API (/api/v1/l2/*), with none of upstream's pages, websocket or APIs
+   */
+  kind: 'l1' | 'l2';
   name: string;
   tagline: string;
   unit: string;
@@ -53,4 +58,11 @@ export interface ChainFrontendModule {
   txView?: () => Promise<Type<ChainDataView>>;
   /** the block page's panel for describeBlock data */
   blockView?: () => Promise<Type<ChainDataView>>;
+  /**
+   * L2: the chain's feature pages (chain/l2/feature.routes.ts: 'names', 'assets', 'markets', 'shielded') until
+   * GET /api/v1/chain says which the backend serves
+   */
+  features?: L2Feature[];
 }
+
+export type L2Feature = 'names' | 'assets' | 'markets' | 'shielded' | 'swaps';

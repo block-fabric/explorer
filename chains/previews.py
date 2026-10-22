@@ -2,13 +2,19 @@
 """
 The link-preview images of the explorers (og:image, twitter:image): one 1200x630 PNG per chain profile,
 frontend/src/resources/previews/chain-<id>.png, rendered with headless Chromium from an HTML card.
-Marks, colours and taglines as in frontend/src/app/chain/modules/<id>/index.ts.
+Marks and colours as in frontend/src/app/chain/modules/<id>/index.ts and chain/marks.ts.
   python3 chains/previews.py
 """
 import os, subprocess, tempfile, glob
 
 CHAINS = {
     'ecash': ('eCash', '#2ec4b6', 'eCash (ECX) with BIP300/301 drivechains', ['M16 3.5l10.8 6.25v12.5L16 28.5 5.2 22.25V9.75z', 'M11 16h10'], []),
+    'thunder': ('Thunder', '#a585ff', 'A payments sidechain of eCash', ['M18.5 3.5 9 18h6.5L13.5 28.5 23 14h-6.5z'], []),
+    'bitnames': ('BitNames', '#5aa6ff', 'A naming sidechain of eCash', ['M9 5h15a2 2 0 0 1 2 2v18a2 2 0 0 1-2 2H9a4 4 0 0 1-4-4V9a4 4 0 0 1 4-4z', 'M9 5v22', 'M13 12h8', 'M13 17h6'], []),
+    'bitassets': ('BitAssets', '#f5b83d', 'An asset sidechain of eCash', ['M6 9c0-2.2 4.5-4 10-4s10 1.8 10 4-4.5 4-10 4S6 11.2 6 9z', 'M6 9v14c0 2.2 4.5 4 10 4s10-1.8 10-4V9', 'M6 16c0 2.2 4.5 4 10 4s10-1.8 10-4'], []),
+    'hivemind': ('Hivemind', '#7bd88f', 'A prediction market sidechain of eCash', ['M28 16a12 12 0 1 1-24 0 12 12 0 1 1 24 0', 'M10.5 16.5l3.5 3.5 7-7.5'], []),
+    'zside': ('zSide', '#f26b9c', 'A shielded sidechain of eCash', ['M16 4l10 4v7c0 6-4 10.5-10 13-6-2.5-10-7-10-13V8z', 'M16 12a3 3 0 0 0-1 5.8V21h2v-3.2A3 3 0 0 0 16 12z'], []),
+    'coinshift': ('Coinshift', '#ff8a3d', 'A swap sidechain of eCash', ['M7 16a9 9 0 0 1 15-6.7', 'M22 5v5h-5', 'M25 16a9 9 0 0 1-15 6.7', 'M10 27v-5h5'], []),
 }
 
 HTML = """<!doctype html><html><head><meta charset="utf-8"><style>

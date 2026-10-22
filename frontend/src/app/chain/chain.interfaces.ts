@@ -247,11 +247,18 @@ export interface ChainInfo {
   network: string;
   networkName: string;
   networks: { id: string; name: string; explorer: string | null }[];
+  /** the explorers of the chains, by profile id (the sidechains', and on an L2 explorer maybe 'ecash'); null: none */
   explorers: Record<string, string | null>;
   sidechains: { id: string; name: string; slot: number }[];
   module: { describeTx: boolean; describeBlock: boolean };
   activationHeight: number | null;
   indexReady: boolean;
+  /** 'l2' on a sidechain explorer (chain/l2/); absent or 'l1' on the eCash explorer */
+  kind?: 'l1' | 'l2';
+  /** L2: the eCash explorer of the same network (links to mainchain blocks and transactions) */
+  mainchainExplorer?: string | null;
+  /** L2: the chain's feature pages the backend serves (GET /api/v1/l2/feature/<name>) */
+  features?: string[];
 }
 
 export interface ChainTxInfo {

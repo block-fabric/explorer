@@ -1,0 +1,167 @@
+<div class="container-xl mp">
+  <div class="head">
+    <div>
+      <h1><app-svg-images name="chain-mark" [fill]="profile.id" width="30" height="30" class="cmark"></app-svg-images> {{ profile.name }}</h1>
+      <div class="sub">{{ profile.tagline }}</div>
+    </div>
+  </div>
+
+  @if (error && !d) {
+    <app-l2-state [state]="{ loading: false, error: error }" what="The sidechain"></app-l2-state>
+  } @else if (!d) {
+    <div class="skeleton-loader" style="height: 300px"></div>
+  }
+  @if (error && d) {
+    <div class="alert alert-warning py-1 small">Refreshing failed ({{ error.message }}): showing the last data.</div>
+  }
+
+  @if (d) {
+    @if (!d.summary.ready) {
+      <div class="alert alert-info py-2 small">Indexing: {{ d.summary.indexed | number }} of {{ (d.summary.tip?.height ?? 0) | number }} blocks. Counts and lists cover the blocks indexed so far.</div>
+    }
+    <div class="kpis">
+      <div class="kpi">
+        <div class="l">Tip</div>
+        <div class="v">@if (d.summary.tip; as t) {<a [routerLink]="['/block', t.hash]">{{ t.height | number }}</a>} @else {–}</div>
+        <div class="s">@if (d.summary.tip?.time; as tt) {<app-time kind="since" [time]="tt" [fastRender]="true"></app-time>} @else {time unknown}</div>
+      </div>
+      <div class="kpi">
+        <div class="l">Blocks</div>
+        <div class="v">{{ d.summary.blocks | number }}</div>
+        <div class="s">indexed to {{ d.summary.indexed | number }}</div>
+      </div>
+      <div class="kpi">
+        <div class="l">Transactions</div>
+        <div class="v">{{ d.summary.txs | number }}</div>
+        <div class="s">@if (d.summary.mempool; as mp) {<span>{{ mp.count | number }} in the mempool</span>} @else {mempool not listed by the node}</div>
+      </div>
+      <div class="kpi">
+        <div class="l">Addresses</div>
+        <div class="v">{{ d.summary.addresses | number }}</div>
+        <div class="s">that have held coins</div>
+      </div>
+      <div class="kpi">
+        <div class="l">Deposits</div>
+        <div class="v">{{ d.summary.deposits.count | number }}</div>
+        <div class="s"><a [routerLink]="['/deposits']">from eCash</a></div>
+      </div>
+      <div class="kpi">
+        <div class="l">Withdrawals</div>
+        <div class="v">{{ d.summary.withdrawals.count | number }}</div>
+        <div class="s"><a [routerLink]="['/withdrawals']">to eCash</a></div>
+      </div>
+    </div>
+
+    <div class="grid2 mt-3">
+      <div class="box">
+        <h2 class="mt-0">Sidechain wealth and eCash escrow</h2>
+        <table class="kv">
+          <tbody>
+            <tr><th>Held on {{ profile.name }}</th><td><app-l2-amount [sats]="d.summary.wealth"></app-l2-amount></td></tr>
+            <tr><th>Escrow on eCash</th><td>
+              @if (d.summary.escrow; as e) {
+                <app-l2-amount [sats]="e.amount"></app-l2-amount>
+                <span class="muted"> · sequence {{ e.sequence }} · </span><app-l2-main-link kind="tx" [id]="e.txid" [short]="true"></app-l2-main-link>
+              } @else {<span class="muted">unknown</span>}
+            </td></tr>
+            @if (d.summary.escrow; as e) {
+              <tr><th>Difference</th><td><app-l2-amount [sats]="e.amount - d.summary.wealth" [signed]="true"></app-l2-amount> <span class="muted">(escrow − wealth)</span></td></tr>
+            }
+          </tbody>
+        </table>
+        @if (d.summary.escrow) {
+          <div class="bar mt-2" [title]="(share(d.summary) * 100 | number:'1.2-2') + '% of the escrow is on the sidechain'"><div class="fill" [style.width.%]="share(d.summary) * 100"></div></div>
+        }
+      </div>
+      <div class="box">
+        <h2 class="mt-0">Pending withdrawal bundle</h2>
+        @if (d.summary.pendingBundle; as b) {
+          <table class="kv mb-2">
+            <tbody>
+              <tr><th>M6 id</th><td>@if (b.m6id) {<span class="mono">{{ b.m6id }}</span>} @else {<span class="muted">not yet proposed</span>}</td></tr>
+              <tr><th>Total</th><td><app-l2-amount [sats]="b.total"></app-l2-amount> · {{ b.payouts.length }} payouts</td></tr>
+            </tbody>
+          </table>
+          <table class="table table-borderless table-sm">
+            <thead><tr><th>eCash address</th><th class="text-end">Amount</th><th class="text-end">Fee</th></tr></thead>
+            <tbody>
+              @for (p of b.payouts.slice(0, 8); track $index) {
+                <tr><td><app-l2-main-link kind="address" [id]="p.address" [short]="true"></app-l2-main-link></td>
+                  <td class="text-end"><app-l2-amount [sats]="p.amount"></app-l2-amount></td><td class="text-end"><app-l2-amount [sats]="p.fee"></app-l2-amount></td></tr>
+              }
+            </tbody>
+          </table>
+          @if (b.payouts.length > 8) {<div class="muted small">and {{ b.payouts.length - 8 }} more</div>}
+        } @else {
+          <div class="empty">No withdrawal bundle is pending.</div>
+        }
+      </div>
+    </div>
+
+    <h2>Latest blocks <a class="small ms-2" [routerLink]="['/blocks']">all blocks</a></h2>
+    <div class="box">
+      <table class="table table-borderless table-sm">
+        <thead><tr><th>Height</th><th>Hash</th><th>Time</th><th>eCash block (BMM)</th><th class="text-end">Txs</th><th class="text-end">Deposits</th><th class="text-end">Volume</th><th class="text-end">Fees</th></tr></thead>
+        <tbody>
+          @for (b of d.blocks; track b.hash) {
+            <tr>
+              <td><a [routerLink]="['/block', b.hash]">{{ b.height | number }}</a></td>
+              <td><a [routerLink]="['/block', b.hash]" class="mono" [title]="b.hash">{{ shortId(b.hash) }}</a></td>
+              <td>@if (b.time) {<app-time kind="since" [time]="b.time" [fastRender]="true"></app-time>} @else {<span class="muted">–</span>}</td>
+              <td>@if (b.mainBlock; as m) {<app-l2-main-link kind="block" [id]="m.hash" [text]="'' + m.height"></app-l2-main-link>} @else {<span class="muted">–</span>}</td>
+              <td class="text-end">{{ b.txCount }}</td>
+              <td class="text-end">{{ b.deposits }}</td>
+              <td class="text-end"><app-l2-amount [sats]="b.volume"></app-l2-amount></td>
+              <td class="text-end"><app-l2-amount [sats]="b.fees"></app-l2-amount></td>
+            </tr>
+          } @empty {
+            <tr><td colspan="8" class="empty">No blocks indexed yet.</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <div class="grid2">
+      <div>
+        <h2>Latest deposits <a class="small ms-2" [routerLink]="['/deposits']">all</a></h2>
+        <div class="box">
+          <table class="table table-borderless table-sm">
+            <thead><tr><th>Block</th><th>eCash tx</th><th>To</th><th class="text-end">Amount</th></tr></thead>
+            <tbody>
+              @for (x of d.deposits; track $index) {
+                <tr>
+                  <td><a [routerLink]="['/block', x.hash]">{{ x.height | number }}</a></td>
+                  <td><app-l2-main-link kind="tx" [id]="x.mainTxid" [short]="true"></app-l2-main-link></td>
+                  <td>@if (x.burned) {<span class="pill">burned</span>} @else {<a [routerLink]="['/address', x.address]" class="mono">{{ shortId(x.address, 6) }}</a>}</td>
+                  <td class="text-end"><app-l2-amount [sats]="x.amount"></app-l2-amount></td>
+                </tr>
+              } @empty {
+                <tr><td colspan="4" class="empty">No deposits yet.</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div>
+        <h2>Latest withdrawals <a class="small ms-2" [routerLink]="['/withdrawals']">all</a></h2>
+        <div class="box">
+          <table class="table table-borderless table-sm">
+            <thead><tr><th>Block</th><th>To (eCash)</th><th>Status</th><th class="text-end">Amount</th></tr></thead>
+            <tbody>
+              @for (w of d.withdrawals; track $index) {
+                <tr>
+                  <td><a [routerLink]="['/block', w.height]">{{ w.height | number }}</a> <a [routerLink]="['/tx', w.txid]" class="mono small" [title]="w.txid">tx</a></td>
+                  <td><app-l2-main-link kind="address" [id]="w.mainAddress" [short]="true"></app-l2-main-link></td>
+                  <td><span class="status" [ngClass]="w.status">{{ w.status }}</span></td>
+                  <td class="text-end"><app-l2-amount [sats]="w.amount"></app-l2-amount></td>
+                </tr>
+              } @empty {
+                <tr><td colspan="4" class="empty">No withdrawals yet.</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  }
+</div>
