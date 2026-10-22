@@ -1,6 +1,6 @@
 import axios from 'axios';
 import enforcer from '../../chain/enforcer';
-import { difficultyOf, destinationText, subsidyAt } from '../../chain/drivechain';
+import { coinbaseTags, coinbaseText, difficultyOf, destinationText, subsidyAt } from '../../chain/drivechain';
 import { escrowSlot, parseBip300Script } from '../../chain/bip300';
 
 // Replies recorded from the betanet bip300301_enforcer (17eb2ce) on 22 October 2026, at height 973,919. backboned
@@ -97,5 +97,12 @@ describe('eCash rules', () => {
     const prev = '22'.repeat(32);
     const m = parseBip300Script('6a44' + '00bf0009' + side + prev);
     expect(m).toMatchObject({ kind: 'M8', slot: 9, hash: side, prevMainBlock: prev });
+  });
+
+  it('keeps HTML out of coinbase tags and text', () => {
+    const tag = Buffer.from('<img src=x onerror=alert(1)>Pool').toString('hex');
+    const script = '03' + 'aaaaaa' + (tag.length / 2).toString(16).padStart(2, '0') + tag;
+    expect(coinbaseTags(script).pool).toBe('img src=x onerror=alert(1)Pool');
+    expect(coinbaseText(script).join(' ')).not.toMatch(/[<>]/);
   });
 });

@@ -159,7 +159,7 @@ export function coinbaseText(hex: string): string[] {
   let cur = '';
   for (let i = 0; i < b.length; i++) {
     const c = b[i];
-    if (c >= 0x20 && c < 0x7f) {
+    if (c >= 0x20 && c < 0x7f && !'<>&"\''.includes(String.fromCharCode(c))) {
       cur += String.fromCharCode(c);
     } else {
       if (cur.length >= 4) { runs.push(cur.trim()); }
@@ -184,7 +184,8 @@ export function coinbaseTags(hex: string): { datum: boolean; pool: string | null
   if (n === 0x4c) { i++; n = b[i]; }
   if (!n || i + 1 + n > b.length) { return none; }
   const raw = b.subarray(i + 1, i + 1 + n);
-  const clean = (x: Buffer) => x.toString('latin1').replace(/[^\x20-\x7e]/g, '').trim() || null;
+  // printable ASCII only, without HTML's special characters: a miner writes this, and pages show it
+  const clean = (x: Buffer) => x.toString('latin1').replace(/[^\x20-\x7e]|[<>&"']/g, '').trim() || null;
   const sep = raw.indexOf(0x0f);
   if (sep >= 0) {
     return { datum: true, pool: clean(raw.subarray(0, sep)), miner: clean(raw.subarray(sep + 1)) };
