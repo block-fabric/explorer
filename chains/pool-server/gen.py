@@ -138,6 +138,15 @@ def main():
 ''')
     site = f'''# eCash block explorers ({ROOT}): https://{DOMAIN}/<explorer>/ for each explorer.
 # Written by {ROOT}/gen.py. The api containers listen on 127.0.0.1 (host network), one port each.
+# The certificate is its own (certbot certonly --webroot -w /var/www/html -d {DOMAIN}), apart from the other sites'.
+server {{
+    listen 80;
+    listen [::]:80;
+    server_name {DOMAIN};
+    location /.well-known/acme-challenge/ {{ root /var/www/html; }}
+    location / {{ return 301 https://$host$request_uri; }}
+}}
+
 server {{
     listen 443 ssl;
     listen [::]:443 ssl;
