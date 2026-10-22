@@ -1,6 +1,6 @@
 #!/bin/bash
-# Build the two Chains Explorer images (one backend, one frontend; every chain profile runs from them):
-#   chains-explorer/backend:local   chains-explorer/frontend:local
+# Build the two eCash explorer images (one backend, one frontend; every explorer runs from them):
+#   ecash-explorer/backend:local   ecash-explorer/frontend:local
 # The build contexts are staged in chains/build/ (the Docker files are copied there, not into backend/ and frontend/),
 # and the builds are capped (CPUS, MEMORY): WSL has crashed under unbounded builds.
 #   chains/build.sh [backend|frontend]...     (default: both)
@@ -26,7 +26,7 @@ for t in $TARGETS; do
     # one context: the rust module inside it, for the classic builder (which has no named contexts)
     sed -i -e 's#^COPY --from=backend \. \.$##' -e 's#^COPY --from=rustgbt \. \.\./rust/$#RUN mv rust ../rust#' "$STAGE/backend/Dockerfile"
     DOCKER_BUILDKIT=0 nice docker build --cpuset-cpus "$CPUS" --memory "$MEMORY" --build-arg commitHash="$COMMIT" \
-      -t chains-explorer/backend:$TAG "$STAGE/backend"
+      -t ecash-explorer/backend:$TAG "$STAGE/backend"
     ;;
   frontend)
     rm -rf "$STAGE/frontend" && mkdir -p "$STAGE/frontend"
@@ -39,9 +39,9 @@ for t in $TARGETS; do
       -e 's!/etc/nginx/nginx-mempool.conf!/etc/nginx/conf.d/nginx-mempool.conf!g' "$f/nginx.conf"
     sed -i -e 's/127.0.0.1:8999/__MEMPOOL_BACKEND_MAINNET_HTTP_HOST__:__MEMPOOL_BACKEND_MAINNET_HTTP_PORT__/g' "$f/nginx-mempool.conf"
     DOCKER_BUILDKIT=0 nice docker build --cpuset-cpus "$CPUS" --memory "$MEMORY" --build-arg commitHash="$COMMIT" \
-      -t chains-explorer/frontend:$TAG "$STAGE/frontend"
+      -t ecash-explorer/frontend:$TAG "$STAGE/frontend"
     ;;
   *) echo "unknown target $t"; exit 1 ;;
   esac
 done
-docker images 'chains-explorer/*'
+docker images 'ecash-explorer/*'

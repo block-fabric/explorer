@@ -1,95 +1,131 @@
 #!/usr/bin/env python3
 """
-Chains explorers on the pool server (46.224.180.56), lean layout. Writes into OUT (default ./stage):
-  docker-compose.yml          db (MariaDB, host network, 127.0.0.1:3317), cookies (copies the nodes' RPC cookies
-                              for the api containers, no network), api-<chain> (backend, host network, 127.0.0.1-only
-                              by ufw; port 18900 + slot), all with memory caps
-  config/<chain>.json         backend mempool-config.json
+The eCash explorers on the pool server (46.224.180.56), next to its eCash node and bip300301_enforcer. Run on the
+server, in ROOT; writes into OUT (default ./stage):
+  docker-compose.yml          db (MariaDB, host network, 127.0.0.1:3318) and api-<explorer> (backend, host network,
+                              127.0.0.1:<api port>), all with memory and CPU caps
+  config/<explorer>.json      the backend's mempool-config.json
   initdb/databases.sql
-  www-config/<chain>.js       the frontend's /resources/config.js for each hostname
-  nginx-site.conf             the host nginx site: https://explorer.chains.blockfab.org/<chain>/
-The frontends are served by the host nginx from www/<chain>/ (the en-US bundle of chains-explorer/frontend with
-<base href="/<chain>/">, see www.sh) and www/resources/ (shared).
-  python3 gen.py [--compose ~/skydoge/explorer/chains/compose.py] [--out stage]
+  nginx-site.conf             the host nginx site: https://explorer.blockfab.org/<explorer>/
+  urls.env                    the explorers' public URLs, for www.sh
+The frontends are served by the host nginx from www/<explorer>/ (the en-US bundle of ecash-explorer/frontend with
+<base href="/<explorer>/">, see www.sh) and www/resources/ (shared).
+
+Node RPC credentials are not in this repository: secrets/<network>.rpc holds "user:password" of a read-only RPC
+user (rpcauth + rpcwhitelist on the node).
+  python3 gen.py [--out stage] [--tag local]
 """
-import argparse, importlib.util, json, os, types
+import argparse, json, os
 
 DOMAIN = 'explorer.blockfab.org'
-API_BASE = 18900
-DB_PORT = 3317
-ROOT = '/opt/chains-explorer'
-MEM = {'chains': '256m'}
-DEFAULT_MEM = '192m'
+ROOT = '/opt/ecash-explorer'
+DB_PORT = 3318
+
+# Every explorer this server runs: its URL path, chain profile and network, the port of its backend, and where it
+# reads the chain. Mainnet and testnet are added here when their node and enforcer run on this server.
+EXPLORERS = [
+    {
+        'path': 'betanet', 'profile': 'ecash', 'network': 'ecashbeta', 'api_port': 18950,
+        'rpc_port': 8542, 'enforcer': 'http://127.0.0.1:8123', 'weight': 4000000,
+        'mem': '1g', 'heap_mb': 768,
+    },
+]
+# The front page goes to this explorer
+HOME = 'betanet'
+
+# How many of the newest blocks the backend indexes into MariaDB (block stats, mining pages). Each one is read in
+# full from the node, which also serves the pool's block templates: two weeks of blocks, not the whole chain.
+INDEXING_BLOCKS = 2016
 
 
+def rpc_auth(network):
+    path = os.path.join(ROOT, 'secrets', f'{network}.rpc')
+    try:
+        user, password = open(path).read().strip().split(':', 1)
+    except (OSError, ValueError):
+        raise SystemExit(f'{path}: missing or not "user:password" (the read-only RPC user of the {network} node)')
+    return user, password
+
+
+def backend_config(e, urls):
+    user, password = rpc_auth(e['network'])
+    return {
+        'MEMPOOL': {
+            'NETWORK': 'mainnet', 'BACKEND': 'none', 'HTTP_PORT': e['api_port'], 'CACHE_DIR': '/backend/cache',
+            'BLOCK_WEIGHT_UNITS': e['weight'], 'INDEXING_BLOCKS_AMOUNT': INDEXING_BLOCKS, 'USER_AGENT': 'ecash-explorer',
+            'STDOUT_LOG_MIN_PRIORITY': 'info', 'AUTOMATIC_POOLS_UPDATE': False, 'ENABLED': True,
+            'POLL_RATE_MS': 2000, 'API_URL_PREFIX': '/api/v1/', 'SPAWN_CLUSTER_PROCS': 0,
+        },
+        'CORE_RPC': {
+            'HOST': '127.0.0.1', 'PORT': e['rpc_port'], 'USERNAME': user, 'PASSWORD': password, 'TIMEOUT': 60000,
+            'COOKIE': False,
+        },
+        'DATABASE': {
+            'ENABLED': True, 'HOST': '127.0.0.1', 'PORT': DB_PORT, 'DATABASE': f"explorer_{e['path']}",
+            'USERNAME': 'mempool', 'PASSWORD': 'mempool',
+        },
+        'STATISTICS': {'ENABLED': True, 'TX_PER_SECOND_SAMPLE_PERIOD': 150},
+        'FIAT_PRICE': {'ENABLED': False},
+        'MAXMIND': {'ENABLED': False},
+        'CHAIN': {
+            'PROFILE': e['profile'], 'NETWORK': e['network'],
+            'ENFORCER': {'URL': e['enforcer'], 'TIMEOUT': 60000, 'MAX_CONCURRENT': 2},
+            'EXPLORER_URLS': urls,
+            'ADDRESS_INDEX': False,
+        },
+    }
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--compose', default=os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'compose.py'))
     ap.add_argument('--out', default='stage')
     ap.add_argument('--tag', default='local')
     a = ap.parse_args()
-    spec = importlib.util.spec_from_file_location('compose', a.compose)
-    cp = importlib.util.module_from_spec(spec); spec.loader.exec_module(cp)
-    profiles = list(cp.PROFILES)
-    urls = {p: f'https://{DOMAIN}/{p}' for p in profiles}
     out = a.out
-    for d in ('config', 'initdb', 'www-config'):
+    # cross links: each network's explorer by network id (the header's network switcher)
+    urls = {e['network']: f"https://{DOMAIN}/{e['path']}" for e in EXPLORERS if e['profile'] == 'ecash'}
+    for d in ('config', 'initdb'):
         os.makedirs(os.path.join(out, d), exist_ok=True)
 
-    def port(p):
-        return API_BASE + (cp.PROFILES[p][0] or 0)
-
-    for p in profiles:
-        args = types.SimpleNamespace(node_host='127.0.0.1', network='testnet', backfill=20000)
-        cfg = cp.backend_config(p, args, urls)
-        rpc = cp.PROFILES[p][1]
-        cfg['MEMPOOL']['HTTP_PORT'] = port(p)
-        cfg['CORE_RPC'].update({'HOST': '127.0.0.1', 'PORT': rpc})
-        cfg['DATABASE'].update({'HOST': '127.0.0.1', 'PORT': DB_PORT})
-        cfg['CHAIN']['MAINCHAIN_RPC'].update({'HOST': '127.0.0.1', 'PORT': cp.PROFILES['chains'][1]})
-        with open(os.path.join(out, 'config', f'{p}.json'), 'w') as f:
-            json.dump(cfg, f, indent=2)
+    for e in EXPLORERS:
+        path = os.path.join(out, 'config', f"{e['path']}.json")
+        with open(path, 'w') as f:
+            json.dump(backend_config(e, urls), f, indent=2)
+        # it holds the node's RPC password: readable by the api container's user (1000) only
+        os.chmod(path, 0o600)
+        if os.geteuid() == 0:
+            os.chown(path, 1000, 1000)
     with open(os.path.join(out, 'initdb', 'databases.sql'), 'w') as f:
-        for p in profiles:
-            f.write(f"CREATE DATABASE IF NOT EXISTS explorer_{p};\nGRANT ALL ON explorer_{p}.* TO 'mempool'@'%';\n")
+        for e in EXPLORERS:
+            f.write(f"CREATE DATABASE IF NOT EXISTS explorer_{e['path']};\nGRANT ALL ON explorer_{e['path']}.* TO 'mempool'@'%';\n")
 
-    L = ['# Written by gen.py (Chains explorers on the pool server); edit that and run it again.',
-         'name: chains-explorer', 'services:',
-         '  db:', '    image: mariadb:10.5.21', '    container_name: chains-explorer-db', '    restart: unless-stopped',
-         '    network_mode: host', '    mem_limit: 256m', '    cpus: 1.0',
+    L = ['# Written by gen.py (eCash explorers on the pool server); edit that and run it again.',
+         'name: ecash-explorer', 'services:',
+         '  db:', '    image: mariadb:10.5.21', '    container_name: ecash-explorer-db', '    restart: unless-stopped',
+         '    network_mode: host', '    mem_limit: 512m', '    cpus: 1.0',
          '    environment:', '      MYSQL_USER: mempool', '      MYSQL_PASSWORD: mempool', '      MYSQL_ROOT_PASSWORD: admin',
-         f'    command: ["--bind-address=127.0.0.1", "--port={DB_PORT}", "--innodb-buffer-pool-size=64M", "--performance-schema=OFF",'
+         f'    command: ["--bind-address=127.0.0.1", "--port={DB_PORT}", "--innodb-buffer-pool-size=256M", "--performance-schema=OFF",'
          ' "--max-connections=120", "--skip-name-resolve", "--innodb-log-buffer-size=8M", "--key-buffer-size=8M"]',
          '    volumes:', '      - ./mysql:/var/lib/mysql', '      - ./initdb:/docker-entrypoint-initdb.d:ro',
          '    healthcheck:', f'      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-P", "{DB_PORT}", "-umempool", "-pmempool"]',
-         '      interval: 10s', '      retries: 30',
-         # copies each node's RPC cookie (root 0600, replaced when a node restarts) where the api containers (uid 1000) read it
-         '  cookies:', '    image: mariadb:10.5.21', '    container_name: chains-explorer-cookies', '    restart: unless-stopped',
-         '    network_mode: none', '    mem_limit: 16m', '    cpus: 0.1',
-         '    entrypoint: ["sh", "-c", "while true; do for c in ' + ' '.join(profiles) + '; do'
-         ' f=/nodes/$$c/testnet/.cookie; [ -s $$f ] && ! cmp -s $$f /cookies/$$c.cookie && cp $$f /cookies/.$$c.tmp'
-         ' && chown 1000:1000 /cookies/.$$c.tmp && chmod 600 /cookies/.$$c.tmp && mv /cookies/.$$c.tmp /cookies/$$c.cookie; done; sleep 15; done"]',
-         '    volumes:', '      - ./cookies:/cookies']
-    L += [f'      - /opt/chains/data/{p}/testnet:/nodes/{p}/testnet:ro' for p in profiles]
-    for p in profiles:
-        L += [f'  api-{p}:', f'    image: chains-explorer/backend:{a.tag}', f'    container_name: chains-explorer-api-{p}',
+         '      interval: 10s', '      retries: 30']
+    for e in EXPLORERS:
+        p = e['path']
+        L += [f'  api-{p}:', f'    image: ecash-explorer/backend:{a.tag}', f'    container_name: ecash-explorer-api-{p}',
               '    restart: unless-stopped', '    network_mode: host', '    user: "1000:1000"',
-              f'    mem_limit: {MEM.get(p, DEFAULT_MEM)}', '    cpus: 0.5',
+              f"    mem_limit: {e['mem']}", '    cpus: 1.0',
               '    depends_on:', '      db:', '        condition: service_healthy',
               '    environment:', '      MEMPOOL_CONFIG_FILE: /config/mempool-config.json',
-              f'      NODE_OPTIONS: "--max-old-space-size={160 if p == "chains" else 128}"',
-              '    volumes:', f'      - ./config/{p}.json:/config/mempool-config.json:ro', '      - ./cookies:/cookies:ro',
-              f'      - ./data/{p}:/backend/cache']
+              f"      NODE_OPTIONS: \"--max-old-space-size={e['heap_mb']}\"",
+              '    volumes:', f'      - ./config/{p}.json:/config/mempool-config.json:ro', f'      - ./data/{p}:/backend/cache']
     with open(os.path.join(out, 'docker-compose.yml'), 'w') as f:
         f.write('\n'.join(L) + '\n')
 
-    # nginx: one server block, one sub-path per chain (/chains/, /thunder/, ...); the front page goes to /chains/
+    # nginx: one server block, one sub-path per explorer (/betanet/, ...); the front page goes to HOME
     loc = []
-    for p in profiles:
-        prt = port(p)
-        loc.append(f'''    # {p}
+    for e in EXPLORERS:
+        p, prt = e['path'], e['api_port']
+        loc.append(f'''    # {p}: {e['profile']} on {e['network']}
     location = /{p} {{ return 301 /{p}/; }}
     location = /{p}/resources/config.js {{ alias {ROOT}/www-config/{p}.js; expires 5m; }}
     location ^~ /{p}/resources/ {{ alias {ROOT}/www/resources/; expires 1h; }}
@@ -100,8 +136,8 @@ def main():
     location = /{p}/api {{ try_files /{p}/index.html =404; }}
     location ^~ /{p}/ {{ try_files $uri $uri/ /{p}/index.html; expires 10m; }}
 ''')
-    site = f'''# Chains block explorers (/opt/chains-explorer): https://{DOMAIN}/<chain>/ for each chain.
-# Written by /opt/chains-explorer/gen.py. The api containers listen on 127.0.0.1:{API_BASE}+slot (host network).
+    site = f'''# eCash block explorers ({ROOT}): https://{DOMAIN}/<explorer>/ for each explorer.
+# Written by {ROOT}/gen.py. The api containers listen on 127.0.0.1 (host network), one port each.
 server {{
     listen 443 ssl;
     listen [::]:443 ssl;
@@ -113,14 +149,14 @@ server {{
     include /etc/letsencrypt/options-ssl-nginx.conf;
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
 
-    access_log /var/log/nginx/chains-explorer.access.log;
-    error_log  /var/log/nginx/chains-explorer.error.log;
+    access_log /var/log/nginx/ecash-explorer.access.log;
+    error_log  /var/log/nginx/ecash-explorer.error.log;
 
     root {ROOT}/www;
     index index.html;
     add_header Cache-Control "public, no-transform";
     location /.well-known/acme-challenge/ {{ root /var/www/html; }}
-    location = / {{ return 302 /chains/; }}
+    location = / {{ return 302 /{HOME}/; }}
     location ^~ /resources/ {{ expires 1h; }}
 
 ''' + '\n'.join(loc) + '''
@@ -129,10 +165,13 @@ server {{
 '''.replace('{{', '{').replace('}}', '}')
     with open(os.path.join(out, 'nginx-site.conf'), 'w') as f:
         f.write(site)
-    for p in profiles:
-        print(f'{p:11} https://{DOMAIN}/{p}/  api 127.0.0.1:{port(p)}  rpc 127.0.0.1:{cp.PROFILES[p][1]}')
     with open(os.path.join(out, 'urls.env'), 'w') as f:
         f.write(','.join(f'{k}={v}' for k, v in urls.items()) + '\n')
+    with open(os.path.join(out, 'explorers.json'), 'w') as f:
+        json.dump(EXPLORERS, f, indent=2)
+    for e in EXPLORERS:
+        print(f"{e['path']:9} https://{DOMAIN}/{e['path']}/  {e['profile']} on {e['network']}  api 127.0.0.1:{e['api_port']}"
+              f"  rpc 127.0.0.1:{e['rpc_port']}  enforcer {e['enforcer']}")
 
 
 if __name__ == '__main__':

@@ -1,7 +1,36 @@
-# Chains Explorer: chain modules
+# eCash explorer: networks, data sources and chain modules
 
-One codebase (upstream mempool + this fork's `chain/` code) runs an explorer for the Chains mainchain and for each
-sidechain. `CHAIN_PROFILE` picks the chain at runtime; everything chain-specific lives in one folder per chain.
+One codebase (upstream mempool + this fork's `chain/` code) runs an explorer for eCash (ECX), a fork of Bitcoin with
+BIP300/301 drivechains, on each of its networks. Sidechain explorers (the LayerTwo-API nodes such as Thunder and
+BitNames) come later as their own module kind.
+
+## Networks
+
+`CHAIN.NETWORK` (backend) and `CHAIN_NETWORK` (frontend) pick one of `backend/src/chain/networks.ts`:
+
+| id | network | addresses |
+|---|---|---|
+| `ecash` | mainnet | `bc1…` |
+| `ecashbeta` | betanet | `bc1…` |
+| `ecashtest` | testnet (Bitcoin testnet4 under eCash rules) | `tb1…` |
+
+ECX keeps Bitcoin's formats and schedule: 8 decimals, 10-minute blocks, 2016-block retargets, 210,000-block
+halvings. The BIP300 constants (activation height, bundle and proposal thresholds) come from the enforcer.
+
+## Where the data comes from
+
+| | source | how |
+|---|---|---|
+| blocks, transactions, mempool | the eCash node | Core JSON-RPC (`CORE_RPC`), as upstream mempool |
+| sidechains, escrows, deposits, withdrawal bundles, BMM | the enforcer | `ValidatorService` over Connect-JSON (`CHAIN.ENFORCER`, `backend/src/chain/enforcer.ts`) |
+| BIP300 coinbase messages, BMM requests, miners | the node's raw blocks | decoded in `backend/src/chain/bip300.ts` and `drivechain.ts` |
+
+Two setups serve the same enforcer API, byte for byte, so the explorer runs on either:
+
+- a stock eCash node with `bip300301_enforcer` next to it (the pool server: `ecashd` on 8542, enforcer on 8123);
+- Backbone (`backboned -grpc`), which enforces BIP300/301 itself and serves the API on 50051.
+
+## Chain modules
 
 | | backend | frontend |
 |---|---|---|
@@ -10,34 +39,14 @@ sidechain. `CHAIN_PROFILE` picks the chain at runtime; everything chain-specific
 | contract | `backend/src/chain/module.ts` (`ChainModule`) | `frontend/src/app/chain/chain-module.ts` (`ChainFrontendModule`) |
 | selected by | `CHAIN.PROFILE` in mempool-config.json | `CHAIN_PROFILE` in the frontend config / Docker env |
 
-## What every sidechain gets for free
-
-With only a profile (id, name, slot, address prefix, colour, mark):
-
-- the full mempool explorer: blocks, transactions, mempool, addresses (the node must run with `-txindex`);
-- the cockpit at `/bmm`: the Chains blocks that carried the sidechain, the bids paid, BMM coverage and gaps, the
-  escrow, deposits, withdrawals, withdrawal bundles with their path to payout (needs `CHAIN.MAINCHAIN_RPC`);
-- on each block page: the Chains block that carried it and the bid;
-- links to and from the other explorers (`CHAIN.EXPLORER_URLS` / `CHAIN_EXPLORER_URLS`).
-
-## Adding a sidechain
-
-1. `cp -r backend/src/chain/modules/sidechain-template backend/src/chain/modules/mychain`, then edit the profile:
-   `sidechainProfile('mychain', 'MyChain', <slot>, '<bech32 prefix on main>')`.
-2. Add it to `backend/src/chain/modules/index.ts`.
-3. Do the same on the frontend (`frontend/src/app/chain/modules/sidechain-template`): profile with `color` and
-   `mark` (SVG stroke paths, viewBox 0 0 32 32).
-4. Run with `CHAIN.PROFILE: "mychain"` (backend) and `CHAIN_PROFILE=mychain` (frontend).
-
-## Optional: the chain's own features
+Today there is one module, `ecash`. A module can add:
 
 Backend (`ChainModule`):
 
-- `initRoutes(app, prefix, ctx)`: read-only routes under `/api/v1/sidechain/` that call the node's own RPCs with
-  `ctx.node.call('mymethod', ...)`. `ctx.cached`, `ctx.handler`, `ctx.fail` and `ctx.intParam` are there to help.
-- `describeTx(tx, ctx)`: what a transaction does on the chain (decode its OP_RETURN marker with `findMarkers` and
-  `Reader` from `chain/marker.ts`). Served at `GET /api/v1/sidechain/tx/:txid`.
-- `describeBlock(block, ctx)`: extra block fields, served at `GET /api/v1/sidechain/block/:hash/features`.
+- `initRoutes(app, prefix, ctx)`: read-only routes under `/api/v1/chain/` that call the node with
+  `ctx.node.call('method', ...)`; `ctx.cached`, `ctx.handler`, `ctx.fail` and `ctx.intParam` help.
+- `describeTx(tx, ctx)` / `describeBlock(block, ctx)`: what a transaction or block does on the chain, served at
+  `GET /api/v1/chain/tx/:txid` and `GET /api/v1/chain/block/:hash/features`.
 - `start(ctx)` / `onNewBlock(block, ctx)`: background indexes.
 
 Frontend (`ChainFrontendModule`):
@@ -45,4 +54,8 @@ Frontend (`ChainFrontendModule`):
 - `routes` + `nav`: the module's pages (lazy `loadComponent`) and their nav entries;
 - `txView` / `blockView`: standalone components showing the `describeTx` / `describeBlock` data.
 
-The BitNames, BitAssets, Hivemind, zSide and FastBlocks backend modules show how markers are decoded.
+## Deployment
+
+`chains/build.sh` builds `ecash-explorer/backend` and `ecash-explorer/frontend`. `chains/pool-server/gen.py` lists
+every explorer the pool server runs (URL path, profile, network, ports) and writes its Docker Compose file, backend
+configs and nginx site for `https://explorer.blockfab.org/<explorer>/`; `www.sh` stages the static frontends.

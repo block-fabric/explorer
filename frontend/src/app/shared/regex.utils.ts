@@ -1,7 +1,5 @@
 import { Env } from '@app/services/state.service';
 
-import { CHAIN_NETWORK, bech32Prefix } from '@app/chain/profiles';
-
 // all base58 characters
 export const BASE58_CHARS = `[a-km-zA-HJ-NP-Z1-9]`;
 
@@ -34,10 +32,21 @@ const ADDRESS_CHARS: {
     bech32: string;
   };
 } = {
-  // Chains Explorer: the 'mainnet' slot is the explorer's own chain, with its profile's prefixes (chain/profiles.ts)
   mainnet: {
-    base58: (CHAIN_NETWORK === 'main' ? `[Cc]` : `[mn2]`) + BASE58_CHARS + `{32,34}`,
-    bech32: `(?:` + bech32Prefix() + '1' + BECH32_CHARS_LW + `{6,100}` + `|` + bech32Prefix().toUpperCase() + '1' + BECH32_CHARS_UP + `{6,100}` + `)`,
+    base58: `[13]` // Starts with a single 1 or 3
+      + BASE58_CHARS
+      + `{26,33}`, // Repeat the previous char 26-33 times.
+      // Version byte 0x00 (P2PKH) can be as short as 27 characters, up to 34 length
+      // P2SH must be 34 length
+    bech32: `(?:`
+        + `bc1` // Starts with bc1
+        + BECH32_CHARS_LW
+        + `{6,100}` // As per bech32, 6 char checksum is minimum
+      + `|`
+        + `BC1` // All upper case version
+        + BECH32_CHARS_UP
+        + `{6,100}`
+      + `)`,
   },
   testnet: {
     base58: `[mn2]` // Starts with a single m, n, or 2 (P2PKH is m or n, 2 is P2SH)
