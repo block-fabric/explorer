@@ -10,6 +10,7 @@ LayerTwo's Rust nodes). File references are into those repositories.
 | BitAssets | 4 | 16004 / 6004 | `get_block_index(hash).txs[].txid` | yes |
 | Hivemind (Truthcoin) | 13 | 16013 / 6013 | `get_block_index(hash).txs[].txid` | no |
 | zSide (thunder-orchard) | 98 | 16098 / 6098 | computed, see below | no |
+| Coinshift | 255 | 16255 / 6255 | `get_block_index(hash).txs[].txid` | see source |
 
 The public RPC (read methods) listens on 216.128.183.114 and admits only the pool server; the private one (wallet,
 mining, stop, peers) stays on 127.0.0.1. Plain JSON-RPC 2.0 POST to `/`, no auth. The Host header must be loopback
@@ -87,6 +88,12 @@ or `216.128.183.114:<port>`.
   the prefix of the full bundle in canonical_bytes (n = actions in the JSON). Inputs and outputs as Thunder.
 - RPC as Thunder; no get_block_index, no mempool listing.
 - Deposit text: bare base58 only.
+
+## Coinshift (slot 255; backbone-coinshift, coinshift-rs v0.14.8)
+- txid = blake3(borsh(tx)) (chains/coinshift/src/types.cpp:261-262). RPC as BitNames for blocks (get_block_index,
+  list_mempool), plus swaps: list_swaps, list_swaps_by_recipient, get_swap_status(swap_id) (doc/rpc-surface.md).
+- Content adds SwapPending{value, swap_id}; TxData: Regular, SwapCreate, SwapClaim, SwapAccept. Swap ids are JSON
+  arrays of 32 numbers. Swap state is partly node-local by design (L1 monitoring, update_swap_l1_txid, cancel_swap).
 
 ## Test data
 `tests/data/betanet/txhex.jsonl` ({txid, hex}) in each repo; Hivemind `tests/data/oracle_vectors.jsonl` and

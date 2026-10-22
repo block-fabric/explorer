@@ -40,7 +40,7 @@ EXPLORERS = [
         'weight': 4000000, 'mem': '384m', 'heap_mb': 256,
     }
     for profile, port, rpc in [('thunder', 18951, 16009), ('bitnames', 18952, 16002), ('bitassets', 18953, 16004),
-                               ('hivemind', 18954, 16013), ('zside', 18955, 16098)]
+                               ('hivemind', 18954, 16013), ('zside', 18955, 16098), ('coinshift', 18956, 16255)]
 ]
 # The front page goes to this explorer
 HOME = 'betanet'

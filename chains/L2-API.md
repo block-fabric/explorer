@@ -1,7 +1,7 @@
 # Sidechain explorers (L2): backend API
 
 The sidechain explorers run from the same images as the eCash explorer, one backend instance per sidechain and
-network, with `CHAIN.PROFILE` set to the sidechain's module (`thunder`, `bitnames`, `bitassets`, `hivemind`, `zside`).
+network, with `CHAIN.PROFILE` set to the sidechain's module (`thunder`, `bitnames`, `bitassets`, `hivemind`, `zside`, `coinshift`).
 Their nodes are the LayerTwo-API drop-ins (backbone-*), read over plain JSON-RPC 2.0 (`CHAIN.SIDECHAIN_RPC`); the
 eCash side comes from the enforcer (`CHAIN.ENFORCER`). An L2 instance does not start upstream mempool's node, mempool,
 statistics or block indexing: it serves only the routes below and `GET /api/v1/chain`.
@@ -66,7 +66,7 @@ OutPoint = { "kind": "regular" | "coinbase" | "deposit" | "marketFunds" | "payou
 Output = { "vout": 0, "address": "…", "content": Content, "value": 0,   // value: sats the output holds (0 for non-sats content)
            "memo": "…" | null, "spent": { "txid": "…" | null, "vin": 0 | null, "height": 2260, "kind": "tx" | "bundle" } | null }
 Content = { "type": "value" | "withdrawal" | "bitname" | "bitnameReservation" | "bitasset" | "bitassetControl"
-            | "bitassetReservation" | "ammLpToken" | "dutchAuctionReceipt" | "marketFunds" | "other",
+            | "bitassetReservation" | "ammLpToken" | "dutchAuctionReceipt" | "marketFunds" | "swapPending" | "other",
             "value"?: 0, "mainAddress"?: "bc1…", "mainFee"?: 0, "assetId"?: "…", "amount"?: 0, "name"?: "…", "raw": <node JSON> }
 ```
 
@@ -96,3 +96,5 @@ Served from the node's own read RPCs (cached a few seconds), shapes as the node 
   `feature/auctions` → `dutch_auctions`, `feature/pools` → the AMM pools seen in the index with `get_amm_pool_state`.
 - `markets` (Hivemind): `feature/markets` → `market_list`, `feature/markets/:id` → `market_get`, `feature/votes` → `vote_period`.
 - `shielded` (zSide): `feature/shielded` → totals from the index (shielded in / out, actions, value balance sum).
+- `swaps` (Coinshift): `feature/swaps` → `list_swaps`, `feature/swaps/:id` → `get_swap_status`; swap ids as hex.
+  Swap state is partly node-local (Coinshift's design): each reply carries `"nodeLocal": true`.
