@@ -948,6 +948,46 @@ class L2Index {
     };
   }
 
+  // ------------------------------------------------------------------ for the modules' feature views
+  // (chain/modules/<chain>/: assets, names, markets, the shielded pool, swaps, top addresses, derived from the index)
+
+  /** Changes whenever what the index holds does (a block, a reorg, filled content, state outputs): a cache key */
+  generation(): string {
+    const top = this.blocks[this.blocks.length - 1];
+    return [this.blocks.length, top?.stored.hash ?? '', this.fills.size, this.stateOutputs.size, this.stateSpent.size].join(':');
+  }
+
+  /** Every tx of the index, oldest first, coinbases left out: inputs and outputs resolved, TxData lifted */
+  forEachTx(fn: (t: { txid: string; height: number; time: number | null; index: number; inputs: Input[]; outputs: Output[]; fee: number;
+    data: any; shielded: Shielded | null; signers: (string | null)[] }) => void): void {
+    for (const b of this.blocks) {
+      const time = b.stored.main?.time ?? null;
+      for (const t of b.txs) {
+        fn({ ...this.txView(t), height: t.height, time });
+      }
+    }
+  }
+
+  /** Every unspent output, with the tx that made it (null: a deposit or the chain's state) */
+  forEachUtxo(fn: (u: { outpoint: OutPoint; txid: string | null; height: number; address: string; content: Content; value: number }) => void): void {
+    for (const r of this.outputs.values()) {
+      if (!r.spent) {
+        fn({ outpoint: r.outpoint, txid: r.txid, height: r.height, address: r.address, content: r.content, value: r.value });
+      }
+    }
+  }
+
+  /** Every address with its balance and counts */
+  forEachAddress(fn: (a: { address: string; balance: number; funded: { count: number; sum: number }; spent: { count: number; sum: number };
+    txs: number; utxos: number; first: number | null; last: number | null }) => void): void {
+    for (const [address, e] of this.addresses) {
+      fn({
+        address, balance: e.funded.sum - e.spent.sum, funded: { ...e.funded }, spent: { ...e.spent }, txs: e.txs.length, utxos: e.utxos.size,
+        first: e.txs[0]?.height ?? null, last: e.txs[e.txs.length - 1]?.height ?? null,
+      });
+    }
+  }
+
   /** Σ of address balances (for checks against sidechain_wealth) */
   balanceSum(): number {
     let s = 0;

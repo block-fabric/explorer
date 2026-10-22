@@ -7,8 +7,9 @@ import { MODULE, PROFILE, SIDECHAIN_PROFILES } from '../profile';
 import { NETWORK, NETWORKS } from '../networks';
 import index from './index';
 import rpc from './rpc';
+import mainchain from './mainchain';
 import { isAddress } from './codec';
-import { L2Chain, L2FeatureContext } from './types';
+import { BlockSummary, L2Chain, L2FeatureContext } from './types';
 
 // Read-only JSON of a sidechain explorer (kind l2), chains/L2-API.md. Rate limiting is nginx's.
 //
@@ -21,6 +22,9 @@ import { L2Chain, L2FeatureContext } from './types';
 //   GET l2/deposits?before=&limit=     GET l2/withdrawals?before=&limit=
 //   GET l2/search/:query               a height, block hash, txid or address
 //   GET l2/feature/<name>[/...]        the module's node features (names, assets, markets, shielded, swaps)
+//   GET l2/bmm/cockpit?window=         the eCash explorer's drivechain cockpit for this slot (CHAIN.MAINCHAIN_API)
+//   GET l2/bmm/events/:kind?before=&limit=   its drivechain events of this slot
+// With CHAIN.MAINCHAIN_API, block summaries and blocks carry `bmm` (mainchain.ts) and the summary a BMM coverage.
 //
 // `before` is exclusive; see index.ts for the paging of lists with several rows per height.
 
@@ -75,6 +79,25 @@ function missing(req: Request, res: Response, what: string): void {
 
 const explorerUrl = (id: string): string | null => config.CHAIN.EXPLORER_URLS?.[id] || null;
 
+/** eCash blocks over which the summary's BMM coverage is counted */
+const COVERAGE_WINDOW = 144;
+const BMM_EVENT_KINDS = ['bmm', 'bmm-requests', 'deposits', 'withdrawals', 'votes', 'proposals', 'bundles'];
+
+/** A route of the eCash explorer's API: its errors stay in the log, the client gets a fixed text */
+function wrapMain(fn: (req: Request, res: Response) => Promise<unknown>) {
+  return async (req: Request, res: Response) => {
+    if (!mainchain.enabled()) {
+      return handleError(req, res, 404, 'This explorer has no eCash drivechain index to read');
+    }
+    try {
+      await fn(req, res);
+    } catch (e) {
+      logger.warn(`L2 API ${req.path}: ${(e instanceof Error ? e.message : String(e)).slice(0, 300)}`);
+      handleError(req, res, 502, 'The eCash explorer did not answer');
+    }
+  };
+}
+
 class L2Routes {
   private chain = MODULE.l2 as L2Chain;
 
@@ -90,9 +113,14 @@ class L2Routes {
       .get(l2 + 'address/:address', wrap(this.$getAddress))
       .get(l2 + 'deposits', wrap(this.$getDeposits))
       .get(l2 + 'withdrawals', wrap(this.$getWithdrawals))
-      .get(l2 + 'search/:query', wrap(this.$search));
+      .get(l2 + 'search/:query', wrap(this.$search))
+      .get(l2 + 'bmm/cockpit', wrapMain(this.$getBmmCockpit))
+      .get(l2 + 'bmm/events/:kind', wrapMain(this.$getBmmEvents));
     this.initFeatures(app, l2 + 'feature/');
     index.start();
+    if (typeof PROFILE.slot === 'number') {
+      mainchain.start(PROFILE.slot);
+    }
   }
 
   private initFeatures(app: Application, prefix: string): void {
@@ -154,6 +182,8 @@ class L2Routes {
       indexReady: index.isReady(),
       features: this.chain.features,
       mainchainExplorer: config.CHAIN.MAINCHAIN_EXPLORER || null,
+      // the BMM views (GET l2/bmm/*, `bmm` of blocks): this backend reads the eCash explorer's drivechain index
+      bmm: mainchain.enabled(),
     });
   };
 
@@ -167,6 +197,7 @@ class L2Routes {
       ]);
       return { wealth, escrow, pendingBundle, mempool };
     });
+    const bmm = await this.bmmCoverage();
     const tip = index.tipHeight();
     const top = tip >= 0 ? index.blockSummaries(tip + 1, 1)[0] : null;
     const c = index.counts();
@@ -181,13 +212,56 @@ class L2Routes {
       deposits: c.deposits, withdrawals: c.withdrawals,
       pendingBundle: p ? { m6id: p.m6id, payouts: p.payouts, total: p.total } : null,
       mempool: live.mempool,
+      bmm,
     });
+  };
+
+  /** The share of the newest COVERAGE_WINDOW eCash blocks that carried a block of this sidechain (the L1 cockpit's) */
+  private async bmmCoverage(): Promise<any> {
+    if (!mainchain.enabled()) {
+      return null;
+    }
+    try {
+      const c = await this.l1Cockpit(COVERAGE_WINDOW);
+      const s = (c?.slots ?? []).find((x: any) => x.slot === PROFILE.slot);
+      return {
+        window: c.totals.blocks, mainHeight: c.totals.to, accepts: s?.accepts ?? 0, coverage: s?.coverage ?? 0,
+        lastMainHeight: s?.lastAcceptHeight ?? null, bidMedian: s?.bidMedian ?? 0,
+      };
+    } catch (e) {
+      logger.debug(`L2 BMM coverage: ${(e instanceof Error ? e.message : String(e)).slice(0, 300)}`);
+      return null;
+    }
+  }
+
+  private l1Cockpit(window: number): Promise<any> {
+    return mainchain.get('drivechain/cockpit', { window, slot: PROFILE.slot as number }, 15000);
+  }
+
+  /** a block summary with its BMM (null: none known, or no eCash index to read) */
+  private withBmm<T extends { hash: string }>(b: T): T & { bmm: any } {
+    return { ...b, bmm: mainchain.enabled() ? mainchain.blockBmm(b.hash) : null };
+  }
+
+  private $getBmmCockpit = async (req: Request, res: Response): Promise<void> => {
+    const window = intParam(req.query.window, 1440, 0, 1e7) as number;
+    res.json(await this.l1Cockpit(window));
+  };
+
+  private $getBmmEvents = async (req: Request, res: Response): Promise<void> => {
+    const kind = String(req.params.kind);
+    if (!BMM_EVENT_KINDS.includes(kind)) {
+      return handleError(req, res, 400, 'Unknown event kind');
+    }
+    const before = intParam(req.query.before, null, 0, 1e9);
+    const limit = intParam(req.query.limit, 50, 1, 500) as number;
+    res.json(await mainchain.get('drivechain/events/' + kind, { slot: PROFILE.slot as number, before, limit }, 10000));
   };
 
   private $getBlocks = async (req: Request, res: Response): Promise<void> => {
     const before = intParam(req.query.before, null, 0, 1e9);
     const limit = intParam(req.query.limit, 15, 1, 50) as number;
-    res.json(index.blockSummaries(before, limit));
+    res.json(index.blockSummaries(before, limit).map((b: BlockSummary) => this.withBmm(b)));
   };
 
   private $getBlock = async (req: Request, res: Response): Promise<void> => {
@@ -199,7 +273,12 @@ class L2Routes {
     if (h === null) {
       return missing(req, res, 'Unknown block');
     }
-    res.json(index.block(h));
+    const block = this.withBmm(index.block(h));
+    if (block.bmm) {
+      // the M8 requests for this slot in the carrying eCash block: the accepted one and those it beat
+      block.bmm = { ...block.bmm, requestList: mainchain.requestsIn(block.bmm.mainHeight) };
+    }
+    res.json(block);
   };
 
   private $getTx = async (req: Request, res: Response): Promise<void> => {

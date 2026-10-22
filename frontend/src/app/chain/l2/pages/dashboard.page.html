@@ -50,7 +50,18 @@
         <div class="v">{{ d.summary.withdrawals.count | number }}</div>
         <div class="s"><a [routerLink]="['/withdrawals']">to eCash</a></div>
       </div>
+      @if (d.summary.bmm; as bmm) {
+        <div class="kpi">
+          <div class="l">BMM coverage</div>
+          <div class="v"><a [routerLink]="['/bmm']">{{ bmm.coverage * 100 | number:'1.0-1' }}%</a></div>
+          <div class="s">{{ bmm.accepts | number }} of the last {{ bmm.window | number }} eCash blocks</div>
+        </div>
+      }
     </div>
+
+    @if (d.blocks.length) {
+      <app-l2-block-strip [blocks]="d.blocks"></app-l2-block-strip>
+    }
 
     <div class="grid2 mt-3">
       <div class="box">
@@ -101,7 +112,7 @@
     <h2>Latest blocks <a class="small ms-2" [routerLink]="['/blocks']">all blocks</a></h2>
     <div class="box">
       <table class="table table-borderless table-sm">
-        <thead><tr><th>Height</th><th>Hash</th><th>Time</th><th>eCash block (BMM)</th><th class="text-end">Txs</th><th class="text-end">Deposits</th><th class="text-end">Volume</th><th class="text-end">Fees</th></tr></thead>
+        <thead><tr><th>Height</th><th>Hash</th><th>Time</th><th>eCash block (BMM)</th><th class="text-end">Bid</th><th class="text-end">Txs</th><th class="text-end">Deposits</th><th class="text-end">Volume</th><th class="text-end">Fees</th></tr></thead>
         <tbody>
           @for (b of d.blocks; track b.hash) {
             <tr>
@@ -109,13 +120,14 @@
               <td><a [routerLink]="['/block', b.hash]" class="mono" [title]="b.hash">{{ shortId(b.hash) }}</a></td>
               <td>@if (b.time) {<app-time kind="since" [time]="b.time" [fastRender]="true"></app-time>} @else {<span class="muted">–</span>}</td>
               <td>@if (b.mainBlock; as m) {<app-l2-main-link kind="block" [id]="m.hash" [text]="'' + m.height"></app-l2-main-link>} @else {<span class="muted">–</span>}</td>
+              <td class="text-end">@if (b.bmm?.bid !== null && b.bmm?.bid !== undefined) { {{ b.bmm?.bid | number }} <span class="muted">sats</span>} @else {<span class="muted">–</span>}</td>
               <td class="text-end">{{ b.txCount }}</td>
               <td class="text-end">{{ b.deposits }}</td>
               <td class="text-end"><app-l2-amount [sats]="b.volume"></app-l2-amount></td>
               <td class="text-end"><app-l2-amount [sats]="b.fees"></app-l2-amount></td>
             </tr>
           } @empty {
-            <tr><td colspan="8" class="empty">No blocks indexed yet.</td></tr>
+            <tr><td colspan="9" class="empty">No blocks indexed yet.</td></tr>
           }
         </tbody>
       </table>

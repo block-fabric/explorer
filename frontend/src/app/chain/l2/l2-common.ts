@@ -6,6 +6,7 @@ import { SharedModule } from '@app/shared/shared.module';
 import { StateService } from '@app/services/state.service';
 import { L2ApiService } from '@app/chain/l2/l2-api.service';
 import { L2Content, L2OutPoint, L2Spent, L2TxSummary, Loaded } from '@app/chain/l2/l2.interfaces';
+import { L2AssetComponent } from '@app/chain/l2/features/asset-badge';
 
 /*
  * The building blocks of the sidechain explorers' pages. Everything from the chain is shown through Angular
@@ -292,7 +293,7 @@ export function humanize(k: string): string {
 @Component({
   selector: 'app-l2-content',
   standalone: true,
-  imports: [CommonModule, RouterModule, L2AmountComponent, L2MainLinkComponent, L2ValueComponent],
+  imports: [CommonModule, RouterModule, L2AmountComponent, L2MainLinkComponent, L2ValueComponent, L2AssetComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [`
     .pill { display: inline-block; font-size: 0.7rem; padding: 0 7px; border-radius: 10px; background: #ffffff14; margin-right: 4px; white-space: nowrap; }
@@ -318,10 +319,12 @@ export function humanize(k: string): string {
         @default {
           <span class="pill a">{{ typeName(c.type) }}</span>
           @if (c.amount !== undefined && c.amount !== null) {<span>{{ c.amount | number }}</span> }
-          @if (c.name) {<span class="mono">{{ c.name }}</span> }
+          @if (c.name) {
+            @if (c.type === 'bitname') {<app-l2-asset [id]="c.name" kind="name"></app-l2-asset> } @else {<span class="mono">{{ c.name }}</span> }
+          }
           @if (c.assetId) {
-            <span class="muted">asset </span>
-            @if (c.assetId === '00') {<span>ECX</span>} @else {<a [routerLink]="['/assets', c.assetId]" class="mono" [title]="c.assetId">{{ shortId(c.assetId) }}</a>}
+            @if (c.type === 'dutchAuctionReceipt') {<span class="muted">auction </span><a [routerLink]="['/auctions', c.assetId]" class="mono" [title]="c.assetId">{{ shortId(c.assetId) }}</a>}
+            @else {<app-l2-asset [id]="c.assetId"></app-l2-asset>}
           }
           @if (c.value) {<span class="muted"> · </span><app-l2-amount [sats]="c.value"></app-l2-amount>}
           @if (c.type === 'other' && c.raw !== undefined) {<div><app-l2-value [value]="c.raw" [depth]="1"></app-l2-value></div>}

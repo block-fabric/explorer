@@ -107,10 +107,17 @@ def l2_config(e, urls):
             'ENFORCER': {'URL': e['enforcer'], 'TIMEOUT': 60000, 'MAX_CONCURRENT': 2},
             'SIDECHAIN_RPC': {'URL': e['sidechain_rpc'], 'TIMEOUT': 60000, 'MAX_CONCURRENT': 2},
             'MAINCHAIN_EXPLORER': urls.get(e['network'], ''),
+            # the BMM views: the eCash explorer backend of the same network, next to this one (network_mode host)
+            'MAINCHAIN_API': f"http://127.0.0.1:{l1_of(e['network'])['api_port']}",
             'EXPLORER_URLS': urls,
             'ADDRESS_INDEX': False,
         },
     }
+
+
+def l1_of(network):
+    """The eCash explorer (kind l1) of a network"""
+    return next(x for x in EXPLORERS if x['kind'] == 'l1' and x['network'] == network)
 
 
 def main():

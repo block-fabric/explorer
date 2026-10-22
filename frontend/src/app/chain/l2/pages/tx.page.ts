@@ -5,12 +5,13 @@ import { SeoService } from '@app/services/seo.service';
 import { L2ApiService, loaded } from '@app/chain/l2/l2-api.service';
 import { L2Tx, Loaded } from '@app/chain/l2/l2.interfaces';
 import { L2_PAGE_IMPORTS, shortId } from '@app/chain/l2/l2-common';
+import { L2TxAssetsComponent, hasAssets } from '@app/chain/l2/features/asset-badge';
 
 /** /tx/:txid: status, inputs and outputs, fee, TxData, zSide's shielded bundle, signers */
 @Component({
   selector: 'app-l2-tx',
   standalone: true,
-  imports: [...L2_PAGE_IMPORTS],
+  imports: [...L2_PAGE_IMPORTS, L2TxAssetsComponent],
   styleUrls: ['../../components/module-page.scss', './l2-page.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -55,6 +56,11 @@ import { L2_PAGE_IMPORTS, shortId } from '@app/chain/l2/l2-common';
         <h2>Inputs and outputs</h2>
         <div class="tx-card"><app-l2-tx-io [tx]="tx"></app-l2-tx-io></div>
 
+        @if (hasAssets(tx)) {
+          <h2>Assets</h2>
+          <div class="box"><app-l2-tx-assets [tx]="tx"></app-l2-tx-assets></div>
+        }
+
         @if (tx.data; as data) {
           <h2>Data: {{ data.type }}</h2>
           <div class="box"><app-l2-value [value]="data" [skip]="['type']"></app-l2-value></div>
@@ -81,6 +87,11 @@ export class L2TxPage implements OnInit {
   view$: Observable<Loaded<L2Tx>>;
 
   constructor(private api: L2ApiService, private route: ActivatedRoute, private seo: SeoService) {}
+
+  /** the tx moves assets or names (BitAssets, BitNames): their summary shows */
+  hasAssets(tx: L2Tx): boolean {
+    return hasAssets([...tx.inputs.map(i => i.content), ...tx.outputs.map(o => o.content)]);
+  }
 
   /** an Orchard bundle flag: 1 spends, 2 outputs */
   flag(flags: number, bit: number): string {

@@ -5,6 +5,7 @@ import { SeoService } from '@app/services/seo.service';
 import { L2ApiService, loaded } from '@app/chain/l2/l2-api.service';
 import { L2Address, Loaded } from '@app/chain/l2/l2.interfaces';
 import { L2_PAGE_IMPORTS, shortId } from '@app/chain/l2/l2-common';
+import { L2AddressAssetsComponent, hasAssets } from '@app/chain/l2/features/asset-badge';
 
 const PAGE = 25;
 
@@ -12,7 +13,7 @@ const PAGE = 25;
 @Component({
   selector: 'app-l2-address',
   standalone: true,
-  imports: [...L2_PAGE_IMPORTS],
+  imports: [...L2_PAGE_IMPORTS, L2AddressAssetsComponent],
   styleUrls: ['../../components/module-page.scss', './l2-page.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -27,6 +28,11 @@ const PAGE = 25;
           <div class="kpi"><div class="l">Received</div><div class="v"><app-l2-amount [sats]="a.funded.sum"></app-l2-amount></div><div class="s">{{ a.funded.count | number }} outputs</div></div>
           <div class="kpi"><div class="l">Sent</div><div class="v"><app-l2-amount [sats]="a.spent.sum"></app-l2-amount></div><div class="s">{{ a.spent.count | number }} outputs spent</div></div>
         </div>
+
+        @if (hasAssets(a)) {
+          <h2>Assets</h2>
+          <div class="box"><app-l2-address-assets [utxos]="a.utxos"></app-l2-address-assets></div>
+        }
 
         <h2>History</h2>
         <div class="box">
@@ -82,6 +88,11 @@ export class L2AddressPage implements OnInit {
   shortId = shortId;
 
   constructor(private api: L2ApiService, private route: ActivatedRoute, private seo: SeoService) {}
+
+  /** the address holds assets or names (BitAssets, BitNames): their balances show */
+  hasAssets(a: L2Address): boolean {
+    return hasAssets(a.utxos.map(u => u.content));
+  }
 
   ngOnInit(): void {
     this.view$ = combineLatest([this.route.paramMap, this.route.queryParamMap]).pipe(

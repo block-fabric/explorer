@@ -196,6 +196,9 @@ interface IConfig {
     };
     // Public URL of the eCash explorer, for links from a sidechain explorer; empty = no links
     MAINCHAIN_EXPLORER: string;
+    // A sidechain explorer: the eCash explorer backend's base URL (e.g. http://127.0.0.1:18950), whose drivechain
+    // index gives the BMM views (chain/l2/mainchain.ts); empty = no BMM views
+    MAINCHAIN_API: string;
   }
 }
 
@@ -386,6 +389,7 @@ const defaults: IConfig = {
       'MAX_CONCURRENT': 2,
     },
     'MAINCHAIN_EXPLORER': '',
+    'MAINCHAIN_API': '',
   }
 };
 

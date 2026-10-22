@@ -1,6 +1,7 @@
 import { ChainModule } from '../../module';
 import { Content } from '../../l2/types';
 import { tagged, withdrawalContent } from '../../l2/codec';
+import { featureRoutes } from './routes';
 
 /**
  * BitAssets (slot 4): assets, AMM pools and Dutch auctions on BitNames' design, served by backbone-bitassets. As
@@ -43,21 +44,7 @@ const bitassets: ChainModule = {
     depositRule: 'prefix', features: ['assets'],
     content: bitassetsContent,
     featureRoutes(app, prefix, ctx) {
-      ctx.list('assets', 'bitassets');
-      ctx.item('assets', 'bitasset_data', /^[0-9a-f]{2,64}$/);
-      ctx.list('auctions', 'dutch_auctions');
-      // the AMM pools seen in the index (LP tokens' asset pairs), each with the node's state
-      app.get(prefix + 'pools', ctx.handler(async (req, res) => {
-        res.json({
-          items: await ctx.cached('pools', 5000, async () => {
-            const out: any[] = [];
-            for (const [asset0, asset1] of ctx.index.ammPools()) {
-              out.push({ asset0, asset1, state: await ctx.rpc.call('get_amm_pool_state', asset0, asset1).catch(() => null) });
-            }
-            return out;
-          }),
-        });
-      }));
+      featureRoutes(app, prefix, ctx);
     },
   },
 };

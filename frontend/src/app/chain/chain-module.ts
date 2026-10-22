@@ -65,4 +65,4 @@ export interface ChainFrontendModule {
   features?: L2Feature[];
 }
 
-export type L2Feature = 'names' | 'assets' | 'markets' | 'shielded' | 'swaps';
+export type L2Feature = 'names' | 'assets' | 'markets' | 'shielded' | 'swaps' | 'richlist';

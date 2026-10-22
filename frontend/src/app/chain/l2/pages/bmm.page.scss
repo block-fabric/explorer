@@ -1,0 +1,10 @@
+// /bmm on top of the eCash cockpit's styles (pages/cockpit/cockpit.component.scss) and l2-page.scss
+.cov-name { width: 110px; }
+.cov-legend { padding-left: 118px; .lg.req { background: color-mix(in srgb, #ff6b6b 45%, transparent); } }
+.cov-cell.req { background: color-mix(in srgb, #ff6b6b 45%, transparent); }
+.status.failed { background: color-mix(in srgb, #ff6b6b 30%, transparent); }
+.chart.skeleton-loader { height: 260px; }
+.b-head .mono { word-break: break-all; }
+.pager { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+.kpis { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+.kpi .k-value { font-size: 1.25rem; }

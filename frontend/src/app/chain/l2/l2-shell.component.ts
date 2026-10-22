@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnIni
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
-import { Observable, Subscription, map } from 'rxjs';
+import { Observable, Subscription, combineLatest, map, startWith } from 'rxjs';
 import { SharedModule } from '@app/shared/shared.module';
 import { StateService } from '@app/services/state.service';
 import { StorageService } from '@app/services/storage.service';
@@ -52,7 +52,10 @@ export class L2ShellComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
-    this.nav$ = this.api.features$.pipe(map(f => [...L2_NAV, ...l2FeatureNav(f, true)]));
+    // the BMM page only where the backend reads the eCash explorer's drivechain index (GET /api/v1/chain bmm)
+    this.nav$ = combineLatest([this.api.features$, this.chainApi.chain$().pipe(startWith(null))]).pipe(
+      map(([f, c]) => [...L2_NAV.filter(n => n.path !== '/bmm' || c?.bmm !== false), ...l2FeatureNav(f, true)]),
+    );
     this.networks$ = this.chainApi.chain$().pipe(
       map(c => ({ others: (c?.networks ?? []).filter(n => n.id !== (c?.network ?? CHAIN_NETWORK) && !!n.explorer) })),
     );

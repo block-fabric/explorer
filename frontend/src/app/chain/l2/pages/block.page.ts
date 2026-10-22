@@ -2,11 +2,12 @@ import { ChangeDetectionStrategy, Component, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { Observable, map, switchMap, tap } from 'rxjs';
 import { SeoService } from '@app/services/seo.service';
+import { PROFILE } from '@app/chain/profiles';
 import { L2ApiService, loaded } from '@app/chain/l2/l2-api.service';
 import { L2Block, Loaded } from '@app/chain/l2/l2.interfaces';
 import { L2_PAGE_IMPORTS, shortId } from '@app/chain/l2/l2-common';
 
-/** /block/:id (hash or height): the header, its eCash carrier block, coinbase, transactions, deposits and bundle spends */
+/** /block/:id (hash or height): the header, its eCash carrier block and BMM (bid, M8 request, competing requests), coinbase, transactions, deposits and bundle spends */
 @Component({
   selector: 'app-l2-block',
   standalone: true,
@@ -48,6 +49,37 @@ import { L2_PAGE_IMPORTS, shortId } from '@app/chain/l2/l2-common';
               <tr><th>Deposits</th><td>{{ (b.deposits?.length ?? 0) | number }}</td></tr>
             </tbody></table>
           </div>
+        </div>
+
+        <h2>Blind merged mining</h2>
+        <div class="box">
+          @if (b.bmm; as m) {
+            <table class="kv"><tbody>
+              <tr><th>Carried by eCash block</th><td><app-l2-main-link kind="block" [id]="m.mainHash" [text]="(m.mainHeight | number) + ''"></app-l2-main-link><span class="muted">&nbsp;·&nbsp;</span><app-l2-main-link kind="block" [id]="m.mainHash" [short]="true"></app-l2-main-link></td></tr>
+              <tr><th>Bid paid to its miner</th><td>@if (m.bid !== null) {<app-l2-amount [sats]="m.bid"></app-l2-amount>} @else {<span class="muted">none found</span>}</td></tr>
+              <tr><th>BMM request (M8)</th><td>@if (m.requestTxid) {<app-l2-main-link kind="tx" [id]="m.requestTxid"></app-l2-main-link>} @else {<span class="muted">none found</span>}</td></tr>
+              <tr><th>Competition</th><td>@if (m.contested) {<span class="pill on">contested</span> {{ m.requests }} requests for the slot in that eCash block} @else { {{ m.requests }} request for the slot in that eCash block, none competing}</td></tr>
+            </tbody></table>
+            @if (m.requestList.length > 1) {
+              <table class="table table-borderless table-sm mt-2 mb-0">
+                <thead><tr><th>Request (M8)</th><th>{{ profile.name }} block asked for</th><th class="text-end">Bid</th><th>Status</th></tr></thead>
+                <tbody>
+                  @for (r of m.requestList; track r.txid) {
+                    <tr>
+                      <td><app-l2-main-link kind="tx" [id]="r.txid" [short]="true"></app-l2-main-link></td>
+                      <td>@if (r.sideBlock === b.hash) {<span class="mono" [title]="r.sideBlock">this block</span>} @else {<span class="mono" [title]="r.sideBlock">{{ shortId(r.sideBlock) }}</span>}</td>
+                      <td class="text-end"><app-l2-amount [sats]="r.bid"></app-l2-amount></td>
+                      <td><span class="status" [class.ok]="r.accepted">{{ r.accepted ? 'accepted' : 'beaten' }}</span></td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+          } @else if (b.mainBlock) {
+            <div class="empty">The eCash explorer's drivechain index has no BMM accept for this block (or this explorer does not read it): carried by eCash block {{ b.mainBlock.height | number }} per the enforcer.</div>
+          } @else {
+            <div class="empty">No eCash block has carried this block yet.</div>
+          }
         </div>
 
         @if (b.coinbase; as cb) {
@@ -113,6 +145,7 @@ import { L2_PAGE_IMPORTS, shortId } from '@app/chain/l2/l2-common';
   </div>`,
 })
 export class L2BlockPage implements OnInit {
+  profile = PROFILE;
   id: string | null = null;
   view$: Observable<Loaded<L2Block>>;
   shortId = shortId;

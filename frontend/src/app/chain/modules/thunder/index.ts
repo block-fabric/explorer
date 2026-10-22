@@ -13,7 +13,11 @@ const thunder: ChainFrontendModule = {
     ...SIDECHAIN_MARKS.thunder,
     blockWeightUnits: 4000000,
   },
-  features: [],
+  features: ['richlist'],
+  // the feature pages of its own (chain/l2/l2.routes.ts puts them ahead of the generic ones)
+  routes: [
+    { path: 'richlist', loadComponent: () => import('./richlist.page').then(m => m.ThunderRichlistPage) },
+  ],
 };
 
 export default thunder;

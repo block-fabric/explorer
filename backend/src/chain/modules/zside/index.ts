@@ -1,5 +1,6 @@
 import { ChainModule } from '../../module';
 import { thunderContent } from '../thunder';
+import { featureRoutes } from './routes';
 
 /**
  * zSide (thunder-orchard, slot 98): Thunder with a shielded Orchard pool, served by backbone-zside. As Thunder
@@ -17,8 +18,8 @@ const zside: ChainModule = {
       ? { actions: tx.orchard_bundle.actions?.length ?? 0, valueBalance: Number(tx.orchard_bundle.balance ?? 0), flags: Number(tx.orchard_bundle.flags ?? 0) }
       : null,
     featureRoutes(app, prefix, ctx) {
-      // totals over the index: sats shielded (into the pool) and unshielded, actions, the value balance sum
-      app.get(prefix + 'shielded', ctx.handler(async (req, res) => { res.json(ctx.index.shielded()); }));
+      // the pool from the index: totals, per block, the latest shielded txs
+      featureRoutes(app, prefix, ctx);
     },
   },
 };

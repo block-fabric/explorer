@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { L2_FEATURE_PAGES } from '@app/chain/l2/l2-nav';
+import { MODULE } from '@app/chain/profiles';
 
 /**
  * The routes of a sidechain explorer (PROFILE.kind 'l2'): app-routing.module.ts loads these in place of upstream's
@@ -20,6 +21,10 @@ export const L2_ROUTES: Routes = [
       { path: 'address/:address', loadComponent: () => import('@app/chain/l2/pages/address.page').then(m => m.L2AddressPage) },
       { path: 'deposits', data: { kind: 'deposits' }, loadComponent: () => import('@app/chain/l2/pages/transfers.page').then(m => m.L2TransfersPage) },
       { path: 'withdrawals', data: { kind: 'withdrawals' }, loadComponent: () => import('@app/chain/l2/pages/transfers.page').then(m => m.L2TransfersPage) },
+      // BMM and the peg on eCash, from the eCash explorer's drivechain index (GET /api/v1/l2/bmm/*)
+      { path: 'bmm', loadComponent: () => import('@app/chain/l2/pages/bmm.page').then(m => m.L2BmmPage) },
+      // the chain's own feature pages (its module's routes, chain/modules/<chain>/), ahead of the generic ones they replace
+      ...(MODULE.routes ?? []),
       // the feature pages: each chain's header shows those its backend serves (GET /api/v1/chain features)
       ...L2_FEATURE_PAGES.flatMap(p => [
         { path: p.path, data: { page: p.path }, loadComponent: featureList },

@@ -14,6 +14,14 @@ const hivemind: ChainFrontendModule = {
     blockWeightUnits: 4000000,
   },
   features: ['markets'],
+  // the feature pages of its own (chain/l2/l2.routes.ts puts them ahead of the generic ones)
+  routes: [
+    { path: 'markets', loadComponent: () => import('./markets.page').then(m => m.HivemindMarketsPage) },
+    { path: 'markets/:id', loadComponent: () => import('./markets.page').then(m => m.HivemindMarketPage) },
+    { path: 'decisions', loadComponent: () => import('./oracle.page').then(m => m.HivemindDecisionsPage) },
+    { path: 'decisions/:id', loadComponent: () => import('./oracle.page').then(m => m.HivemindDecisionPage) },
+    { path: 'votes', loadComponent: () => import('./oracle.page').then(m => m.HivemindVotesPage) },
+  ],
 };
 
 export default hivemind;

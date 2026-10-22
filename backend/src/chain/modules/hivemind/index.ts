@@ -1,6 +1,7 @@
 import { ChainModule } from '../../module';
 import { Content } from '../../l2/types';
 import { hex, tagged, withdrawalContent } from '../../l2/codec';
+import { featureRoutes } from './routes';
 
 /**
  * Hivemind (Truthcoin, slot 13): prediction markets and votes, served by backbone-hivemind. Txids, deposits and
@@ -34,11 +35,7 @@ const hivemind: ChainModule = {
     depositRule: 'checksum', stateUtxos: true, features: ['markets'],
     content: hivemindContent,
     featureRoutes(app, prefix, ctx) {
-      ctx.list('markets', 'market_list');
-      ctx.item('markets', 'market_get', /^[0-9a-f]{12}$/);
-      app.get(prefix + 'votes', ctx.handler(async (req, res) => {
-        res.json(await ctx.cached('votes', 5000, () => ctx.rpc.call('vote_period')));
-      }));
+      featureRoutes(app, prefix, ctx);
     },
   },
 };

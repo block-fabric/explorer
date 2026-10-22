@@ -14,6 +14,15 @@ const bitassets: ChainFrontendModule = {
     blockWeightUnits: 4000000,
   },
   features: ['assets'],
+  // the feature pages of its own (chain/l2/l2.routes.ts puts them ahead of the generic ones)
+  routes: [
+    { path: 'assets', loadComponent: () => import('./assets.page').then(m => m.BitAssetsAssetsPage) },
+    { path: 'assets/:id', loadComponent: () => import('./assets.page').then(m => m.BitAssetsAssetPage) },
+    { path: 'pools', loadComponent: () => import('./pools.page').then(m => m.BitAssetsPoolsPage) },
+    { path: 'pools/:id', loadComponent: () => import('./pools.page').then(m => m.BitAssetsPoolPage) },
+    { path: 'auctions', loadComponent: () => import('./auctions.page').then(m => m.BitAssetsAuctionsPage) },
+    { path: 'auctions/:id', loadComponent: () => import('./auctions.page').then(m => m.BitAssetsAuctionPage) },
+  ],
 };
 
 export default bitassets;

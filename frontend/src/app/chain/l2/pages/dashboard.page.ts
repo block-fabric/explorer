@@ -5,6 +5,7 @@ import { PROFILE } from '@app/chain/profiles';
 import { L2ApiService, l2Error } from '@app/chain/l2/l2-api.service';
 import { L2BlockSummary, L2Deposit, L2Error, L2Summary, L2Withdrawal } from '@app/chain/l2/l2.interfaces';
 import { L2_PAGE_IMPORTS, shortId } from '@app/chain/l2/l2-common';
+import { L2BlockStripComponent } from '@app/chain/l2/l2-block-strip.component';
 
 interface Dash {
   summary: L2Summary;
@@ -13,11 +14,11 @@ interface Dash {
   withdrawals: L2Withdrawal[];
 }
 
-/** A sidechain explorer's dashboard (/): the tip, counts, wealth against the eCash escrow, the pending bundle, the latest blocks, deposits and withdrawals; every 15 s */
+/** A sidechain explorer's dashboard (/): the block strip with BMM marks, the tip, counts, BMM coverage, wealth against the eCash escrow, the pending bundle, the latest blocks, deposits and withdrawals; every 15 s */
 @Component({
   selector: 'app-l2-dashboard',
   standalone: true,
-  imports: [...L2_PAGE_IMPORTS],
+  imports: [...L2_PAGE_IMPORTS, L2BlockStripComponent],
   templateUrl: './dashboard.page.html',
   styleUrls: ['../../components/module-page.scss', './l2-page.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,

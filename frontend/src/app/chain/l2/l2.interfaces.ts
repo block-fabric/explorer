@@ -18,6 +18,30 @@ export interface L2Summary {
   pendingBundle: { m6id: string | null; payouts: { address: string; amount: number; fee: number }[]; total: number } | null;
   /** null when the node cannot list its mempool (Thunder, zSide) */
   mempool: { count: number } | null;
+  /** BMM coverage over the newest `window` eCash blocks; null: no eCash explorer API (CHAIN.MAINCHAIN_API) */
+  bmm?: { window: number; mainHeight: number; accepts: number; coverage: number; lastMainHeight: number | null; bidMedian: number } | null;
+}
+
+/** A sidechain block's BMM, from the eCash explorer's drivechain index */
+export interface L2Bmm {
+  /** the eCash block that carried it */
+  mainHeight: number;
+  mainHash: string;
+  /** sats: the fee of the M8 request, paid to that block's miner */
+  bid: number | null;
+  /** the M8 request (eCash txid) */
+  requestTxid: string | null;
+  /** M8 requests for this slot in that eCash block */
+  requests: number;
+  contested: boolean;
+}
+
+/** An M8 request for this slot in an eCash block (sideBlock in the nodes' order) */
+export interface L2BmmRequest {
+  txid: string;
+  bid: number;
+  sideBlock: string;
+  accepted: boolean;
 }
 
 export interface L2BlockSummary {
@@ -33,6 +57,8 @@ export interface L2BlockSummary {
   fees: number;
   deposits: number;
   volume: number;
+  /** null: no BMM known for it (or no eCash explorer API) */
+  bmm?: L2Bmm | null;
 }
 
 export type L2OutPointKind = 'regular' | 'coinbase' | 'deposit' | 'marketFunds' | 'payout';
@@ -139,6 +165,8 @@ export interface L2Block extends Omit<L2BlockSummary, 'deposits'> {
   /** credited when this block connected */
   deposits: L2Deposit[];
   bundleSpends: { outpoint: L2OutPoint; m6id: string }[];
+  /** with the M8 requests for this slot in the carrying eCash block */
+  bmm?: (L2Bmm & { requestList: L2BmmRequest[] }) | null;
 }
 
 export interface L2Address {

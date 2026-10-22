@@ -67,6 +67,7 @@
             <p><a [routerLink]="['/blocks']">Blocks</a></p>
             <p><a [routerLink]="['/deposits']">Deposits</a></p>
             <p><a [routerLink]="['/withdrawals']">Withdrawals</a></p>
+            <p><a [routerLink]="['/bmm']">BMM on eCash</a></p>
             <p *ngFor="let item of l2Nav$ | async"><a [routerLink]="[item.path]">{{ item.title }}</a></p>
           </div>
           <ng-container *ngIf="chainLinks$ | async as chains">

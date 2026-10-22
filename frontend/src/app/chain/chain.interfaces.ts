@@ -257,6 +257,8 @@ export interface ChainInfo {
   kind?: 'l1' | 'l2';
   /** L2: the eCash explorer of the same network (links to mainchain blocks and transactions) */
   mainchainExplorer?: string | null;
+  /** a sidechain explorer: the BMM views (GET /api/v1/l2/bmm/*) are on */
+  bmm?: boolean;
   /** L2: the chain's feature pages the backend serves (GET /api/v1/l2/feature/<name>) */
   features?: string[];
 }

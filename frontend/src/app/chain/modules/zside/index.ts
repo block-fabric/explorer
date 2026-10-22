@@ -14,6 +14,10 @@ const zside: ChainFrontendModule = {
     blockWeightUnits: 4000000,
   },
   features: ['shielded'],
+  // the feature pages of its own (chain/l2/l2.routes.ts puts them ahead of the generic ones)
+  routes: [
+    { path: 'shielded', loadComponent: () => import('./shielded.page').then(m => m.ZsideShieldedPage) },
+  ],
 };
 
 export default zside;

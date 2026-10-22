@@ -15,6 +15,11 @@ const coinshift: ChainFrontendModule = {
     blockWeightUnits: 4000000,
   },
   features: ['swaps'],
+  // the feature pages of its own (chain/l2/l2.routes.ts puts them ahead of the generic ones)
+  routes: [
+    { path: 'swaps', loadComponent: () => import('./swaps.page').then(m => m.CoinshiftSwapsPage) },
+    { path: 'swaps/:id', loadComponent: () => import('./swaps.page').then(m => m.CoinshiftSwapPage) },
+  ],
 };
 
 export default coinshift;

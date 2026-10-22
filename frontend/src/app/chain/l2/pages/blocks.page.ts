@@ -19,20 +19,21 @@ const PAGE = 25;
   template: `
   <div class="container-xl mp">
     <h1><app-svg-images name="nav-cubes" width="28" height="28" class="cmark"></app-svg-images> Blocks</h1>
-    <div class="sub">{{ profile.name }}'s blocks, newest first, with the eCash block whose miner committed each (BMM)</div>
+    <div class="sub">{{ profile.name }}'s blocks, newest first, with the eCash block whose miner committed each (BMM) and the bid paid to that miner</div>
     @if (view$ | async; as v) {
       <app-l2-state [state]="v" what="Blocks" [height]="400"></app-l2-state>
       @if (v.data; as blocks) {
         <div class="box">
           <table class="table table-borderless table-sm">
-            <thead><tr><th>Height</th><th>Hash</th><th>Time</th><th>eCash block (BMM)</th><th class="text-end">Txs</th><th class="text-end">Inputs</th><th class="text-end">Outputs</th><th class="text-end">Deposits</th><th class="text-end">Volume</th><th class="text-end">Fees</th></tr></thead>
+            <thead><tr><th>Height</th><th>Hash</th><th>Time</th><th>eCash block (BMM)</th><th class="text-end">Bid</th><th class="text-end">Txs</th><th class="text-end">Inputs</th><th class="text-end">Outputs</th><th class="text-end">Deposits</th><th class="text-end">Volume</th><th class="text-end">Fees</th></tr></thead>
             <tbody>
               @for (b of blocks; track b.hash) {
                 <tr>
                   <td><a [routerLink]="['/block', b.hash]">{{ b.height | number }}</a></td>
                   <td><a [routerLink]="['/block', b.hash]" class="mono" [title]="b.hash">{{ shortId(b.hash) }}</a></td>
                   <td>@if (b.time) {<app-timestamp [unixTime]="b.time" [hideTimeSince]="true"></app-timestamp>} @else {<span class="muted">–</span>}</td>
-                  <td>@if (b.mainBlock; as m) {<app-l2-main-link kind="block" [id]="m.hash" [text]="'' + m.height"></app-l2-main-link>} @else {<span class="muted">–</span>}</td>
+                  <td>@if (b.bmm; as m) {<app-l2-main-link kind="block" [id]="m.mainHash" [text]="'' + m.mainHeight"></app-l2-main-link>@if (m.contested) {<span class="pill ms-1" [title]="m.requests + ' BMM requests for the slot in that eCash block'">contested</span>}} @else if (b.mainBlock; as m) {<app-l2-main-link kind="block" [id]="m.hash" [text]="'' + m.height"></app-l2-main-link>} @else {<span class="muted">–</span>}</td>
+                  <td class="text-end">@if (b.bmm?.bid !== null && b.bmm?.bid !== undefined) { {{ b.bmm?.bid | number }} <span class="muted">sats</span>} @else {<span class="muted">–</span>}</td>
                   <td class="text-end">{{ b.txCount }}</td>
                   <td class="text-end">{{ b.inputs }}</td>
                   <td class="text-end">{{ b.outputs }}</td>
@@ -41,7 +42,7 @@ const PAGE = 25;
                   <td class="text-end"><app-l2-amount [sats]="b.fees"></app-l2-amount></td>
                 </tr>
               } @empty {
-                <tr><td colspan="10" class="empty">No blocks here.</td></tr>
+                <tr><td colspan="11" class="empty">No blocks here.</td></tr>
               }
             </tbody>
           </table>

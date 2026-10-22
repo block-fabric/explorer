@@ -1,0 +1,267 @@
+<div class="container-xl cockpit" [style.--accent]="color">
+
+  <div class="cp-head">
+    <div>
+      <h1>
+        <app-svg-images name="chain-mark" [fill]="profile.id" width="30" height="30" class="cp-icon"></app-svg-images>
+        {{ profile.name }} on eCash
+      </h1>
+      <div class="cp-sub">
+        Blind merged mining and the two-way peg of slot {{ slot }}, from the eCash explorer's drivechain index
+        @if (data; as d) {
+          <span class="dot">·</span> eCash block <b><app-l2-main-link kind="block" [id]="'' + d.live.height" [text]="(d.live.height | number) + ''"></app-l2-main-link></b>
+          <span class="dot">·</span> {{ d.totals.blocks | number }} blocks analysed ({{ windowLabel() }})
+          @if (!d.indexReady) {<span class="badge badge-warning ms-2">indexing…</span>}
+        }
+      </div>
+    </div>
+    <div class="cp-controls">
+      <div class="btn-group btn-group-sm">
+        @for (w of windows; track w.blocks) {
+          <button class="btn" [class.btn-primary]="window === w.blocks" [class.btn-secondary]="window !== w.blocks" (click)="setWindow(w.blocks)">{{ w.label }}</button>
+        }
+      </div>
+    </div>
+  </div>
+
+  @if (error && !data) {
+    @if (error.status === 404) {
+      <div class="alert alert-info">This explorer does not read an eCash drivechain index: the BMM views are off.</div>
+    } @else {
+      <div class="alert alert-warning">The eCash drivechain index is not available: {{ error.message }}</div>
+    }
+  } @else if (!data) {
+    <div class="skeleton-loader cp-skel"></div>
+  }
+
+  @if (data; as d) {
+    <!-- KPI strip -->
+    <div class="kpis">
+      <div class="kpi">
+        <div class="k-label">BMM coverage</div>
+        <div class="k-value">{{ pct(stats?.coverage ?? 0, 1) }}</div>
+        <div class="k-sub">{{ (stats?.accepts ?? 0) | number }} of {{ d.totals.blocks | number }} eCash blocks carried a {{ profile.name }} block</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">Bids paid to eCash miners</div>
+        <div class="k-value"><app-l2-amount [sats]="stats?.bids ?? 0"></app-l2-amount></div>
+        <div class="k-sub">median {{ (stats?.bidMedian ?? 0) | number }} · avg {{ (stats?.bidAvg ?? 0) | number }} · max {{ (stats?.bidMax ?? 0) | number }} sats</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">Competition</div>
+        <div class="k-value">{{ (stats?.requests ?? 0) | number }} <span class="k-small">requests</span></div>
+        <div class="k-sub">{{ (stats?.rejected ?? 0) | number }} beaten · {{ (stats?.contested ?? 0) | number }} eCash blocks contested</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">Gaps</div>
+        <div class="k-value">{{ (stats?.longestGap ?? 0) | number }} <span class="k-small">blocks</span></div>
+        <div class="k-sub">longest run without a {{ profile.name }} block · last one
+          @if (stats?.lastAcceptHeight !== null && stats?.lastAcceptHeight !== undefined) { {{ (d.live.height - stats.lastAcceptHeight) | number }} blocks ago } @else { – }</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">Escrow on eCash</div>
+        <div class="k-value"><app-l2-amount [sats]="live?.escrow ?? 0"></app-l2-amount></div>
+        <div class="k-sub">@if (live?.escrowTxid) {<app-l2-main-link kind="tx" [id]="live.escrowTxid" [short]="true"></app-l2-main-link>} @else {no escrow output}</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">Net peg flow</div>
+        <div class="k-value"><app-l2-amount [sats]="stats?.netFlow ?? 0" [signed]="true"></app-l2-amount></div>
+        <div class="k-sub">{{ (stats?.deposits ?? 0) | number }} deposits in · {{ (stats?.withdrawals ?? 0) | number }} withdrawals out</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">Withdrawal bundles</div>
+        <div class="k-value">{{ d.live.bundles.length }} <span class="k-small">pending</span></div>
+        <div class="k-sub">{{ stats?.bundlesProposed ?? 0 }} proposed · {{ stats?.bundlesPaid ?? 0 }} paid · {{ stats?.bundlesFailed ?? 0 }} failed</div>
+      </div>
+    </div>
+
+    <!-- coverage strip: the newest eCash blocks -->
+    <h2 class="cp-h2">Blind merged mining, block by block <span class="cp-h2-sub">the newest {{ d.coverage.length }} eCash blocks; a lit cell carried a {{ profile.name }} block, brighter = higher bid</span></h2>
+    <div class="box grid-box">
+      <div class="cov-row" [style.--sc]="color">
+        <div class="cov-name">{{ profile.name }}</div>
+        <div class="cov-cells">
+          @for (b of d.coverage; track b.height) {
+            @if (accepted(b); as a) {
+              <a class="cov-cell on" [routerLink]="['/block', reverseHex(a.sideBlock)]"
+                [style.opacity]="0.45 + 0.55 * (stats?.bidMax ? (a.bid || 0) / stats.bidMax : 1)"
+                [title]="'eCash block ' + b.height + ' carried ' + profile.name + ' block ' + shortId(reverseHex(a.sideBlock)) + (a.bid !== null ? ' · bid ' + a.bid + ' sats' : '') + (b.requests > 1 ? ' · ' + b.requests + ' requests' : '')"></a>
+            } @else {
+              <span class="cov-cell" [class.req]="b.requests > 0" [title]="'eCash block ' + b.height + (b.miner ? ' (' + b.miner + ')' : '') + ': no ' + profile.name + ' block' + (b.requests ? ', ' + b.requests + ' request(s) not accepted' : '')"></span>
+            }
+          }
+        </div>
+      </div>
+      <div class="cov-row cov-meta">
+        <div class="cov-name">Peg</div>
+        <div class="cov-cells">
+          @for (b of d.coverage; track b.height) {
+            <span class="cov-cell ev" [class.dep]="b.deposits" [class.wd]="b.withdrawals" [class.vote]="b.voted && !b.deposits && !b.withdrawals"
+              [title]="'eCash block ' + b.height + (b.deposits ? ' · ' + b.deposits + ' deposits' : '') + (b.withdrawals ? ' · ' + b.withdrawals + ' withdrawals' : '') + (b.voted ? ' · bundle vote' : '')"></span>
+          }
+        </div>
+      </div>
+      <div class="cov-legend">
+        <span><i class="lg dep"></i>deposit</span><span><i class="lg wd"></i>withdrawal</span><span><i class="lg vote"></i>bundle vote</span><span><i class="lg req"></i>request not accepted</span>
+        <span class="ms-auto">← older · eCash block {{ d.coverage[0]?.height | number }} … {{ d.coverage[d.coverage.length - 1]?.height | number }} · newer →</span>
+      </div>
+    </div>
+
+    <!-- charts -->
+    <div class="chart-grid">
+      <div class="box chart-box">
+        <h5>Bids over time <small>paid to eCash miners for {{ profile.name }} blocks</small></h5>
+        <div class="chart" *browserOnly echarts [initOpts]="chartInitOptions" [options]="charts.bids"></div>
+      </div>
+      <div class="box chart-box">
+        <h5>BMM coverage <small>share of eCash blocks carrying a {{ profile.name }} block</small></h5>
+        <div class="chart" *browserOnly echarts [initOpts]="chartInitOptions" [options]="charts.coverage"></div>
+      </div>
+      <div class="box chart-box">
+        <h5>Competition <small>the newest {{ requests.length | number }} BMM requests (M8) for the slot: accepted and beaten bids</small></h5>
+        @if (charts.competition) {
+          <div class="chart" *browserOnly echarts [initOpts]="chartInitOptions" [options]="charts.competition"></div>
+        } @else {
+          <div class="skeleton-loader chart"></div>
+        }
+      </div>
+      <div class="box chart-box">
+        <h5>Escrow <small>ECX locked on eCash for {{ profile.name }}</small></h5>
+        <div class="chart" *browserOnly echarts [initOpts]="chartInitOptions" [options]="charts.escrow"></div>
+      </div>
+      <div class="box chart-box">
+        <h5>Deposits and withdrawals <small>deposits up, withdrawals down</small></h5>
+        <div class="chart" *browserOnly echarts [initOpts]="chartInitOptions" [options]="charts.flows"></div>
+      </div>
+      <div class="box chart-box">
+        <h5>Bundle votes <small>over the window, against the threshold</small></h5>
+        <div class="chart" *browserOnly echarts [initOpts]="chartInitOptions" [options]="charts.bundles"></div>
+      </div>
+    </div>
+
+    <!-- withdrawal bundles -->
+    <h2 class="cp-h2">Withdrawal bundles <span class="cp-h2-sub">a bundle can be paid out once it has {{ d.live.info.bundleThreshold | number }} votes, within {{ d.live.info.bundleMaxAge | number }} eCash blocks of its proposal</span></h2>
+    <div class="box">
+      @for (b of d.live.bundles; track b.hash) {
+        <div class="bundle" [style.--sc]="color">
+          <div class="b-head">
+            <span class="mono" [title]="b.hash">{{ b.hash }}</span>
+            @if (b.payable) {<span class="b-amt pos">payable</span>}
+          </div>
+          @if (bundleProgress(b); as p) {
+            <div class="b-bar"><div class="b-fill" [style.width.%]="p.pct * 100" [class.doomed]="!p.canMake"></div></div>
+            <div class="b-meta">
+              <span>votes <b>{{ b.score | number }}</b> / {{ b.threshold | number }}</span>
+              <span><b>{{ b.blocksleft | number }}</b> blocks left</span>
+              @if (!b.payable && p.canMake) {<span class="pos">needs {{ p.needed | number }} more votes</span>}
+              @if (!p.canMake) {<span class="neg">cannot reach the threshold in time</span>}
+              <span>proposed at eCash block <app-l2-main-link kind="block" [id]="'' + b.height" [text]="(b.height | number) + ''"></app-l2-main-link></span>
+            </div>
+          }
+        </div>
+      } @empty {
+        <p class="text-muted mb-0">No withdrawal bundle of {{ profile.name }} is pending on eCash.</p>
+      }
+    </div>
+
+    <!-- miners -->
+    <div class="row-2">
+      <div class="box table-box">
+        <h5>eCash miners that carried {{ profile.name }} <small>{{ windowLabel() }}</small></h5>
+        <table class="table table-borderless table-sm cp-table">
+          <thead><tr><th>Miner</th><th class="text-right">Blocks</th><th class="text-right">{{ profile.name }} blocks</th><th class="text-right">Bids earned</th></tr></thead>
+          <tbody>
+            @for (m of carriers(); track m.tag) {
+              <tr>
+                <td class="miner" [title]="(m.name || m.tag) + ' · coinbase tag ' + m.tag">{{ m.name || m.tag }}</td>
+                <td class="text-right">{{ m.blocks | number }}</td>
+                <td class="text-right">{{ m.accepts | number }}</td>
+                <td class="text-right"><app-l2-amount [sats]="m.bids"></app-l2-amount></td>
+              </tr>
+            } @empty {
+              <tr><td colspan="4" class="text-muted">No eCash block carried a {{ profile.name }} block in the window.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <div class="box">
+        <h5>Drivechain rules <small>from the enforcer</small></h5>
+        <div class="rules">
+          <div><span>Slot</span><b>{{ slot }}</b></div>
+          <div><span>Active since</span><b>eCash block {{ (live?.activationHeight ?? 0) | number }}</b></div>
+          <div><span>Bundle threshold</span><b>{{ d.live.info.bundleThreshold | number }} votes</b></div>
+          <div><span>Bundle max age</span><b>{{ d.live.info.bundleMaxAge | number }} blocks</b></div>
+          <div class="wide"><span>About</span><b class="small">{{ live?.description }}</b></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- event feeds -->
+    <h2 class="cp-h2">Event log <span class="cp-h2-sub">eCash blocks and transactions open on the eCash explorer</span></h2>
+    <div class="box ev-box">
+      <div class="cp-tabs">
+        @for (f of feeds; track f.id) {
+          <button class="cp-tab" [class.on]="feed === f.id" (click)="setFeed(f.id)">{{ f.label }}</button>
+        }
+      </div>
+      @if (!feedItems) {
+        <div class="skeleton-loader mt-2"></div>
+      } @else if (!feedItems.length) {
+        <p class="text-muted mt-2 mb-0">Nothing of this kind in the indexed eCash blocks.</p>
+      } @else {
+        <table class="table table-borderless table-sm cp-table mt-2">
+          <thead>
+            <tr>
+              <th>eCash block</th><th>Age</th>
+              @switch (feed) {
+                @case ('bmm') {<th>{{ profile.name }} block</th><th class="text-right">Bid</th>}
+                @case ('bmm-requests') {<th>{{ profile.name }} block asked for</th><th class="text-right">Bid</th>}
+                @case ('deposits') {<th>To</th><th class="text-right">Amount</th>}
+                @case ('withdrawals') {<th>Bundle</th><th class="text-right">Amount</th>}
+                @case ('bundles') {<th>Bundle</th><th class="text-right">Status</th>}
+              }
+              <th class="text-right">eCash tx</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (e of feedItems; track $index) {
+              <tr>
+                <td class="ev-h"><app-l2-main-link kind="block" [id]="e.blockHash" [text]="(e.height | number) + ''"></app-l2-main-link></td>
+                <td class="ev-t"><app-time kind="since" [time]="e.time" [fastRender]="true"></app-time></td>
+                @switch (feed) {
+                  @case ('bmm') {
+                    <td><a class="mono" [routerLink]="['/block', reverseHex(e.sideBlock)]" [title]="reverseHex(e.sideBlock)">{{ shortId(reverseHex(e.sideBlock)) }}</a></td>
+                    <td class="text-right">@if (e.bid !== undefined && e.bid !== null) { {{ e.bid | number }} sats} @else {no bid}</td>
+                  }
+                  @case ('bmm-requests') {
+                    <td>@if (e.accepted) {<a class="mono" [routerLink]="['/block', reverseHex(e.sideBlock)]" [title]="reverseHex(e.sideBlock)">{{ shortId(reverseHex(e.sideBlock)) }}</a>} @else {<span class="mono" [title]="reverseHex(e.sideBlock)">{{ shortId(reverseHex(e.sideBlock)) }}</span>}</td>
+                    <td class="text-right">{{ e.bid | number }} sats <span class="status" [class.ok]="e.accepted">{{ e.accepted ? 'accepted' : 'beaten' }}</span></td>
+                  }
+                  @case ('deposits') {
+                    <td class="mono dest" [title]="e.destination">{{ e.destination }}</td>
+                    <td class="text-right pos"><app-l2-amount [sats]="e.amount"></app-l2-amount></td>
+                  }
+                  @case ('withdrawals') {
+                    <td class="mono" [title]="e.bundle">{{ shortId(e.bundle) }} · {{ e.payouts?.length }} payouts</td>
+                    <td class="text-right neg"><app-l2-amount [sats]="e.amount"></app-l2-amount></td>
+                  }
+                  @case ('bundles') {
+                    <td class="mono" [title]="e.hash">{{ shortId(e.hash) }}</td>
+                    <td class="text-right"><span class="status" [class.paid]="e.type === 'paid'" [class.failed]="e.type === 'failed'" [class.pending]="e.type === 'proposed'">{{ e.type }}</span></td>
+                  }
+                }
+                <td class="ev-tx">@if (e.txid || e.requestTxid; as t) {<app-l2-main-link kind="tx" [id]="t" [short]="true"></app-l2-main-link>}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+        <div class="pager">
+          @if (feedBefore !== null) {<button class="btn btn-sm btn-secondary" (click)="pageFeed(null)">Newest</button>}
+          @if (feedItems.length === feedPage) {
+            <button class="btn btn-sm btn-secondary" (click)="pageFeed(feedItems[feedItems.length - 1].height)">Older &rarr;</button>
+          }
+        </div>
+      }
+    </div>
+  }
+</div>

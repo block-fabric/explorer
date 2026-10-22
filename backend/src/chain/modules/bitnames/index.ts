@@ -1,6 +1,7 @@
 import { ChainModule } from '../../module';
 import { Content } from '../../l2/types';
 import { tagged, withdrawalContent } from '../../l2/codec';
+import { featureRoutes } from './routes';
 
 /**
  * BitNames (slot 2): names (BitNames) as UTXOs, served by backbone-bitnames. Txids, deposits and bundle spends
@@ -34,8 +35,7 @@ const bitnames: ChainModule = {
     depositRule: 'prefix', features: ['names'],
     content: bitnamesContent,
     featureRoutes(app, prefix, ctx) {
-      ctx.list('names', 'bitnames');
-      ctx.item('names', 'bitname_data', /^[0-9a-f]{64}$/);
+      featureRoutes(app, prefix, ctx);
     },
   },
 };

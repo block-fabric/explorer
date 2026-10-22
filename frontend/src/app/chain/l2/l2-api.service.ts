@@ -87,6 +87,16 @@ export class L2ApiService {
     return this.api.get('l2/search/' + encodeURIComponent(query));
   }
 
+  /** the eCash explorer's drivechain cockpit for this slot (GET /api/v1/l2/bmm/cockpit), window in eCash blocks */
+  bmmCockpit$(window: number): Observable<any> {
+    return this.api.get('l2/bmm/cockpit', { window });
+  }
+
+  /** the eCash explorer's drivechain events of this slot: bmm, bmm-requests, deposits, withdrawals, bundles, ... */
+  bmmEvents$(kind: string, before: number | null = null, limit = 40): Observable<any[]> {
+    return this.api.get('l2/bmm/events/' + encodeURIComponent(kind), { before, limit });
+  }
+
   /** a chain feature's read RPC (GET /api/v1/l2/feature/<path>): node-given shapes, lists as { items } */
   feature$<T = any>(path: string, id?: string): Observable<T> {
     return this.api.get('l2/feature/' + path + (id !== undefined ? '/' + encodeURIComponent(id) : ''));

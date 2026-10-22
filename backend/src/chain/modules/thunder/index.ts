@@ -1,6 +1,7 @@
 import { ChainModule } from '../../module';
 import { Content } from '../../l2/types';
 import { tagged, withdrawalContent } from '../../l2/codec';
+import { featureRoutes } from './routes';
 
 /**
  * Thunder (slot 9), a sidechain of plain sats: LayerTwo's thunder, served by backbone-thunder. Its node hands out
@@ -25,8 +26,11 @@ const thunder: ChainModule = {
   profile: { id: 'thunder', kind: 'l2', name: 'Thunder', unit: 'sats', slot: 9, mainchain: false, subsidy: false },
   l2: {
     txids: 'canonical', blockIndex: false, inputPairs: true, withdrawalBundleRpc: true, mempool: false, txInfo: false, fill: false,
-    depositRule: 'bare', features: [],
+    depositRule: 'bare', features: ['richlist'],
     content: thunderContent,
+    featureRoutes(app, prefix, ctx) {
+      featureRoutes(app, prefix, ctx);
+    },
   },
 };
 
