@@ -31,6 +31,8 @@ import { miningStats } from './mining';
 //   GET chain/block/:hash/features     the module's describeBlock
 //   GET chain/...                      the module's own routes (initRoutes)
 
+// Bounded: keys can come from request paths (ids), so the oldest entries go once there are CACHE_MAX of them
+const CACHE_MAX = 1000;
 const cache = new Map<string, { at: number; value: any }>();
 async function cached<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<T> {
   const c = cache.get(key);
@@ -38,7 +40,11 @@ async function cached<T>(key: string, ttlMs: number, fn: () => Promise<T>): Prom
     return c.value;
   }
   const value = await fn();
+  cache.delete(key);
   cache.set(key, { at: Date.now(), value });
+  while (cache.size > CACHE_MAX) {
+    cache.delete(cache.keys().next().value as string);
+  }
   return value;
 }
 
@@ -62,9 +68,9 @@ function wrap(fn: (req: Request, res: Response) => Promise<unknown>) {
     try {
       await fn(req, res);
     } catch (e) {
-      const message = (e instanceof Error ? e.message : String(e)).slice(0, 200);
-      logger.debug(`Chain API ${req.path}: ${message}`);
-      handleError(req, res, 500, `Node error: ${message}`);
+      // the node's or enforcer's error text stays in the log: it can name hosts, ports and internals
+      logger.warn(`Chain API ${req.path}: ${(e instanceof Error ? e.message : String(e)).slice(0, 300)}`);
+      handleError(req, res, 500, 'The node or the enforcer did not answer');
     }
   };
 }

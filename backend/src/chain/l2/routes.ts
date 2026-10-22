@@ -27,6 +27,8 @@ import { L2Chain, L2FeatureContext } from './types';
 const BUILDING = 'The index is still being built';
 const HASH = /^[0-9a-f]{64}$/;
 
+// Bounded: keys can come from request paths (ids), so the oldest entries go once there are CACHE_MAX of them
+const CACHE_MAX = 1000;
 const cache = new Map<string, { at: number; value: any }>();
 async function cached<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<T> {
   const c = cache.get(key);
@@ -34,7 +36,11 @@ async function cached<T>(key: string, ttlMs: number, fn: () => Promise<T>): Prom
     return c.value;
   }
   const value = await fn();
+  cache.delete(key);
   cache.set(key, { at: Date.now(), value });
+  while (cache.size > CACHE_MAX) {
+    cache.delete(cache.keys().next().value as string);
+  }
   return value;
 }
 
@@ -51,9 +57,9 @@ function wrap(fn: (req: Request, res: Response) => Promise<unknown>) {
     try {
       await fn(req, res);
     } catch (e) {
-      const message = (e instanceof Error ? e.message : String(e)).slice(0, 200);
-      logger.debug(`L2 API ${req.path}: ${message}`);
-      handleError(req, res, 500, `Node error: ${message}`);
+      // the node's error text stays in the log: it can name hosts, ports and internals
+      logger.warn(`L2 API ${req.path}: ${(e instanceof Error ? e.message : String(e)).slice(0, 300)}`);
+      handleError(req, res, 500, 'The sidechain node did not answer');
     }
   };
 }
@@ -108,7 +114,12 @@ class L2Routes {
           if (!id.test(v)) {
             return handleError(req, res, 400, 'Invalid id');
           }
-          const r = await cached(`feature:${path}:${v}`, 5000, () => rpc.call(method, param ? param(v) : v).catch(() => null));
+          // an id the node does not know is not cached (ids come from the request)
+          const key = `feature:${path}:${v}`;
+          const r = await cached(key, 5000, () => rpc.call(method, param ? param(v) : v).catch(() => null));
+          if (r === null) {
+            cache.delete(key);
+          }
           if (r === null || r === undefined) {
             return handleError(req, res, 404, 'Unknown id');
           }
