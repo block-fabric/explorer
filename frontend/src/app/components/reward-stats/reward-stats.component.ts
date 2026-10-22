@@ -13,7 +13,7 @@ import { PROFILE } from '@app/chain/profiles';
   standalone: false,
 })
 export class RewardStatsComponent implements OnInit {
-  unit = PROFILE.unit; // Chains Explorer
+  unit = PROFILE.unit; // eCash Explorer
   public $rewardStats: Observable<any>;
   private lastBlockHeight: number;
 

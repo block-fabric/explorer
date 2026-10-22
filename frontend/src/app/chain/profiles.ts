@@ -1,11 +1,8 @@
 /**
- * Chain profiles: one explorer build serves the Chains (CHN) mainchain and each of its drivechain sidechains.
+ * Chain profiles: one explorer build serves the eCash (ECX) mainchain, and later its drivechain sidechains.
  * window.__env.CHAIN_PROFILE (resources/config.js, set per container by docker/frontend/entrypoint.sh) picks the
  * chain at runtime, so several explorers run side by side from one image. The backend has the matching list in
  * backend/src/chain/profile.ts.
- *
- * Brand colours and marks are those of each chain's own app (apps/<chain>-app/src/webui/app/src/chain/chain.json;
- * Chains: chains-app's Midnight theme).
  */
 
 import { ChainFrontendModule, ChainProfile } from '@app/chain/chain-module';
@@ -17,19 +14,36 @@ export type ProfileId = string;
 /** Every known chain profile, by id */
 export const PROFILES: Record<string, ChainProfile> = Object.fromEntries(MODULES.map(m => [m.profile.id, m.profile]));
 
-/** The sidechains of the Chains network (every sidechain module but the template), in slot order */
+/** The sidechains with a module of their own, in slot order (none yet: their names come from the drivechain API) */
 export const SIDECHAINS: ChainProfile[] = MODULES.map(m => m.profile)
-  .filter(p => !p.mainchain && p.id !== 'sidechain-template')
+  .filter(p => !p.mainchain)
   .sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0));
 
 export function profileBySlot(slot: number): ChainProfile | undefined {
   return SIDECHAINS.find(p => p.slot === slot);
 }
 
+/** The mark of a sidechain without a profile: a block (app-svg-images chain-mark, fill 'sidechain') */
+export const SIDECHAIN_MARK: Pick<ChainProfile, 'mark' | 'markRects'> = {
+  mark: [], markRects: [{ x: 7, y: 7, w: 18, h: 18, rx: 4.5 }],
+};
+
+const SLOT_PALETTE = ['#ff8a3d', '#a585ff', '#5aa6ff', '#f26b9c', '#f5b83d', '#7bd88f', '#ff6b6b', '#c9a0ff'];
+
+/** A sidechain's colour: its profile's, else one per slot */
+export function slotColor(slot: number): string {
+  return profileBySlot(slot)?.color ?? SLOT_PALETTE[((slot % SLOT_PALETTE.length) + SLOT_PALETTE.length) % SLOT_PALETTE.length];
+}
+
+/** The app-svg-images chain-mark fill of a sidechain: its profile id, else the generic block */
+export function slotMarkId(slot: number): string {
+  return profileBySlot(slot)?.id ?? 'sidechain';
+}
+
 const env = (typeof window !== 'undefined' && window['__env']) || {};
 
 function resolveModule(): ChainFrontendModule {
-  const id = String(env.CHAIN_PROFILE || 'chains').toLowerCase();
+  const id = String(env.CHAIN_PROFILE || 'ecash').toLowerCase();
   return MODULES.find(m => m.profile.id === id) ?? MODULES[0];
 }
 
@@ -37,10 +51,23 @@ function resolveModule(): ChainFrontendModule {
 export const MODULE: ChainFrontendModule = resolveModule();
 export const PROFILE: ChainProfile = MODULE.profile;
 
-/** main | testnet | regtest: the address prefixes shown and accepted */
-export const CHAIN_NETWORK: 'main' | 'testnet' | 'regtest' = (['main', 'testnet', 'regtest'].includes(env.CHAIN_NETWORK) ? env.CHAIN_NETWORK : 'testnet');
+/** The eCash networks (backend/src/chain/networks.ts): their names and address prefixes (Bitcoin's) */
+export type NetworkId = 'ecash' | 'ecashbeta' | 'ecashtest';
+export const NETWORKS: Record<NetworkId, { id: NetworkId; name: string; bech32: string }> = {
+  ecash: { id: 'ecash', name: 'Mainnet', bech32: 'bc' },
+  ecashbeta: { id: 'ecashbeta', name: 'Betanet', bech32: 'bc' },
+  ecashtest: { id: 'ecashtest', name: 'Testnet', bech32: 'tb' },
+};
 
-/** The public URLs of the explorers (profile id -> URL), from CHAIN_EXPLORER_URLS: "chains=https://...,thunder=https://..." */
+/** The network this explorer shows (CHAIN_NETWORK): the address prefixes shown and accepted, the name in the header */
+export const CHAIN_NETWORK: NetworkId = (Object.keys(NETWORKS).includes(String(env.CHAIN_NETWORK).toLowerCase())
+  ? String(env.CHAIN_NETWORK).toLowerCase() : 'ecashbeta') as NetworkId;
+export const NETWORK_NAME = NETWORKS[CHAIN_NETWORK].name;
+
+/**
+ * The public URLs of the explorers (profile or network id -> URL), from CHAIN_EXPLORER_URLS:
+ * "ecash=https://...,ecashtest=https://..."
+ */
 export const EXPLORER_URLS: Partial<Record<ProfileId, string>> = (() => {
   const out: Partial<Record<ProfileId, string>> = {};
   const raw = String(env.CHAIN_EXPLORER_URLS || '');
@@ -58,13 +85,8 @@ export function explorerUrl(id: ProfileId, path = ''): string | null {
   return base ? base + path : null;
 }
 
-/** the path of what a Chains block committed to (M7) in a sidechain's explorer: a block, or an anchor ticket on a chain of stake */
-export function sideBlockPath(slot: number, hash: string): string {
-  return profileBySlot(slot)?.pos ? '/anchor/' + hash : '/block/' + hash;
-}
-
-export function bech32Prefix(p: ChainProfile = PROFILE): string {
-  return p.bech32[CHAIN_NETWORK];
+export function bech32Prefix(): string {
+  return NETWORKS[CHAIN_NETWORK].bech32;
 }
 
 /** #rrggbb scaled towards black by f (0..1) */
@@ -117,7 +139,7 @@ export function applyProfileToDocument(): void {
       .badge-info, .bg-info { background-color: ${dark} !important; color: #e9ebee !important; }
       .nav-tabs .nav-link.active, .nav-pills .nav-link.active { border-bottom-color: ${accent}; }
       .navbar-nav .nav-item.active .nav-link { color: ${accent} !important; }
-      /* CHN has no price feed: no fiat amounts */
+      /* ECX has no price feed here: no fiat amounts */
       app-fiat, .fiat, .table-cell-fiat { display: none !important; }
     `;
     document.head.appendChild(style);
@@ -127,7 +149,7 @@ export function applyProfileToDocument(): void {
       favicon.setAttribute('href', 'data:image/svg+xml,' + encodeURIComponent(markSvg(PROFILE, 64)));
     }
   }
-  const title = `${PROFILE.name} Explorer`;
+  const title = `${PROFILE.name} Explorer` + (CHAIN_NETWORK === 'ecash' ? '' : ` (${NETWORK_NAME})`);
   document.title = title;
   for (const sel of ['meta[property="og:title"]', 'meta[name="twitter:title"]']) {
     document.querySelector(sel)?.setAttribute('content', title);

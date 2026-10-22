@@ -3,8 +3,8 @@ import { HttpEvent, HttpHandler, HttpInterceptor, HttpRequest } from '@angular/c
 import { Observable } from 'rxjs';
 
 /**
- * Chains Explorer under a sub-path (e.g. https://explorer.chains.blockfab.org/layers/): the page's <base href>
- * ("/layers/") gives the prefix, '' when the explorer is at the root of its host (the default build, <base href="/">).
+ * eCash Explorer under a sub-path (e.g. https://example.org/ecashtest/): the page's <base href>
+ * ("/ecashtest/") gives the prefix, '' when the explorer is at the root of its host (the default build, <base href="/">).
  * The Angular router follows <base href> by itself; the backend's API and WebSocket are absolute paths
  * (/api/v1/...), so they get the prefix here.
  */

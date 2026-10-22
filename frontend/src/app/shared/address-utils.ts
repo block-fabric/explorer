@@ -3,6 +3,7 @@ import { ScriptInfo } from '@app/shared/script.utils';
 import { Vin, Vout } from '@interfaces/electrs.interface';
 import { BECH32_CHARS_LW, BASE58_CHARS, HEX_CHARS } from '@app/shared/regex.utils';
 import { parseTaproot } from './transaction.utils';
+import { CHAIN_NETWORK } from '@app/chain/profiles';
 
 export type AddressType = 'fee'
   | 'empty'
@@ -76,6 +77,12 @@ const ADDRESS_PREFIXES = {
     confidential: 'tlq1',
   },
 };
+
+// eCash Explorer: eCash testnet (CHAIN_NETWORK ecashtest) has Bitcoin testnet's addresses, in the 'mainnet' slot the
+// explorer runs as (see regex.utils.ts)
+if (CHAIN_NETWORK === 'ecashtest') {
+  (ADDRESS_PREFIXES as any).mainnet = ADDRESS_PREFIXES.testnet;
+}
 
 // precompiled regexes for common address types (excluding prefixes)
 const base58Regex = RegExp('^' + BASE58_CHARS + '{26,34}$');

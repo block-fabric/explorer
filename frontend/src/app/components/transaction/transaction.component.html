@@ -76,7 +76,7 @@
       (accelerateClicked)="onAccelerateClicked()"
       (toggleCpfp$)="toggleCpfp()"
     ></app-transaction-details>
-    <!-- Chains Explorer: what the transaction did for the drivechain (Chains) or on this sidechain (its module) -->
+    <!-- eCash Explorer: what the transaction did for the drivechain -->
     <app-chain-tx-panel *ngIf="tx && !isLoadingTx" [txid]="tx.txid"></app-chain-tx-panel>
   }
 

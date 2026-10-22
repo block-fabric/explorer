@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
-import { PROFILE, PROFILES, ChainProfile } from '@app/chain/profiles';
+import { PROFILE, PROFILES, SIDECHAIN_MARK, ChainProfile } from '@app/chain/profiles';
 
 @Component({
   selector: 'app-svg-images',
@@ -18,11 +18,11 @@ export class SvgImagesComponent {
   @Input() viewBox: string;
   @Input() fill: string;
 
-  // Chains Explorer: the chain's logo and marks
+  // eCash Explorer: the chain's logo and marks
   profile = PROFILE;
   nameLength = Math.min(370, Math.max(150, PROFILE.name.length * 46));
 
-  markOf(id: string): ChainProfile {
-    return PROFILES[id] ?? PROFILE;
+  markOf(id: string): Pick<ChainProfile, 'mark' | 'markRects'> {
+    return id === 'sidechain' ? SIDECHAIN_MARK : PROFILES[id] ?? PROFILE;
   }
 }

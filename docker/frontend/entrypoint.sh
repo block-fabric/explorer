@@ -39,7 +39,7 @@ __BLOCK_WEIGHT_UNITS__=${BLOCK_WEIGHT_UNITS:=4000000}
 __MEMPOOL_BLOCKS_AMOUNT__=${MEMPOOL_BLOCKS_AMOUNT:=8}
 __BASE_MODULE__=${BASE_MODULE:=mempool}
 __ROOT_NETWORK__=${ROOT_NETWORK:=}
-# Chains Explorer: '=' not ':=', so that an empty value stays empty instead of falling back to mempool.space
+# eCash Explorer: '=' not ':=', so that an empty value stays empty instead of falling back to mempool.space
 __MEMPOOL_WEBSITE_URL__=${MEMPOOL_WEBSITE_URL=https://mempool.space}
 __LIQUID_WEBSITE_URL__=${LIQUID_WEBSITE_URL=https://liquid.network}
 __MINING_DASHBOARD__=${MINING_DASHBOARD:=true}
@@ -63,25 +63,28 @@ __HISTORICAL_PRICE__=${HISTORICAL_PRICE:=true}
 __ADDITIONAL_CURRENCIES__=${ADDITIONAL_CURRENCIES:=false}
 __STRATUM_ENABLED__=${STRATUM_ENABLED:=false}
 
-# Chains Explorer: the chain this container shows (frontend/src/app/chain/modules/<id>) and the other explorers' URLs
-__CHAIN_PROFILE__=${CHAIN_PROFILE:=chains}
-__CHAIN_NETWORK__=${CHAIN_NETWORK:=testnet}
+# eCash Explorer: the chain this container shows (frontend/src/app/chain/modules/<id>), its network
+# (ecash | ecashbeta | ecashtest) and the other explorers' URLs ("ecash=https://...,ecashtest=https://...", by network id)
+__CHAIN_PROFILE__=${CHAIN_PROFILE:=ecash}
+__CHAIN_NETWORK__=${CHAIN_NETWORK:=ecashbeta}
 __CHAIN_EXPLORER_URLS__=${CHAIN_EXPLORER_URLS:=}
 export __CHAIN_PROFILE__
 export __CHAIN_NETWORK__
 export __CHAIN_EXPLORER_URLS__
 
-# Chains Explorer: the chain's name in the page title and link previews (index.html says "Chains Explorer")
-case "${CHAIN_PROFILE:-chains}" in
-  bitnames) __CHAIN_NAME__=BitNames ;; bitassets) __CHAIN_NAME__=BitAssets ;; fastblocks) __CHAIN_NAME__=FastBlocks ;;
-  zside) __CHAIN_NAME__=zSide ;; thunder) __CHAIN_NAME__=Thunder ;; hivemind) __CHAIN_NAME__=Hivemind ;;
-  layers) __CHAIN_NAME__=Layers ;; *) __CHAIN_NAME__=Chains ;;
+# eCash Explorer: the chain's and network's name in the page title and link previews (index.html says "eCash Explorer")
+case "${CHAIN_PROFILE:-ecash}" in
+  *) __CHAIN_NAME__=eCash ;;
 esac
-# ... and absolute links for crawlers and link previews (which do not run the app): this chain's public URL from
-# CHAIN_EXPLORER_URLS; without one, the links stay relative to the page
-__CHAIN_URL__=$(echo "${CHAIN_EXPLORER_URLS:-}" | tr ',' '\n' | grep "^${CHAIN_PROFILE:-chains}=" | cut -d= -f2- | sed 's#/*$##')
+case "${CHAIN_NETWORK:-ecashbeta}" in
+  ecash) __NETWORK_SUFFIX__= ;; ecashtest) __NETWORK_SUFFIX__=" (Testnet)" ;; *) __NETWORK_SUFFIX__=" (Betanet)" ;;
+esac
+# ... and absolute links for crawlers and link previews (which do not run the app): this explorer's public URL from
+# CHAIN_EXPLORER_URLS (keyed by network); without one, the links stay relative to the page
+__CHAIN_URL__=$(echo "${CHAIN_EXPLORER_URLS:-}" | tr ',' '\n' | grep "^${CHAIN_NETWORK:-ecashbeta}=" | cut -d= -f2- | sed 's#/*$##')
 for f in $(find /var/www/mempool -name index.html); do
-  sed -i -e "s/Chains Explorer/${__CHAIN_NAME__} Explorer/g" -e "s#resources/previews/chain-chains.png#resources/previews/chain-${CHAIN_PROFILE:-chains}.png#g" "$f"
+  # (with the network suffix of an earlier start matched too, so that a restart does not add another)
+  sed -i -E -e "s/eCash Explorer( \((Betanet|Testnet)\))?/${__CHAIN_NAME__} Explorer${__NETWORK_SUFFIX__}/g" -e "s#resources/previews/chain-ecash.png#resources/previews/chain-${CHAIN_PROFILE:-ecash}.png#g" "$f"
   if [ -n "$__CHAIN_URL__" ]; then
     sed -i -e "s#content=\"resources/previews/#content=\"${__CHAIN_URL__}/resources/previews/#g" -e "s#rel=\"canonical\" href=\"./\"#rel=\"canonical\" href=\"${__CHAIN_URL__}/\"#" "$f"
   fi

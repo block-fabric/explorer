@@ -12,7 +12,7 @@ import { PROFILE } from '@app/chain/profiles';
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class AmountSelectorComponent implements OnInit {
-  unit = PROFILE.unit; // Chains Explorer
+  unit = PROFILE.unit; // eCash Explorer
   amountForm: UntypedFormGroup;
   modes = ['btc', 'sats', 'fiat'];
 

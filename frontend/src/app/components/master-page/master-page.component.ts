@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, Input, ViewChild } from '@angular/core';
 import { Router } from '@angular/router';
 import { Env, StateService } from '@app/services/state.service';
-import { Observable, merge, of, Subscription } from 'rxjs';
+import { Observable, map, merge, of, Subscription } from 'rxjs';
 import { LanguageService } from '@app/services/language.service';
 import { EnterpriseService } from '@app/services/enterprise.service';
 import { NavigationService } from '@app/services/navigation.service';
@@ -9,7 +9,8 @@ import { MenuComponent } from '@components/menu/menu.component';
 import { StorageService } from '@app/services/storage.service';
 import { AuthServiceMempool } from '@app/services/auth.service';
 
-import { MODULE, PROFILE, PROFILES, SIDECHAINS, explorerUrl, NavItem } from '@app/chain/profiles';
+import { CHAIN_NETWORK, MODULE, NETWORK_NAME, PROFILE, NavItem } from '@app/chain/profiles';
+import { ChainApiService } from '@app/chain/chain-api.service';
 @Component({
   selector: 'app-master-page',
   templateUrl: './master-page.component.html',
@@ -17,16 +18,15 @@ import { MODULE, PROFILE, PROFILES, SIDECHAINS, explorerUrl, NavItem } from '@ap
   standalone: false,
 })
 export class MasterPageComponent implements OnInit, OnDestroy {
-  // Chains Explorer: this explorer's chain, its pages, and the other explorers to switch to (those with a public URL)
+  // eCash Explorer: this explorer's chain and network, its pages, and the other networks' explorers (those with a URL)
   profile = PROFILE;
+  chainNetwork = CHAIN_NETWORK;
+  networkName = NETWORK_NAME;
   chainNav: NavItem[] = [
-    PROFILE.mainchain
-      ? { path: '/drivechain', title: 'Drivechain: sidechains, BMM, deposits, withdrawals, votes', icon: 'nav-drivechain' }
-      : { path: '/bmm', title: `BMM and peg: the Chains blocks that carried ${PROFILE.name}, deposits and withdrawals`, icon: 'nav-drivechain' },
+    { path: '/drivechain', title: 'Drivechain: sidechains, BMM, deposits, withdrawals, votes', icon: 'nav-drivechain' },
     ...(MODULE.nav ?? []),
   ];
-  otherChains = [PROFILES.chains, ...SIDECHAINS].filter(p => p && p.id !== PROFILE.id && explorerUrl(p.id));
-  explorerUrl = explorerUrl;
+  networks$: Observable<{ others: { id: string; name: string; explorer: string | null }[] }>;
   @Input() headerVisible = true;
   @Input() footerVisibleOverride: boolean | null = null;
 
@@ -62,9 +62,13 @@ export class MasterPageComponent implements OnInit, OnDestroy {
     private storageService: StorageService,
     private authService: AuthServiceMempool,
     private router: Router,
+    private chainApi: ChainApiService,
   ) { }
 
   ngOnInit(): void {
+    this.networks$ = this.chainApi.chain$().pipe(
+      map(c => ({ others: (c?.networks ?? []).filter(n => n.id !== (c?.network ?? CHAIN_NETWORK) && !!n.explorer) })),
+    );
     this.env = this.stateService.env;
     this.connectionState$ = this.stateService.connectionState$;
     this.network$ = merge(of(''), this.stateService.networkChanged$);

@@ -5,7 +5,7 @@ import { NgxEchartsModule } from 'ngx-echarts';
 import { SharedModule } from '@app/shared/shared.module';
 import { ChainCockpitComponent } from './cockpit.component';
 
-/** The drivechain cockpit (/drivechain on Chains, /bmm on a sidechain), lazy with its charts */
+/** The drivechain cockpit (/drivechain), lazy with its charts */
 @NgModule({
   declarations: [ChainCockpitComponent],
   imports: [

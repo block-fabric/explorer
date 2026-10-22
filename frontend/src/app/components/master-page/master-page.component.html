@@ -27,6 +27,8 @@
         <app-svg-images *ngIf="!officialMempoolSpace" name="mempoolSpace" viewBox="0 0 500 126" class="mempool-logo" [ngStyle]="{'opacity': connectionState.val === 2 ? 1 : 0.5 }"></app-svg-images>
         <app-svg-images *ngIf="officialMempoolSpace" name="officialMempoolSpace" viewBox="0 0 500 126"></app-svg-images>
       }
+      <!-- eCash Explorer: the network this explorer shows -->
+      <div class="network-badge" [class.mainnet]="chainNetwork === 'ecash'" title="eCash network">{{ networkName }}</div>
       <div class="connection-badge">
         <div class="badge bg-warning" *ngIf="connectionState.val === 0" i18n="master-page.offline">Offline</div>
         <div class="badge bg-warning" *ngIf="connectionState.val === 1" i18n="master-page.reconnecting">Reconnecting...</div>
@@ -48,6 +50,8 @@
         <app-svg-images *ngIf="!officialMempoolSpace" name="mempoolSpace" viewBox="0 0 500 126" class="mempool-logo" [ngStyle]="{'opacity': connectionState.val === 2 ? 1 : 0.5 }"></app-svg-images>
         <app-svg-images *ngIf="officialMempoolSpace" name="officialMempoolSpace" viewBox="0 0 500 126"></app-svg-images>
       }
+      <!-- eCash Explorer: the network this explorer shows -->
+      <div class="network-badge" [class.mainnet]="chainNetwork === 'ecash'" title="eCash network">{{ networkName }}</div>
       <div class="connection-badge">
         <div class="badge bg-warning" *ngIf="connectionState.val === 0" i18n="master-page.offline">Offline</div>
         <div class="badge bg-warning" *ngIf="connectionState.val === 1" i18n="master-page.reconnecting">Reconnecting...</div>
@@ -70,19 +74,22 @@
     </div>
   </div>
 
-  <!-- Chains Explorer: switch to the explorer of another chain (those with a URL in CHAIN_EXPLORER_URLS) -->
-  <div ngbDropdown class="dropdown-container chain-switcher" *ngIf="otherChains.length">
-    <button ngbDropdownToggle type="button" class="btn btn-secondary dropdown-toggle-split d-flex justify-content-center align-items-center" aria-haspopup="true" aria-label="Other chains" title="Other chains">
-      <app-svg-images name="chain-mark" [fill]="profile.id" width="20" height="20" [style]="'color: ' + profile.color"></app-svg-images>
-    </button>
-    <div ngbDropdownMenu class="dropdown-menu-right">
-      <a ngbDropdownItem *ngFor="let p of otherChains" [href]="explorerUrl(p.id)" class="chain-switch-item">
-        <span class="cs-mark" [style.color]="p.color"><app-svg-images name="chain-mark" [fill]="p.id" width="20" height="20"></app-svg-images></span>
-        <span class="cs-name">{{ p.name }}</span>
-        <span class="cs-slot">{{ p.mainchain ? 'mainchain' : 'slot ' + p.slot }}</span>
-      </a>
+  <!-- eCash Explorer: the other eCash networks' explorers (GET /api/v1/chain: networks with an explorer URL) -->
+  <ng-container *ngIf="networks$ | async as nets">
+    <div ngbDropdown class="dropdown-container network-switcher" *ngIf="nets.others.length">
+      <button ngbDropdownToggle type="button" class="btn btn-secondary dropdown-toggle-split d-flex justify-content-center align-items-center" aria-haspopup="true" [attr.aria-label]="'Other eCash networks. Current: ' + networkName" [title]="'Other eCash networks. Current: ' + networkName">
+        <app-svg-images name="chain-mark" [fill]="profile.id" width="20" height="20" [style]="'color: ' + profile.color"></app-svg-images>
+      </button>
+      <div ngbDropdownMenu class="dropdown-menu-right">
+        <span ngbDropdownItem class="network-switch-item active" [disabled]="true">
+          <span class="ns-name">{{ networkName }}</span><span class="ns-id">this explorer</span>
+        </span>
+        <a ngbDropdownItem *ngFor="let n of nets.others" [href]="n.explorer" class="network-switch-item">
+          <span class="ns-name">{{ n.name }}</span><span class="ns-id">{{ n.id }}</span>
+        </a>
+      </div>
     </div>
-  </div>
+  </ng-container>
 
   <div class="navbar-collapse" id="navbarCollapse">
     <ul class="navbar-nav {{ network.val }}">
@@ -112,7 +119,7 @@
           <div class="svg-wrapper"><app-svg-images name="nav-cubes" width="21.59" height="100%"></app-svg-images></div>
         </a>
       </li>
-      <!-- Chains Explorer: the pages of this chain (Drivechain on Chains; BMM and peg on a sidechain) and of its module -->
+      <!-- eCash Explorer: the pages of this chain (Drivechain) and of its module -->
       <li class="nav-item" routerLinkActive="active" *ngFor="let item of chainNav" [id]="'btn-' + item.path.slice(1)">
         <a class="nav-link" [routerLink]="[item.path | relativeUrl]" (click)="collapse()" [title]="item.title" [attr.aria-label]="item.title">
           <div class="svg-wrapper"><app-svg-images [name]="item.icon" [fill]="profile.id" width="21.59" height="100%"></app-svg-images></div>

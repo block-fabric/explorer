@@ -20,8 +20,8 @@ import { ActivatedRoute } from '@angular/router';
 import { SighashFlag } from '@app/shared/transaction.utils';
 
 import { OutputLabel, labelEscrowInput, labelOutputs } from '@app/chain/output-labels';
-import { TxToken, TxTokensService } from '@app/chain/tx-tokens.service';
-import { profileBySlot } from '@app/chain/profiles';
+import { DrivechainLiveService } from '@app/chain/drivechain-live.service';
+import { slotMarkId } from '@app/chain/profiles';
 @Component({
   selector: 'app-transactions-list',
   templateUrl: './transactions-list.component.html',
@@ -30,7 +30,7 @@ import { profileBySlot } from '@app/chain/profiles';
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class TransactionsListComponent implements OnInit, OnChanges, OnDestroy {
-  private txTokensSub: any; // Chains Explorer
+  private sidechainNamesSub: Subscription; // eCash Explorer
   network = '';
   nativeAssetId = this.stateService.network === 'liquidtestnet' ? environment.nativeTestAssetId : environment.nativeAssetId;
   isLiquid = this.stateService.network === 'liquid' || this.stateService.network === 'liquidtestnet';
@@ -93,7 +93,7 @@ export class TransactionsListComponent implements OnInit, OnChanges, OnDestroy {
     private ordApiService: OrdApiService,
     private assetsService: AssetsService,
     private ref: ChangeDetectorRef,
-    private txTokens: TxTokensService,
+    private drivechainLive: DrivechainLiveService,
     private priceService: PriceService,
     private storageService: StorageService,
     private route: ActivatedRoute,
@@ -102,7 +102,11 @@ export class TransactionsListComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   ngOnInit(): void {
-    this.txTokensSub = this.txTokens.version$.subscribe(() => this.ref.markForCheck());
+    // eCash Explorer: the output labels name the sidechains once their names come in
+    this.sidechainNamesSub = this.drivechainLive.names$.subscribe(() => {
+      this.chainLabelCache.clear();
+      this.ref.markForCheck();
+    });
     this.latestBlock$ = this.stateService.blocks$.pipe(map((blocks) => blocks[0]));
     this.networkSubscription = this.stateService.networkChanged$.subscribe((network) => {
       this.network = network;
@@ -229,9 +233,6 @@ export class TransactionsListComponent implements OnInit, OnChanges, OnDestroy {
           }
         }, 10);
       }
-    }
-    if (changes.transactions && this.transactions?.length) {
-      this.txTokens.request(this.transactions.map(t => t.txid)); // Chains Explorer
     }
     if (changes.transactions || changes.addresses) {
       this.similarityMatches.clear();
@@ -514,7 +515,7 @@ export class TransactionsListComponent implements OnInit, OnChanges, OnDestroy {
     this.storageService.setValue('view-amount-mode', modes[newIndex]);
   }
 
-  // Chains Explorer: drivechain labels of the outputs (chain/output-labels.ts), once per transaction
+  // eCash Explorer: drivechain labels of the outputs (chain/output-labels.ts), once per transaction
   private chainLabelCache = new Map<string, (OutputLabel | null)[]>();
   chainLabels(tx: Transaction): (OutputLabel | null)[] {
     let labels = this.chainLabelCache.get(tx.txid);
@@ -529,14 +530,8 @@ export class TransactionsListComponent implements OnInit, OnChanges, OnDestroy {
     return labelEscrowInput(vin?.prevout?.scriptpubkey);
   }
 
-  // Chains Explorer: token amounts on inputs and outputs (chain/tx-tokens.service.ts)
-  tokenOf(tx: Transaction, side: 'vin' | 'vout', i: number): TxToken | null {
-    if (!this.txTokens.enabled) { return null; }
-    return this.txTokens.get(tx.txid)?.[side]?.[i] ?? null;
-  }
-
-  chainProfileId(slot: number): string {
-    return profileBySlot(slot)?.id ?? 'chains';
+  chainMarkId(slot: number): string {
+    return slotMarkId(slot);
   }
 
   trackByFn(index: number, tx: Transaction): string {
@@ -750,7 +745,7 @@ export class TransactionsListComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.txTokensSub?.unsubscribe();
+    this.sidechainNamesSub?.unsubscribe();
     this.outspendsSubscription.unsubscribe();
     this.currencyChangeSubscription?.unsubscribe();
     this.networkSubscription.unsubscribe();

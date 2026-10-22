@@ -1,4 +1,5 @@
 import { Env } from '@app/services/state.service';
+import { CHAIN_NETWORK } from '@app/chain/profiles';
 
 // all base58 characters
 export const BASE58_CHARS = `[a-km-zA-HJ-NP-Z1-9]`;
@@ -153,6 +154,11 @@ const ADDRESS_CHARS: {
       + `)`,
   },
 };
+// eCash Explorer: the explorer always runs as the 'mainnet' network; eCash testnet (CHAIN_NETWORK ecashtest) has
+// Bitcoin testnet's addresses (tb1, m/n/2), so the 'mainnet' slot takes those there (chain/profiles.ts)
+if (CHAIN_NETWORK === 'ecashtest') {
+  ADDRESS_CHARS.mainnet = ADDRESS_CHARS.testnet;
+}
 type RegexTypeNoAddrNoBlockHash = | `transaction` | `blockheight` | `date` | `timestamp`;
 export type RegexType = `address` | `blockhash` | RegexTypeNoAddrNoBlockHash;
 

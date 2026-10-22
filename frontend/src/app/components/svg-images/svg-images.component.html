@@ -145,7 +145,7 @@
     </svg>
   </ng-container>
   <ng-container *ngSwitchCase="'mempoolSpace'">
-    <!-- Chains Explorer: the mark and name of the chain this explorer shows (chain/profiles.ts), in place of the
+    <!-- eCash Explorer: the mark and name of the chain this explorer shows (chain/profiles.ts), in place of the
          mempool logo (a trademark of Mempool Space K.K., not for forks) -->
     <svg [class]="class" [style]="style" [attr.width]="width" [attr.height]="height" [attr.viewBox]="viewBox || '0 0 500 126'" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" [attr.aria-label]="profile.name + ' Explorer'">
       <g transform="translate(6 13) scale(3.125)" fill="none" [attr.stroke]="profile.color" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
@@ -156,7 +156,8 @@
       <text x="129" y="116" textLength="300" lengthAdjust="spacing" [attr.fill]="profile.color" font-family="-apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Liberation Sans', sans-serif" font-size="30" font-weight="600" letter-spacing="8">EXPLORER</text>
     </svg>
   </ng-container>
-  <!-- Chains Explorer: a chain's mark alone (nav items, chain switcher, chips); [fill] names another profile by id -->
+  <!-- eCash Explorer: a chain's mark alone (nav items, network switcher, sidechain marks); [fill] names a profile by id,
+       'sidechain' a sidechain without one -->
   <ng-container *ngSwitchCase="'chain-mark'">
     <svg [class]="class" [style]="style" [attr.width]="width" [attr.height]="height" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
       <g fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
@@ -165,16 +166,7 @@
       </g>
     </svg>
   </ng-container>
-  <!-- Chains Explorer: the validators nav item (a badge with a check) -->
-  <ng-container *ngSwitchCase="'nav-validators'">
-    <svg [class]="class" [style]="style" [attr.width]="width" [attr.height]="height" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <g fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M16 3l11 4v8c0 7-4.7 11.6-11 14-6.3-2.4-11-7-11-14V7z"/>
-        <path d="M10.5 16l4 4 7-8"/>
-      </g>
-    </svg>
-  </ng-container>
-  <!-- Chains Explorer: the drivechain nav item (a chain forking into two) -->
+  <!-- eCash Explorer: the drivechain nav item (a chain forking into two) -->
   <ng-container *ngSwitchCase="'nav-drivechain'">
     <svg [class]="class" [style]="style" [attr.width]="width" [attr.height]="height" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
       <g fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">

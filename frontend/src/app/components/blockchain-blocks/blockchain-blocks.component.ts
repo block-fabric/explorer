@@ -6,7 +6,6 @@ import { BlockExtended } from '@interfaces/node-api.interface';
 import { Location } from '@angular/common';
 import { CacheService } from '@app/services/cache.service';
 
-import { PROFILE } from '@app/chain/profiles';
 interface BlockchainBlock extends BlockExtended {
   placeholder?: boolean;
   loading?: boolean;
@@ -30,7 +29,6 @@ export class BlockchainBlocksComponent implements OnInit, OnChanges, OnDestroy {
   @Input() blockWidth: number = 125;
   @Input() spotlight: number = 0;
   @Input() showPools: boolean = true;
-  profile = PROFILE; // Chains Explorer
   @Input() getHref?: (index, block) => string = (index, block) => `/block/${block.id}`;
 
   specialBlocks = specialBlocks;

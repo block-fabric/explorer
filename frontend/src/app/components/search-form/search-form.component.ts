@@ -20,7 +20,7 @@ import { PROFILE } from '@app/chain/profiles';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class SearchFormComponent implements OnInit {
-  searchPlaceholder = `Search ${PROFILE.name} blocks, transactions, addresses`; // Chains Explorer
+  searchPlaceholder = `Search ${PROFILE.name} blocks, transactions, addresses`; // eCash Explorer
   @Input() hamburgerOpen = false;
   env: Env;
   network = '';

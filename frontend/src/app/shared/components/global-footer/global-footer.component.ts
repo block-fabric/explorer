@@ -1,7 +1,7 @@
 import { Input, ChangeDetectionStrategy, ChangeDetectorRef, Component, OnInit, OnChanges, SimpleChanges, Inject, LOCALE_ID, OnDestroy } from '@angular/core';
 import { Router, ActivatedRoute } from '@angular/router';
 import { Observable, merge, of, Subject, Subscription } from 'rxjs';
-import { tap, takeUntil } from 'rxjs/operators';
+import { map, tap, takeUntil } from 'rxjs/operators';
 import { Env, StateService } from '@app/services/state.service';
 import { IBackendInfo } from '@interfaces/websocket.interface';
 import { LanguageService } from '@app/services/language.service';
@@ -11,7 +11,8 @@ import { WebsocketService } from '@app/services/websocket.service';
 import { EnterpriseService } from '@app/services/enterprise.service';
 import { SERVICES_POPUP_ACTION } from '@app/shared/services-popup-action.token';
 
-import { MODULE, PROFILE, PROFILES, SIDECHAINS, explorerUrl } from '@app/chain/profiles';
+import { CHAIN_NETWORK, MODULE, NETWORK_NAME, PROFILE } from '@app/chain/profiles';
+import { ChainApiService } from '@app/chain/chain-api.service';
 @Component({
   selector: 'app-global-footer',
   templateUrl: './global-footer.component.html',
@@ -25,10 +26,11 @@ export class GlobalFooterComponent implements OnInit, OnDestroy, OnChanges {
   private destroy$: Subject<any> = new Subject<any>();
   env: Env;
   officialMempoolSpace = this.stateService.env.OFFICIAL_MEMPOOL_SPACE;
-  profile = PROFILE; // Chains Explorer
+  profile = PROFILE; // eCash Explorer
+  networkName = NETWORK_NAME;
   moduleNav = MODULE.nav ?? [];
-  otherChains = [PROFILES.chains, ...SIDECHAINS].filter(c => c && c.id !== PROFILE.id && explorerUrl(c.id));
-  chainUrl = (id: string) => explorerUrl(id);
+  /** the other eCash networks' explorers (GET /api/v1/chain) */
+  otherNetworks$: Observable<{ id: string; name: string; explorer: string | null }[]>;
   mempoolSpaceBuild = window['isMempoolSpaceBuild'];
   backendInfo$: Observable<IBackendInfo>;
   servicesBackendInfo$: Observable<IBackendInfo>;
@@ -55,11 +57,15 @@ export class GlobalFooterComponent implements OnInit, OnDestroy, OnChanges {
     private cd: ChangeDetectorRef,
     private websocketService: WebsocketService,
     private router: Router,
+    private chainApi: ChainApiService,
     @Inject(SERVICES_POPUP_ACTION) private openServicesPopupAction: () => void
   ) {}
 
   ngOnInit(): void {
     this.isServicesPage = this.router.url.includes('/services/');
+    this.otherNetworks$ = this.chainApi.chain$().pipe(
+      map(c => (c?.networks ?? []).filter(n => n.id !== (c?.network ?? CHAIN_NETWORK) && !!n.explorer)),
+    );
 
     this.env = this.stateService.env;
     this.backendInfo$ = this.stateService.backendInfo$;

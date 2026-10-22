@@ -104,3 +104,6 @@ h5 { font-size: 0.95rem; margin-bottom: 8px; small { color: var(--transparent-fg
 .ev-h { width: 70px; } .ev-t { width: 120px; color: var(--transparent-fg); font-size: 0.78rem; }
 .dest { max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
 .ev-tx { text-align: right; }
+// a sidechain, by its name and colour
+.sc-label { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
+  &::before { content: ''; width: 8px; height: 8px; border-radius: 2px; background: var(--sc); } }

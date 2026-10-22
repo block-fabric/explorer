@@ -57,21 +57,24 @@
         }
       </div>
     </div>
-    <!-- Chains Explorer: this chain's pages and the other explorers, in place of mempool.space's links -->
+    <!-- eCash Explorer: this chain's pages and the other networks' explorers, in place of mempool.space's links -->
     <div class="row col-md-12 link-tree" [class]="{'services': isServicesPage}">
         <div class="links">
           <p class="category">Explore</p>
           <p><a [routerLink]="['/blocks' | relativeUrl]">Recent Blocks</a></p>
           <p><a [routerLink]="['/txs' | relativeUrl]">Recent Transactions</a></p>
-          <p><a [routerLink]="[(profile.mainchain ? '/drivechain' : '/bmm') | relativeUrl]">{{ profile.mainchain ? 'Drivechain cockpit' : 'BMM and peg' }}</a></p>
+          <p><a [routerLink]="['/drivechain' | relativeUrl]">Drivechain cockpit</a></p>
           <p *ngFor="let item of moduleNav"><a [routerLink]="[item.path | relativeUrl]">{{ item.title }}</a></p>
           <p><a [routerLink]="['/tx/push' | relativeUrl]">Broadcast Transaction</a></p>
           <p><a [routerLink]="['/docs/api' | relativeUrl]">API Documentation</a></p>
         </div>
-        <div class="links" *ngIf="otherChains.length">
-          <p class="category">{{ profile.mainchain ? 'Sidechains' : 'Chains' }}</p>
-          <p *ngFor="let c of otherChains"><a [href]="chainUrl(c.id)">{{ c.name }}</a><span class="text-muted small" style="margin-left: 6px">{{ c.mainchain ? 'mainchain' : 'slot ' + c.slot }}</span></p>
-        </div>
+        <ng-container *ngIf="otherNetworks$ | async as nets">
+          <div class="links" *ngIf="nets.length">
+            <p class="category">Networks</p>
+            <p class="text-muted small">{{ networkName }} (this explorer)</p>
+            <p *ngFor="let n of nets"><a [href]="n.explorer">{{ n.name }} Explorer</a></p>
+          </div>
+        </ng-container>
         <div class="links">
           <p class="category">Tools</p>
           <p><a [routerLink]="['/clock/mempool/0']">Clock (Mempool)</a></p>
@@ -91,7 +94,7 @@
           <span>{{ (backendInfo$ | async)?.hostname }} (v{{ (backendInfo$ | async )?.version }}) [<a target="_blank" href="https://github.com/mempool/mempool/commit/{{ (backendInfo$ | async )?.gitCommit | slice:0:8 }}">{{ (backendInfo$ | async )?.gitCommit | slice:0:8 }}</a>]</span>
           <span *ngIf="stateService.env.GIT_COMMIT_HASH_MEMPOOL_SPACE">[{{ (servicesBackendInfo$ | async )?.gitCommit | slice:0:8 }}]</span>
         </p>
-        <p *ngIf="!officialMempoolSpace">{{ profile.name }} Explorer · mempool v{{ packetJsonVersion }} [{{ frontendGitCommitHash }}]</p>
+        <p *ngIf="!officialMempoolSpace">{{ profile.name }} {{ networkName }} Explorer · mempool v{{ packetJsonVersion }} [{{ frontendGitCommitHash }}]</p>
       </div>
     </div>
   </div>

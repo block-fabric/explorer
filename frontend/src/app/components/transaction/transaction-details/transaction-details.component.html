@@ -330,7 +330,7 @@
     @if (!isLoadingTx) {
       <tr>
         <td class="td-width" i18n="block.miner">Miner</td>
-        <!-- Chains Explorer: the miner from the coinbase tag (drivechain index); the pools list does not know Chains -->
+        <!-- eCash Explorer: the miner from the coinbase tag (drivechain index); the pools list does not know eCash -->
         @if (tx?.status?.block_hash) {
           <td class="wrap-cell"><app-chain-block-marks [hash]="tx.status.block_hash" mode="miner"></app-chain-block-marks></td>
         } @else if (false && pool) {

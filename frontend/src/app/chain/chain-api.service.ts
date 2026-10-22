@@ -1,16 +1,14 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable, of, shareReplay, catchError, map } from 'rxjs';
+import { Observable, of, shareReplay, catchError } from 'rxjs';
 import { StateService } from '@app/services/state.service';
-import {
-  ChainTxInfo, DrivechainBlock, DrivechainBlockSummary, DrivechainSummary, SidechainCarrier, SidechainSummary,
-} from '@app/chain/chain.interfaces';
+import { ChainInfo, ChainTxInfo, DrivechainBlock, DrivechainBlockSummary, DrivechainSummary } from '@app/chain/chain.interfaces';
 
-/** The chain profiles' API, /api/v1/chain, /api/v1/drivechain/*, /api/v1/sidechain/* */
+/** The chain profiles' API, /api/v1/chain, /api/v1/drivechain/* */
 @Injectable({ providedIn: 'root' })
 export class ChainApiService {
   private base: string;
-  private carriers = new Map<string, Observable<SidechainCarrier | null>>();
+  private chain: Observable<ChainInfo | null>;
 
   constructor(private http: HttpClient, private stateService: StateService) {
     let host = '';
@@ -50,28 +48,16 @@ export class ChainApiService {
     return this.get<ChainTxInfo | null>('drivechain/tx/' + txid).pipe(catchError(() => of(null)));
   }
 
-  sidechainSummary$(): Observable<SidechainSummary> {
-    return this.get('sidechain/summary');
-  }
-
-  /** The Chains block that carried a sidechain block (memoized per page load) */
-  carrier$(sideBlockHash: string): Observable<SidechainCarrier | null> {
-    if (!this.carriers.has(sideBlockHash)) {
-      this.carriers.set(sideBlockHash, this.get<{ carrier: SidechainCarrier | null }>('sidechain/block/' + sideBlockHash).pipe(
-        map(v => v.carrier),
-        catchError(() => of(null)),
-        shareReplay(1),
-      ));
+  /** this explorer's chain and network, and the other networks' explorers (memoized per page load) */
+  chain$(): Observable<ChainInfo | null> {
+    if (!this.chain) {
+      this.chain = this.get<ChainInfo>('chain').pipe(catchError(() => of(null)), shareReplay(1));
     }
-    return this.carriers.get(sideBlockHash)!;
+    return this.chain;
   }
 
-  carriers$(hashes: string[]): Observable<Record<string, SidechainCarrier | null>> {
-    return this.get('sidechain/blocks', { hashes: hashes.join(',') });
-  }
-
-  /** Per-sidechain feature routes (/api/v1/sidechain/<path>) */
-  feature$<T>(path: string, params?: Record<string, string | number | null | undefined>): Observable<T> {
-    return this.get('sidechain/' + path, params);
+  /** The chain module's own routes (/api/v1/chain/<path>) */
+  module$<T>(path: string, params?: Record<string, string | number | null | undefined>): Observable<T> {
+    return this.get('chain/' + path, params);
   }
 }

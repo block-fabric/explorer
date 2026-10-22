@@ -1,4 +1,4 @@
-import { MODULE, PROFILE, profileBySlot } from '@app/chain/profiles';
+import { PROFILE, profileBySlot, slotColor } from '@app/chain/profiles';
 
 /**
  * Labels for the outputs of a transaction, read from their scripts (what the transaction page shows in place of a
@@ -6,11 +6,11 @@ import { MODULE, PROFILE, profileBySlot } from '@app/chain/profiles';
  *   BIP300/301 messages: M1 proposal, M2 ack, M3 bundle, M4 votes, M7 BMM accept, M8 BMM request
  *   M5/M6: a sidechain's escrow output, a deposit's destination, a withdrawal's payouts
  *   the witness commitment
- *   the chain module's own markers (ChainFrontendModule.markers: BitNames, BitAssets, Hivemind, ...)
+ * Sidechain names come from the drivechain API (setSidechainNames, called by DrivechainLiveService).
  */
 
 export interface OutputLabel {
-  /** short tag: M7, M5, BNAM, ... */
+  /** short tag: M7, M5, ... */
   tag: string;
   text: string;
   /** sidechain slot it concerns, for the colour and mark */
@@ -44,17 +44,24 @@ export function opReturnData(scriptHex: string): Uint8Array | null {
   return s.subarray(i, i + n);
 }
 
-/** the slot of an escrow output script (OP_DRIVECHAIN 0x01 <slot> OP_TRUE), or null */
+/** the slot of an escrow output script (OP_DRIVECHAIN 0x01 <slot> OP_TRUE; eCash's OP_DRIVECHAIN is OP_NOP8, 0xb7), or null */
 export function escrowSlot(scriptHex: string): number | null {
-  return scriptHex && scriptHex.length === 8 && scriptHex.startsWith('b401') && scriptHex.endsWith('51') ? parseInt(scriptHex.substr(4, 2), 16) : null;
+  return scriptHex && scriptHex.length === 8 && scriptHex.startsWith('b701') && scriptHex.endsWith('51') ? parseInt(scriptHex.substr(4, 2), 16) : null;
+}
+
+let sidechainNames: Record<number, string> = {};
+
+/** The active sidechains' names by slot (their titles, from the enforcer) */
+export function setSidechainNames(names: Record<number, string>): void {
+  sidechainNames = { ...names };
 }
 
 function sideName(slot: number): string {
-  return profileBySlot(slot)?.name ?? `slot ${slot}`;
+  return sidechainNames[slot] ?? profileBySlot(slot)?.name ?? `slot ${slot}`;
 }
 
 function colorOf(slot?: number): string {
-  return (slot !== undefined && profileBySlot(slot)?.color) || PROFILE.color;
+  return slot !== undefined ? slotColor(slot) : PROFILE.color;
 }
 
 const VOTE_FORMS = ['repeats the previous votes', 'one byte per sidechain', 'two bytes per sidechain', 'upvotes the leaders by 50'];
@@ -88,8 +95,7 @@ function bip300(data: Uint8Array): OutputLabel | null {
       const bundle = data.length >= 37 ? reversedHex(data.subarray(5, 37)) : '';
       return { tag: 'M3', slot, color: colorOf(slot), text: `${sideName(slot)} bundle ${bundle.slice(0, 8)}`, help: `BIP300 M3: bundle ${bundle}.` };
     }
-    case 'd6e1c5df':
-    case 'd6e1c5bf': {
+    case 'd6e1c5df': {
       const slot = data[4];
       return { tag: 'M2', slot, color: colorOf(slot), text: `ack · slot ${slot}`, help: 'BIP300 M2: this block acks the sidechain proposal for this slot.' };
     }
@@ -112,7 +118,7 @@ export function labelEscrowInput(scriptHex: string | undefined): OutputLabel | n
     help: `The previous escrow output of ${sideName(slot)}: deposits and withdrawals each spend it and create the next one.` };
 }
 
-const chn = (sats: number): string => (sats / 1e8).toLocaleString(undefined, { maximumFractionDigits: 8 }) + ' CHN';
+const ecx = (sats: number): string => (sats / 1e8).toLocaleString(undefined, { maximumFractionDigits: 8 }) + ' ' + PROFILE.unit;
 
 interface VinFull extends Vin { prevout?: { scriptpubkey?: string; value?: number } | null }
 
@@ -129,12 +135,12 @@ export function labelOutputs(vin: VinFull[], vout: Vout[]): (OutputLabel | null)
     if (slot !== null) {
       if (withdrawal) {
         const paid = (escrowIn?.prevout?.value ?? 0) - (vout[i].value ?? 0);
-        out[i] = { tag: 'M6', slot, color: colorOf(slot), text: `${sideName(slot)} escrow, ${chn(paid)} out`,
-          help: `The escrow of ${sideName(slot)} after this withdrawal: ${chn(paid)} left it for the payouts and the fee (BIP300 M6).` };
+        out[i] = { tag: 'M6', slot, color: colorOf(slot), text: `${sideName(slot)} escrow, ${ecx(paid)} out`,
+          help: `The escrow of ${sideName(slot)} after this withdrawal: ${ecx(paid)} left it for the payouts and the fee (BIP300 M6).` };
       } else {
         const added = (vout[i].value ?? 0) - (escrowIn?.prevout?.value ?? 0);
-        out[i] = { tag: 'M5', slot, color: colorOf(slot), text: `${sideName(slot)} escrow, +${chn(added)}`,
-          help: `A deposit of ${chn(added)} into the escrow of ${sideName(slot)} (BIP300 M5), credited on the sidechain to the destination in the next output.` };
+        out[i] = { tag: 'M5', slot, color: colorOf(slot), text: `${sideName(slot)} escrow, +${ecx(added)}`,
+          help: `A deposit of ${ecx(added)} into the escrow of ${sideName(slot)} (BIP300 M5), credited on the sidechain to the destination in the next output.` };
         const dest = i + 1 < vout.length ? opReturnData(vout[i + 1].scriptpubkey ?? '') : null;
         if (dest) {
           const text = ascii(dest);
@@ -147,7 +153,7 @@ export function labelOutputs(vin: VinFull[], vout: Vout[]): (OutputLabel | null)
     }
     const data = opReturnData(script);
     if (data) {
-      out[i] = bip300(data) ?? moduleMarker(data)
+      out[i] = bip300(data)
         ?? (withdrawal ? { tag: 'M6', slot: escrowInSlot!, color: colorOf(escrowInSlot!), text: 'Withdrawal bundle data', help: 'Data the sidechain attached to this withdrawal bundle.' } : null);
       continue;
     }
@@ -157,21 +163,4 @@ export function labelOutputs(vin: VinFull[], vout: Vout[]): (OutputLabel | null)
     }
   }
   return out;
-}
-
-function moduleMarker(data: Uint8Array): OutputLabel | null {
-  for (const m of MODULE.markers ?? []) {
-    const tag = m.tag.toLowerCase();
-    if (toHex(data.subarray(0, tag.length / 2)) === tag) {
-      const payload = data.subarray(tag.length / 2);
-      let text = m.name;
-      try {
-        text = m.describe ? m.describe(payload) : m.name;
-      } catch (e) {
-        // a marker the decoder does not follow: its name alone
-      }
-      return { tag: m.short ?? m.name, color: PROFILE.color, text, help: m.help };
-    }
-  }
-  return null;
 }

@@ -10,21 +10,15 @@
           </div>
         </div>
       </div>
-      <!-- Chains Explorer: aserti3 retargets every block (no 2016-block epochs): Chains gets its own mining widget;
-           the sidechains have no proof of work to show -->
-      <div class="col card-wrapper" *ngIf="profile.mainchain">
+      <!-- eCash Explorer: mining from the coinbases (pools by tag, DATUM miners), the retarget and the halving -->
+      <div class="col card-wrapper">
         <div class="main-title">Mining</div>
         <app-drivechain-widget kind="mining"></app-drivechain-widget>
       </div>
-      <!-- Chains Explorer: blocks of stake have no difficulty; their slot clock and finality instead -->
-      <div class="col card-wrapper" *ngIf="profile.pos">
-        <div class="main-title">Proof of stake</div>
-        <app-drivechain-widget kind="stake"></app-drivechain-widget>
-      </div>
     </ng-container>
-    <!-- Chains Explorer: drivechain widgets -->
+    <!-- eCash Explorer: drivechain widgets -->
     <div class="col card-wrapper">
-      <div class="main-title">{{ profile.mainchain ? 'Sidechain treasury' : 'Escrow on Chains' }}</div>
+      <div class="main-title">Sidechain treasury</div>
       <app-drivechain-widget kind="treasury"></app-drivechain-widget>
     </div>
     <div class="col card-wrapper">
@@ -126,7 +120,7 @@
                 <th class="table-cell-height" i18n="dashboard.latest-blocks.height">Height</th>
                 <th class="table-cell-mined" i18n="dashboard.latest-blocks.mined">Mined</th>
                 <th class="table-cell-transaction-count" i18n="dashboard.latest-blocks.transaction-count">TXs</th>
-                <th class="table-cell-chain">{{ profile.mainchain ? 'Sidechains' : 'Chains block' }}</th>
+                <th class="table-cell-chain">Sidechains</th>
                 <th class="table-cell-size" i18n="dashboard.latest-blocks.size">Size</th>
               </thead>
               <tbody *ngIf="blocks$ | async as blocks; else blocksSkeleton">

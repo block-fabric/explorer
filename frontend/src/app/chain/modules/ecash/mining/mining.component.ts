@@ -3,15 +3,17 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { Subject, Subscription, catchError, merge, of, switchMap, timer } from 'rxjs';
 import { ChainApiService } from '@app/chain/chain-api.service';
 import { PROFILE } from '@app/chain/profiles';
+import { escapeHtml } from '@app/chain/escape-html';
 import { SeoService } from '@app/services/seo.service';
 import { StateService } from '@app/services/state.service';
 
 const WINDOWS = [{ label: '6h', blocks: 360 }, { label: '1d', blocks: 1440 }, { label: '1w', blocks: 10080 }, { label: 'All', blocks: 0 }];
-const PALETTE = ['#b5f27e', '#5aa6ff', '#ff8a3d', '#f26b9c', '#a585ff', '#2bc79a', '#f5b83d', '#9aa4b2'];
+const PALETTE = [PROFILE.color, '#5aa6ff', '#ff8a3d', '#f26b9c', '#a585ff', '#2bc79a', '#f5b83d', '#9aa4b2'];
 
 /**
- * Chains mining (/mining): pools by coinbase tag with DATUM pools split into their miners, hashrate and difficulty,
- * the aserti3 schedule and the next block's difficulty, block times, halving epochs (GET /api/v1/drivechain/mining).
+ * eCash mining (/mining): pools by coinbase tag with DATUM pools split into their miners, hashrate and difficulty,
+ * the 2016-block retarget and the estimated next difficulty, block times, halving epochs
+ * (GET /api/v1/drivechain/mining).
  */
 @Component({
   selector: 'app-chain-mining',
@@ -80,7 +82,7 @@ export class ChainMiningComponent implements OnInit, OnDestroy {
 
   secs(s: number): string {
     const a = Math.abs(s);
-    const t = a >= 3600 ? (a / 3600).toFixed(1) + ' h' : a >= 60 ? (a / 60).toFixed(1) + ' min' : a.toFixed(0) + ' s';
+    const t = a >= 3600 ? +(a / 3600).toFixed(1) + ' h' : a >= 60 ? +(a / 60).toFixed(1) + ' min' : a.toFixed(0) + ' s';
     return t;
   }
 
@@ -117,7 +119,7 @@ export class ChainMiningComponent implements OnInit, OnDestroy {
     }
     this.charts.donut = {
       animation: false, backgroundColor: 'transparent',
-      tooltip: { trigger: 'item', backgroundColor: 'rgba(17,19,31,0.95)', textStyle: { color: '#fff', fontSize: 12 }, formatter: (x: any) => `${x.name}<br>${x.value} blocks (${x.percent}%)` },
+      tooltip: { trigger: 'item', backgroundColor: 'rgba(17,19,31,0.95)', textStyle: { color: '#fff', fontSize: 12 }, formatter: (x: any) => `${escapeHtml(x.name)}<br>${x.value} blocks (${x.percent}%)` },
       series: [
         { type: 'pie', radius: ['0%', '48%'], center: ['50%', '50%'], label: { position: 'inner', color: '#11131f', fontSize: 11, fontWeight: 700, formatter: (x: any) => x.percent > 6 ? x.name : '' },
           itemStyle: { borderColor: '#11131f', borderWidth: 2 }, data: inner },
@@ -159,11 +161,11 @@ export class ChainMiningComponent implements OnInit, OnDestroy {
     this.charts.difficulty = {
       animation: false, backgroundColor: 'transparent', grid: { left: 60, right: 16, top: 30, bottom: 28 },
       legend: { top: 0, textStyle: { color: '#ffffffcc', fontSize: 11 } },
-      tooltip: { trigger: 'item', backgroundColor: 'rgba(17,19,31,0.95)', textStyle: { color: '#fff', fontSize: 12 }, formatter: (p: any) => `block ${p.value[0]}<br>difficulty ${this.diff(p.value[1])}` },
+      tooltip: { trigger: 'item', backgroundColor: 'rgba(17,19,31,0.95)', textStyle: { color: '#fff', fontSize: 12 }, formatter: (p: any) => `block ${Number(p.value[0])}<br>difficulty ${escapeHtml(this.diff(p.value[1]))}` },
       xAxis: { type: 'value', min: 'dataMin', max: 'dataMax', ...this.axis() },
       yAxis: { type: 'log', ...this.axis(), axisLabel: { color: '#ffffff99', fontSize: 10, formatter: (v: number) => this.diff(v) } },
       series: [
-        { name: 'aserti3', type: 'scatter', symbolSize: 3, itemStyle: { color: '#5aa6ff' }, data: pts.filter(p => !p[2]).map(p => [p[0], p[1]]) },
+        { name: 'difficulty', type: 'scatter', symbolSize: 3, itemStyle: { color: '#5aa6ff' }, data: pts.filter(p => !p[2]).map(p => [p[0], p[1]]) },
         { name: 'min-difficulty (testnet rule)', type: 'scatter', symbolSize: 5, itemStyle: { color: '#ff8a3d' }, data: pts.filter(p => p[2]).map(p => [p[0], p[1]]) },
       ],
     };
@@ -172,15 +174,15 @@ export class ChainMiningComponent implements OnInit, OnDestroy {
     this.charts.blocktimes = {
       animation: false, backgroundColor: 'transparent', grid: { left: 44, right: 12, top: 20, bottom: 28 },
       tooltip: this.tooltip({ axisPointer: { type: 'shadow' } }),
-      xAxis: { type: 'category', data: h.map(b => b.to === null ? `> ${b.from}s` : `≤ ${b.to}s`), ...this.axis() },
+      xAxis: { type: 'category', data: h.map(b => b.to === null ? `> ${this.secs(b.from)}` : `≤ ${this.secs(b.to)}`), ...this.axis() },
       yAxis: yv('blocks'),
-      series: [{ type: 'bar', barMaxWidth: 34, data: h.map(b => ({ value: b.count, itemStyle: { color: b.to !== null && b.to <= 60 ? PROFILE.color : b.to !== null && b.to <= 120 ? '#5aa6ff' : '#ff8a3d' } })) }],
+      series: [{ type: 'bar', barMaxWidth: 34, data: h.map(b => ({ value: b.count, itemStyle: { color: b.to !== null && b.to <= 600 ? PROFILE.color : b.to !== null && b.to <= 1200 ? '#5aa6ff' : '#ff8a3d' } })) }],
     };
 
     this.charts.fees = {
       animation: false, backgroundColor: 'transparent', grid: { left: 60, right: 12, top: 20, bottom: 28 },
-      tooltip: this.tooltip({ valueFormatter: (v: number) => (v ?? 0).toFixed(8) + ' CHN' }), xAxis,
-      yAxis: yv('CHN'),
+      tooltip: this.tooltip({ valueFormatter: (v: number) => (v ?? 0).toFixed(8) + ' ' + PROFILE.unit }), xAxis,
+      yAxis: yv(PROFILE.unit),
       series: [{ type: 'bar', barMaxWidth: 16, itemStyle: { color: '#f5b83d' }, data: s.map(b => b.fees / 1e8) }],
     };
   }

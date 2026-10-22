@@ -68,7 +68,7 @@
               <ng-template #transactionsSingular let-i i18n="shared.transaction-count.singular">{{ i }} transaction</ng-template>
               <ng-template #transactionsPlural let-i i18n="shared.transaction-count.plural">{{ i }} transactions</ng-template>
             </div>
-            <app-chain-block-marks *ngIf="profile.mainchain || profile.pos" [hash]="block.id" mode="stripe"></app-chain-block-marks>
+            <app-chain-block-marks [hash]="block.id" mode="stripe"></app-chain-block-marks>
             <div [attr.data-cy]="'bitcoin-block-' + offset + '-index-' + i + '-time'" class="time-difference">
               <app-time kind="since" [time]="block.timestamp" [fastRender]="true" [precision]="1" minUnit="minute"></app-time>
               <a *ngIf="!minimal && showIsEarlierThanParent(i)" [routerLink]="['/docs/faq' | relativeUrl ]" class="timestamp-info" fragment="why-block-timestamps-dont-always-increase">
@@ -77,8 +77,8 @@
             </div>
           </ng-container>
         </div>
-        <!-- Chains Explorer: the drivechain marks (miner, sidechains carried, peg events; or the Chains block that carried
-             this sidechain block) in place of the mining pool, which the pools list does not know on Chains -->
+        <!-- eCash Explorer: the drivechain marks (miner, sidechains carried, peg events) in place of the mining pool,
+             which the pools list does not know on eCash -->
         <div class="animated chain-marks" *ngIf="showPools && !minimal">
           <app-chain-block-marks [hash]="block.id" mode="below"></app-chain-block-marks>
         </div>

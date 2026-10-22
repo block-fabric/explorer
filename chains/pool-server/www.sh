@@ -19,9 +19,10 @@ while read -r p profile network weight; do
   sed -i -e "s#<base href=\"/\">#<base href=\"/$p/\">#" -e "s#src=\"/resources/config.js\"#src=\"/$p/resources/config.js\"#" "$OUT/www/$p/index.html"
   grep -q "<base href=\"/$p/\">" "$OUT/www/$p/index.html"
   # the network in the page title, and absolute links for crawlers and link previews (they do not run the app)
-  case $network in ecash) n='eCash' ;; ecashbeta) n='eCash Betanet' ;; ecashtest) n='eCash Testnet' ;; *) n=$network ;; esac
+  # (as the app titles its pages: "eCash Explorer (Betanet)")
+  case $network in ecash) n='eCash Explorer' ;; ecashbeta) n='eCash Explorer (Betanet)' ;; ecashtest) n='eCash Explorer (Testnet)' ;; *) n="eCash Explorer ($network)" ;; esac
   u="https://explorer.blockfab.org/$p"
-  sed -i -e "s/eCash Explorer/$n Explorer/g" \
+  sed -i -e "s/eCash Explorer/$n/g" \
     -e "s#content=\"resources/previews/#content=\"$u/resources/previews/#g" -e "s#rel=\"canonical\" href=\"./\"#rel=\"canonical\" href=\"$u/\"#" "$OUT/www/$p/index.html"
   docker run --rm -e CHAIN_PROFILE="$profile" -e CHAIN_NETWORK="$network" -e CHAIN_EXPLORER_URLS="$URLS" -e BLOCK_WEIGHT_UNITS="$weight" \
     -e MINING_DASHBOARD=false -e HISTORICAL_PRICE=false -e MEMPOOL_WEBSITE_URL= -e LIQUID_WEBSITE_URL= -e SERVICES_API= -e ACCELERATOR_BUTTON=false -e NGINX_PROTOCOL=https -e NGINX_PORT=443 \

@@ -12,7 +12,7 @@ import { PROFILE } from '@app/chain/profiles';
   standalone: false,
 })
 export class AmountComponent implements OnInit, OnDestroy {
-  unit = PROFILE.unit; // Chains Explorer: the chain's unit (chain/profiles.ts)
+  unit = PROFILE.unit; // eCash Explorer: the chain's unit (chain/profiles.ts)
   conversions$: Observable<any>;
   currency: string;
   viewAmountMode$: Observable<'btc' | 'sats' | 'fiat'>;

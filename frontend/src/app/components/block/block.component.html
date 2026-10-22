@@ -206,7 +206,7 @@
           </a>
         </td>
         <td *ngIf="!stateService.env.MINING_DASHBOARD && stateService.env.BASE_MODULE === 'mempool'">
-          <!-- Chains Explorer: the miner from the coinbase tag (drivechain index) -->
+          <!-- eCash Explorer: the miner from the coinbase tag (drivechain index) -->
           <app-chain-block-marks [hash]="block.id" mode="miner"></app-chain-block-marks>
         </td>
       </tr>
@@ -240,7 +240,7 @@
     </ng-template>
   </ng-template>
 
-  <!-- Chains Explorer: what this block did for the drivechain (Chains), or the Chains block that carried it (sidechains) -->
+  <!-- eCash Explorer: what this block did for the drivechain -->
   <app-chain-block-panel *ngIf="block && !error" [blockHash]="block.id" [height]="block.height"></app-chain-block-panel>
 
   <ng-container *ngIf="showComparison">

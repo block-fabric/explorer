@@ -24,20 +24,15 @@
         <div class="k-value">{{ diff(d.totals.regularDifficulty ?? d.totals.difficulty) }}</div>
         <div class="k-sub">{{ d.totals.minDifficultyTip ? 'last regular block (the tip is a min-difficulty one)' : 'of the tip' }} · {{ d.totals.minDifficultyBlocks | number }} min-difficulty blocks</div>
       </div>
-      <div class="kpi" *ngIf="d.asert && !d.asert.bootstrap">
-        <div class="k-label">Next block</div>
-        <div class="k-value">{{ diff(d.asert.nextDifficulty) }}</div>
-        <div class="k-sub" *ngIf="d.totals.regularDifficulty as r">{{ (d.asert.nextDifficulty / r - 1) * 100 | number:'1.1-1' }}% vs the last regular block · aserti3</div>
-      </div>
-      <div class="kpi" *ngIf="d.asert && !d.asert.bootstrap">
-        <div class="k-label">Schedule</div>
-        <div class="k-value" [class.pos]="d.asert.drift < 0" [class.neg]="d.asert.drift > 0">{{ d.asert.drift > 0 ? 'behind' : 'ahead' }} {{ secs(d.asert.drift) }}</div>
-        <div class="k-sub">{{ (d.asert.blocksBehind < 0 ? -d.asert.blocksBehind : d.asert.blocksBehind) | number:'1.0-1' }} blocks {{ d.asert.drift > 0 ? 'behind' : 'ahead of' }} 60 s/block since the anchor</div>
+      <div class="kpi" *ngIf="d.retarget as r">
+        <div class="k-label">Next retarget</div>
+        <div class="k-value" [class.pos]="r.change > 0" [class.neg]="r.change < 0">{{ r.change !== null ? (r.change > 0 ? '+' : '') + (r.change * 100 | number:'1.1-1') + '%' : '–' }}</div>
+        <div class="k-sub">{{ r.nextDifficulty !== null ? 'to ' + diff(r.nextDifficulty) + ' · ' : '' }}in {{ r.blocksLeft | number }} blocks, ~{{ r.eta * 1000 | date:'MMM d, HH:mm' }}</div>
       </div>
       <div class="kpi">
         <div class="k-label">Block time</div>
         <div class="k-value">{{ d.totals.avgBlockTime | number:'1.0-0' }} s</div>
-        <div class="k-sub">median {{ d.totals.medianBlockTime | number:'1.0-0' }} s · target 60 s</div>
+        <div class="k-sub">median {{ d.totals.medianBlockTime | number:'1.0-0' }} s · target 600 s</div>
       </div>
       <div class="kpi">
         <div class="k-label">Pools</div>
@@ -103,33 +98,38 @@
         <div class="chart" *browserOnly echarts [initOpts]="chartInitOptions" [options]="charts.hashrate"></div>
       </div>
       <div class="box">
-        <h5>Difficulty per block <small>aserti3 retargets every block; orange: a test network's min-difficulty blocks</small></h5>
+        <h5>Difficulty per block <small>retargets every 2016 blocks; orange: a test network's min-difficulty blocks</small></h5>
         <div class="chart" *browserOnly echarts [initOpts]="chartInitOptions" [options]="charts.difficulty"></div>
       </div>
     </div>
 
     <div class="row-2">
       <div class="box">
-        <h5>Time between blocks <small>target 60 s</small></h5>
+        <h5>Time between blocks <small>target 10 min</small></h5>
         <div class="chart" *browserOnly echarts [initOpts]="chartInitOptions" [options]="charts.blocktimes"></div>
       </div>
       <div class="box">
         <h5>Difficulty adjustment and epochs</h5>
         <div class="rules">
-          <div><span>Algorithm</span><b>aserti3, every block</b></div>
-          <div><span>Half-life</span><b>{{ (d.asert?.halfLife || 7200) / 3600 }} h ({{ (d.asert?.halfLife || 7200) / 60 }} blocks)</b></div>
-          <div *ngIf="d.asert && !d.asert.bootstrap"><span>Anchor</span><b>block {{ d.asert.anchorHeight | number }} · difficulty {{ diff(d.asert.anchorDifficulty) }}</b></div>
-          <div *ngIf="d.asert?.bootstrap"><span>Bootstrap</span><b>{{ d.asert.blocksToAnchor | number }} blocks to the anchor</b></div>
-          <div *ngIf="d.asert && !d.asert.bootstrap"><span>Next block</span><b>{{ diff(d.asert.nextDifficulty) }}</b></div>
-          <div *ngIf="d.asert?.minDifficultyAfter"><span>Min-difficulty block allowed</span><b>if none is found by {{ d.asert.minDifficultyAfter * 1000 | date:'HH:mm:ss' }} (2 min after the tip)</b></div>
-          <div><span>Halving epoch</span><b>{{ d.halving.epoch + 1 }} · {{ d.halving.subsidy }} CHN per block</b></div>
+          <div><span>Algorithm</span><b>Bitcoin's: every 2016 blocks, towards 10 min per block, at most 4× either way</b></div>
+          <ng-container *ngIf="d.retarget as r">
+            <div><span>Period</span><b>blocks {{ r.periodStart | number }}–{{ r.nextRetarget - 1 | number }}</b></div>
+            <div><span>Pace so far</span><b>{{ r.avgBlockTime !== null ? secs(r.avgBlockTime) + ' per block' : '–' }}</b></div>
+            <div><span>Estimated next difficulty</span><b>{{ r.nextDifficulty !== null ? diff(r.nextDifficulty) + ' (' + (r.change > 0 ? '+' : '') + (r.change * 100 | number:'1.1-1') + '%)' : '–' }}</b></div>
+            <div><span>Retarget</span><b>block {{ r.nextRetarget | number }} · ~{{ r.eta * 1000 | date:'MMM d, y HH:mm' }}</b></div>
+            <div *ngIf="r.minDifficultyAfter"><span>Min-difficulty block allowed</span><b>if none is found by {{ r.minDifficultyAfter * 1000 | date:'HH:mm:ss' }} (20 min after the tip)</b></div>
+            <div class="wide"><span>Period progress</span>
+              <div class="bar big"><div class="fill" [style.width.%]="100 * r.progress"></div></div>
+              <small class="text-muted">{{ pct(r.progress, 1) }} · {{ r.blocksLeft | number }} blocks left</small></div>
+          </ng-container>
+          <div><span>Halving epoch</span><b>{{ d.halving.epoch + 1 }} · {{ d.halving.subsidy }} {{ profile.unit }} per block</b></div>
           <div><span>Next halving</span><b>block {{ d.halving.nextHalving | number }}</b></div>
           <div class="wide"><span>Epoch progress</span>
             <div class="bar big"><div class="fill" [style.width.%]="100 * d.halving.progress"></div></div>
-            <small class="text-muted">{{ pct(d.halving.progress, 2) }} · {{ d.halving.blocksLeft | number }} blocks left at 60 s each</small></div>
+            <small class="text-muted">{{ pct(d.halving.progress, 2) }} · {{ d.halving.blocksLeft | number }} blocks left at 10 min each</small></div>
         </div>
-        <p class="text-muted small mt-2 mb-0">With aserti3 the difficulty falls by half for every 2 hours the chain is behind schedule since the anchor and doubles for every
-          2 hours ahead. It only depends on the last block, so the next block's difficulty is known as soon as the last one is found.</p>
+        <p class="text-muted small mt-2 mb-0">Every 2016 blocks the difficulty is set so that the last period would have taken two weeks
+          at 10 minutes per block. The estimate above assumes the rest of the period keeps the pace so far.</p>
       </div>
     </div>
   </ng-container>

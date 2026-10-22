@@ -1,4 +1,4 @@
-// The chain profiles' API (backend/src/chain/drivechain.ts, drivechain.routes.ts). Amounts are in sats.
+// The chain profiles' API (backend/src/chain/drivechain.ts, drivechain.routes.ts, mining.ts). Amounts are in sats.
 
 export interface VoteEntry {
   slot: number;
@@ -31,8 +31,10 @@ export interface DcDeposit {
   name: string;
   txid: string;
   amount: number;
+  /** the sidechain address, as text when it is printable, else hex */
   destination: string;
-  burnindex: number;
+  /** the escrow's sequence number after the deposit */
+  sequence: number;
 }
 
 export interface DcWithdrawal {
@@ -41,7 +43,34 @@ export interface DcWithdrawal {
   txid: string;
   bundle: string;
   amount: number;
+  escrowDelta: number;
   payouts: { amount: number; script: string }[];
+}
+
+export interface PendingBundle {
+  /** M6 id */
+  hash: string;
+  /** vote count */
+  score: number;
+  /** proposed at */
+  height: number;
+}
+
+/** Who mined a block and what it earned (from its coinbase) */
+export interface MinerInfo {
+  tag: string | null;
+  coinbaseText: string;
+  reward: number;
+  fees: number;
+  subsidy: number;
+  txCount: number;
+  weight: number;
+  difficulty: number;
+  bits: string;
+  minDifficulty: boolean;
+  datum: boolean;
+  poolTag: string | null;
+  minerTag: string | null;
 }
 
 export interface DrivechainBlock {
@@ -57,8 +86,9 @@ export interface DrivechainBlock {
   deposits: DcDeposit[];
   withdrawals: DcWithdrawal[];
   bundlesClosed: { slot: number; name: string; hash: string; paid: boolean }[];
-  pending: { [slot: number]: { hash: string; score: number }[] };
-  scanned: boolean;
+  /** the pending bundles after this block */
+  pending: { [slot: number]: PendingBundle[] };
+  miner: MinerInfo | null;
 }
 
 export interface DrivechainBlockSummary {
@@ -94,89 +124,129 @@ export interface SlotStats {
   lastBmmHeight: number | null;
 }
 
+/** A pending withdrawal bundle: its votes against the threshold, and the blocks it has left */
 export interface WithdrawalBundle {
   slot: number;
-  name?: string;
+  name: string;
+  /** M6 id */
   hash: string;
-  index: number;
-  height: number;
+  /** votes */
   score: number;
-  lastupvote: number;
+  /** proposed at */
+  height: number;
+  threshold: number;
   blocksleft: number;
   payable: boolean;
-  known: boolean;
-  vote?: string;
-  payouts: { amount: number; script: string; address?: string }[];
-  fee: number;
-  total: number;
+}
+
+/** The BIP300 constants, from the enforcer (GetChainInfo) */
+export interface DrivechainInfo {
+  activationHeight: number;
+  bundleMaxAge: number;
+  bundleThreshold: number;
+  usedSlotProposalMaxAge: number;
+  usedSlotThreshold: number;
+  unusedSlotProposalMaxAge: number;
+  unusedSlotThreshold: number;
+  /** the enforcer's own name for the network */
+  network?: string;
+}
+
+export interface EscrowOutput {
+  txid: string;
+  vout: number;
+  amount: number;
+  sequence: number;
 }
 
 export interface ActiveSidechain {
   slot: number;
   title: string;
-  description: string;
-  version: number;
-  hashid1: string;
-  hashid2: string;
-  proposalhash: string;
-  activationheight: number;
-  escrowscript: string;
-  escrow: { txid: string; n: number; amount: number } | null;
+  description: string | null;
+  hashId1: string | null;
+  hashId2: string | null;
+  proposalHeight: number;
+  activationHeight: number;
+  voteCount: number;
+  escrow: EscrowOutput | null;
   pendingbundles: number;
   profile: string | null;
   explorer: string | null;
   stats: SlotStats | null;
 }
 
-export interface DrivechainSummary {
-  info: {
-    maxsidechains: number;
-    activationperiod: number;
-    activationmaxfailures: number;
-    replacementperiod: number;
-    withdrawalperiod: number;
-    withdrawalminscore: number;
-    maxpendingbundles: number;
-    upvoteexpiryblocks: number;
-    height: number;
-    activesidechains: number;
-    proposals: number;
-    pendingbundles: number;
-    escrowtotal: number;
-    statehash: string;
-  };
-  averageFee: any;
-  sidechains: ActiveSidechain[];
-  proposals: { pending: any[]; queued: any[] } | any;
-  bundles: WithdrawalBundle[];
-  indexed: { from: number | null; to: number };
-}
-
-export interface SidechainCarrier {
-  height: number;
-  hash: string | null;
-  time: number | null;
-  bid: number | null;
-  requestTxid: string | null;
-  /** chains of stake: 'ticket' = this block acknowledges the anchor Chains committed to; 'anchored' = this block was anchored */
-  role?: 'ticket' | 'anchored';
-  ticket?: string;
-  anchored?: string;
-  ackBlock?: string;
-  ackHeight?: number;
-}
-
-export interface SidechainSummary {
+/** A sidechain proposal (M1) on its way to activation */
+export interface SidechainProposal {
   slot: number;
-  name: string;
-  onMainchain: any;
+  title: string | null;
+  description: string | null;
+  hash: string;
+  voteCount: number;
+  proposalHeight: number;
+  proposalAge: number;
+}
+
+export interface DrivechainSummary {
+  info: DrivechainInfo & { height: number; network: string; enforcerNetwork: string };
+  sidechains: ActiveSidechain[];
+  proposals: SidechainProposal[];
   bundles: WithdrawalBundle[];
-  mainchainInfo: any;
-  state: any;
-  bmmInfo: any;
-  stats: SlotStats | null;
   indexed: { from: number | null; to: number };
-  mainchainExplorer: string | null;
+}
+
+/** The cockpit's live state (GET drivechain/cockpit: live) */
+export interface CockpitLive {
+  height: number;
+  info: DrivechainInfo;
+  mining: { difficulty: number; networkhashps: number; pooledtx: number } | null;
+  chainwork: string | null;
+  supply: number;
+  subsidy: number;
+  nextHalving: number;
+  escrowTotal: number;
+  escrowShareOfSupply: number;
+  allSidechains: { slot: number; title: string | null; profile: string | null }[];
+  sidechains: {
+    slot: number; title: string | null; description: string | null; activationHeight: number; escrow: number;
+    escrowTxid: string | null; pendingbundles: number; profile: string | null; explorer: string | null;
+  }[];
+  proposals: SidechainProposal[];
+  bundles: WithdrawalBundle[];
+}
+
+/** Where the chain is in its 2016-block retarget period (GET drivechain/mining: retarget) */
+export interface RetargetState {
+  periodStart: number;
+  nextRetarget: number;
+  blocksLeft: number;
+  /** 0..1 through the period */
+  progress: number;
+  /** seconds per block so far in the period */
+  avgBlockTime: number | null;
+  nextDifficulty: number | null;
+  /** the estimated change at the retarget, e.g. 0.05 for +5% */
+  change: number | null;
+  /** unix time of the retarget, at the period's pace */
+  eta: number;
+  /** test networks: a block may come at the minimum difficulty after this time */
+  minDifficultyAfter: number | null;
+}
+
+/** GET /api/v1/chain: this explorer's chain and network, and the other networks' explorers */
+export interface ChainInfo {
+  id: string;
+  name: string;
+  unit: string;
+  slot: number | null;
+  mainchain: boolean;
+  network: string;
+  networkName: string;
+  networks: { id: string; name: string; explorer: string | null }[];
+  explorers: Record<string, string | null>;
+  sidechains: { id: string; name: string; slot: number }[];
+  module: { describeTx: boolean; describeBlock: boolean };
+  activationHeight: number | null;
+  indexReady: boolean;
 }
 
 export interface ChainTxInfo {

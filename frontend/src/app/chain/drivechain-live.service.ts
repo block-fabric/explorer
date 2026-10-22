@@ -1,16 +1,13 @@
 import { Injectable } from '@angular/core';
-import { BehaviorSubject, Observable, catchError, combineLatest, debounceTime, filter, map, merge, of, shareReplay, switchMap, timer } from 'rxjs';
+import { BehaviorSubject, Observable, catchError, debounceTime, filter, map, merge, of, shareReplay, switchMap, timer } from 'rxjs';
 import { ChainApiService } from '@app/chain/chain-api.service';
-import { DrivechainBlockSummary, SidechainCarrier } from '@app/chain/chain.interfaces';
-import { PROFILE } from '@app/chain/profiles';
+import { DrivechainBlockSummary } from '@app/chain/chain.interfaces';
+import { setSidechainNames } from '@app/chain/output-labels';
 import { StateService } from '@app/services/state.service';
 
-/** What the block cubes and tables show for a block: its drivechain summary (Chains) or its carrier (a sidechain) */
+/** What the block cubes and tables show for a block: its drivechain summary */
 export interface BlockMark {
   summary?: DrivechainBlockSummary;
-  carrier?: SidechainCarrier | null;
-  /** blocks of stake (FastBlocks, Layers): kind (pos | bmm), slot, proposer, ack, finality */
-  pos?: { kind: string; slot?: number; proposer?: string; finality?: { status: string; anchors: number }; ack?: any; mainheight?: number } | null;
 }
 
 /**
@@ -27,6 +24,9 @@ export class DrivechainLiveService {
   cockpit$: Observable<any>;
   /** the latest deposits and withdrawals, newest first */
   peg$: Observable<any[]>;
+
+  /** the active sidechains' names by slot, from the enforcer (GET drivechain/summary), for the output labels */
+  names$ = new BehaviorSubject<Record<number, string>>({});
 
   private wantHashes = new Set<string>();
   private retries = new Map<string, number>();
@@ -58,6 +58,14 @@ export class DrivechainLiveService {
       shareReplay({ bufferSize: 1, refCount: true }),
     );
 
+    this.api.drivechainSummary$().pipe(catchError(() => of(null))).subscribe((d) => {
+      if (d?.sidechains?.length) {
+        const names = Object.fromEntries(d.sidechains.map(sc => [sc.slot, sc.title]));
+        setSidechainNames(names);
+        this.names$.next(names);
+      }
+    });
+
     // block marks for the blocks in view (the block strip pushes them through stateService.blocks$)
     this.stateService.blocks$.pipe(
       filter(b => !!b?.length),
@@ -84,10 +92,8 @@ export class DrivechainLiveService {
         const hashes = [...this.batch].slice(0, 100);
         this.batch.clear();
         this.batchTimer = null;
-        const req$ = PROFILE.mainchain
-          ? this.api.get<DrivechainBlockSummary[]>('drivechain/blocks', { hashes: hashes.join(',') }).pipe(
-            map((sums) => { for (const s of sums) { this.marks.set(s.hash, { summary: s }); } }))
-          : this.fetchMarks(hashes.map(h => ({ hash: h, height: 0 })));
+        const req$ = this.api.get<DrivechainBlockSummary[]>('drivechain/blocks', { hashes: hashes.join(',') }).pipe(
+          map((sums) => { for (const s of sums) { this.marks.set(s.hash, { summary: s }); } }));
         req$.pipe(catchError(() => of(null))).subscribe(() => this.marks$.next(this.marks));
       }, 50);
     }
@@ -107,34 +113,19 @@ export class DrivechainLiveService {
     if (!blocks.length) {
       return of(undefined);
     }
-    if (PROFILE.mainchain) {
-      const top = Math.max(...blocks.map(b => b.height));
-      const bottom = Math.min(...blocks.map(b => b.height));
-      return this.api.drivechainBlocks$(top, Math.min(100, top - bottom + 1)).pipe(
-        catchError(() => of([] as DrivechainBlockSummary[])),
-        map((sums) => {
-          for (const s of sums) { this.marks.set(s.hash, { summary: s }); }
-          this.marks$.next(this.marks);
-          // the drivechain index can be a few seconds behind the block strip: ask again for what it did not have yet
-          const missing = blocks.filter(b => !this.marks.has(b.hash));
-          if (missing.length && (this.retries.get(missing[0].hash) ?? 0) < 6) {
-            this.retries.set(missing[0].hash, (this.retries.get(missing[0].hash) ?? 0) + 1);
-            setTimeout(() => this.fetchMarks(missing).subscribe(), 5000);
-          }
-        }),
-      );
-    }
-    // every time: the carrier of a new block comes a little later, and finality moves (soft, anchored, final)
-    const hashes = blocks.map(b => b.hash).slice(0, 100);
-    return combineLatest([
-      this.api.carriers$(hashes).pipe(catchError(() => of({} as Record<string, SidechainCarrier | null>))),
-      PROFILE.pos ? this.api.get<Record<string, any>>('sidechain/blocks-features', { hashes: hashes.join(',') }).pipe(catchError(() => of({}))) : of({} as Record<string, any>),
-    ]).pipe(
-      map(([carriers, features]) => {
-        for (const h of hashes) {
-          this.marks.set(h, { carrier: carriers[h] ?? null, pos: features[h] ?? this.marks.get(h)?.pos ?? null });
-        }
+    const top = Math.max(...blocks.map(b => b.height));
+    const bottom = Math.min(...blocks.map(b => b.height));
+    return this.api.drivechainBlocks$(top, Math.min(100, top - bottom + 1)).pipe(
+      catchError(() => of([] as DrivechainBlockSummary[])),
+      map((sums) => {
+        for (const s of sums) { this.marks.set(s.hash, { summary: s }); }
         this.marks$.next(this.marks);
+        // the drivechain index can be a few seconds behind the block strip: ask again for what it did not have yet
+        const missing = blocks.filter(b => !this.marks.has(b.hash));
+        if (missing.length && (this.retries.get(missing[0].hash) ?? 0) < 6) {
+          this.retries.set(missing[0].hash, (this.retries.get(missing[0].hash) ?? 0) + 1);
+          setTimeout(() => this.fetchMarks(missing).subscribe(), 5000);
+        }
       }),
     );
   }

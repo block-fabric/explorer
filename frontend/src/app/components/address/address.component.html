@@ -100,9 +100,6 @@
       </div>
     </ng-container>
 
-    <!-- Chains Explorer: the tokens of this address (BitAssets, Layers) -->
-    <app-address-tokens *ngIf="address" [address]="address.address"></app-address-tokens>
-
     <ng-container *ngIf="(stateService.backend$ | async) === 'esplora' && address && transactions && transactions.length > 2">
       <br>
       <div class="title-tx">

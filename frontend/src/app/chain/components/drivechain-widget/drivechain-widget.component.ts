@@ -1,15 +1,16 @@
 import { ChangeDetectionStrategy, Component, Input, OnInit } from '@angular/core';
-import { Observable, catchError, combineLatest, map, of, switchMap, timer } from 'rxjs';
+import { Observable, catchError, of, switchMap, timer } from 'rxjs';
 import { ChainApiService } from '@app/chain/chain-api.service';
 import { DrivechainLiveService } from '@app/chain/drivechain-live.service';
-import { PROFILE, explorerUrl, profileBySlot } from '@app/chain/profiles';
+import { PROFILE, slotColor, slotMarkId } from '@app/chain/profiles';
 
 /**
  * Dashboard widgets of the drivechain (data: DrivechainLiveService, the cockpit over the newest 144 blocks):
- *   treasury  the CHN locked in each sidechain, as a bar and a list, with the share of the supply
+ *   treasury  the ECX locked in each sidechain, as a bar and a list, with the share of the supply
  *   bmm       the newest blocks x sidechains, coverage and bids
- *   bundles   the pending withdrawal bundles on their way to the payout score
+ *   bundles   the pending withdrawal bundles: their votes against the threshold, the blocks they have left
  *   peg       the latest deposits and withdrawals
+ *   mining    hashrate, the 2016-block retarget, pools by coinbase tag, the halving
  */
 @Component({
   selector: 'app-drivechain-widget',
@@ -19,13 +20,12 @@ import { PROFILE, explorerUrl, profileBySlot } from '@app/chain/profiles';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DrivechainWidgetComponent implements OnInit {
-  @Input() kind: 'treasury' | 'bmm' | 'bundles' | 'peg' | 'stake' | 'mining' = 'treasury';
+  @Input() kind: 'treasury' | 'bmm' | 'bundles' | 'peg' | 'mining' = 'treasury';
 
   profile = PROFILE;
-  cockpitPath = PROFILE.mainchain ? '/drivechain' : '/bmm';
+  cockpitPath = '/drivechain';
   data$: Observable<any>;
   peg$: Observable<any[]>;
-  stake$: Observable<any>;
   mining$: Observable<any>;
 
   constructor(private live: DrivechainLiveService, private api: ChainApiService) {}
@@ -36,24 +36,14 @@ export class DrivechainWidgetComponent implements OnInit {
     if (this.kind === 'mining') {
       this.mining$ = timer(0, 30000).pipe(switchMap(() => this.api.get<any>('drivechain/mining', { window: 144 }).pipe(catchError(() => of(null)))));
     }
-    if (this.kind === 'stake') {
-      this.stake$ = timer(0, 15000).pipe(
-        switchMap(() => combineLatest([
-          this.api.feature$<any>('pos').pipe(catchError(() => of(null))),
-          this.api.feature$<any>('validators').pipe(catchError(() => of(null))),
-          this.api.get<number>('blocks/tip/height').pipe(catchError(() => of(null))),
-        ])),
-        map(([pos, vals, tip]) => pos ? { pos, vals, tip } : null),
-      );
-    }
   }
 
   colorOf(slot: number): string {
-    return profileBySlot(slot)?.color ?? PROFILE.color;
+    return slotColor(slot);
   }
 
-  profileId(slot: number): string {
-    return profileBySlot(slot)?.id ?? 'chains';
+  markId(slot: number): string {
+    return slotMarkId(slot);
   }
 
   pct(x: number, d = 1): string {
@@ -81,30 +71,17 @@ export class DrivechainWidgetComponent implements OnInit {
     return d.coverage.slice(-n);
   }
 
-  progress(d: any, b: any): number {
-    return Math.min(1, b.score / (d.live.info.withdrawalminscore || 1));
+  /** a pending bundle's votes against the threshold, 0..1 */
+  progress(b: any): number {
+    return Math.min(1, b.score / (b.threshold || 1));
   }
 
-  canMake(d: any, b: any): boolean {
-    return d.live.info.withdrawalminscore - b.score <= b.blocksleft;
-  }
-
-  /** a mainchain link: in-app on Chains, to the Chains explorer from a sidechain */
-  blockLink(hash: string): string | null {
-    return PROFILE.mainchain ? null : explorerUrl('chains', '/block/' + hash);
-  }
-
-  txLink(txid: string): string | null {
-    return PROFILE.mainchain ? null : explorerUrl('chains', '/tx/' + txid);
+  /** whether a bundle can still reach the threshold in the blocks it has left (one upvote per block at most) */
+  canMake(b: any): boolean {
+    return b.threshold - b.score <= b.blocksleft;
   }
 
   trackSlot = (_: number, s: any) => s.slot;
-
-  /** where the slot is in its epoch (40 slots), 0..1 */
-  epochProgress(pos: any, vals: any): number {
-    const first = vals?.firstslot ?? (pos.epoch * 40);
-    return Math.min(1, Math.max(0, (pos.slot - first + 1) / 40));
-  }
 
   hashrate(h: number): string {
     if (!h) { return '0 H/s'; }
@@ -120,6 +97,4 @@ export class DrivechainWidgetComponent implements OnInit {
     for (const [x, s] of u) { if (d >= x) { return (d / x).toFixed(2) + s; } }
     return d.toFixed(d < 10 ? 3 : 1);
   }
-
-  keyShort(k: string): string { return k ? k.slice(0, 10) + '…' : '?'; }
 }

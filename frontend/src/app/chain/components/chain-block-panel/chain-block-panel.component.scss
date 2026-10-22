@@ -17,3 +17,6 @@ h5 { font-size: 1rem; margin-bottom: 4px; }
 .vote.down { color: var(--red); }
 .lbl { color: var(--transparent-fg); width: 240px; }
 .neg { color: #ff6b6b; }
+// a sidechain, by its name and colour
+.sc-name { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
+  &::before { content: ''; width: 8px; height: 8px; border-radius: 2px; background: var(--sc); } }

@@ -84,7 +84,7 @@ export class SeoService {
   }
 
   updateCanonical(path) {
-    // Chains Explorer: the page's own address (host, and the sub-path the explorer runs under), not mempool.space's
+    // eCash Explorer: the page's own address (host, and the sub-path the explorer runs under), not mempool.space's
     this.canonicalLink?.setAttribute('href', document.location.origin + basePath() + path);
   }
 
@@ -99,7 +99,7 @@ export class SeoService {
       {return this.baseTitle + ' - Liquid Network';}
     if (this.network === 'liquidtestnet')
       {return this.baseTitle + ' - Liquid Testnet';}
-    // Chains Explorer: the base title is already the chain's ("Layers Explorer"): no " - Bitcoin Explorer" after it
+    // eCash Explorer: the base title is already the chain's ("eCash Explorer"): no " - Bitcoin Explorer" after it
     return this.baseTitle;
   }
 

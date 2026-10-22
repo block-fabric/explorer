@@ -28,7 +28,7 @@ export class OpenGraphService {
   ) {
     // save og:image tag from original template
     const initialOgImageTag = metaService.getTag('property=\'og:image\'');
-    // Chains Explorer: the chain's own preview (resources/previews/chain-<id>.png, chains/previews.py)
+    // eCash Explorer: the chain's own preview (resources/previews/chain-<id>.png; TODO: chain-ecash.png)
     this.defaultImageUrl = document.location.origin + basePath() + '/resources/previews/chain-' + PROFILE.id + '.png';
     this.router.events.pipe(
       filter(event => event instanceof NavigationEnd),
@@ -54,7 +54,7 @@ export class OpenGraphService {
   }
 
   setOgImage() {
-    // Chains Explorer: no unfurler (/render/) to draw page previews: the chain's preview for every page
+    // eCash Explorer: no unfurler (/render/) to draw page previews: the chain's preview for every page
     this.clearOgImage();
   }
 
@@ -66,7 +66,7 @@ export class OpenGraphService {
   }
 
   setManualOgImage(imageFilename) {
-    // Chains Explorer: mempool's page previews are mempool.space's: the chain's preview instead
+    // eCash Explorer: mempool's page previews are mempool.space's: the chain's preview instead
     this.clearOgImage();
   }
 

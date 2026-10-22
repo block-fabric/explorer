@@ -328,13 +328,28 @@ main {
   padding-bottom: 20px;
 }
 
-// Chains Explorer: the chain switcher's items: mark, name, then the slot on the right
-.chain-switch-item {
+// eCash Explorer: the network switcher's items: name, then the network id on the right
+.network-switch-item {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-width: 220px;
-  .cs-mark { display: inline-flex; width: 20px; flex: 0 0 20px; }
-  .cs-name { flex: 1 1 auto; text-align: left; }
-  .cs-slot { flex: 0 0 auto; margin-left: 16px; font-size: 0.8em; color: var(--transparent-fg); }
+  min-width: 200px;
+  .ns-name { flex: 1 1 auto; text-align: left; }
+  .ns-id { flex: 0 0 auto; margin-left: 16px; font-size: 0.8em; color: var(--transparent-fg); }
+  &.active { opacity: 0.7; }
+}
+
+// eCash Explorer: the network name next to the logo
+.network-badge {
+  align-self: center;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #ffd166;
+  border: 1px solid color-mix(in srgb, #ffd166 55%, transparent);
+  &.mainnet { color: var(--chain-accent, #2ec4b6); border-color: color-mix(in srgb, var(--chain-accent, #2ec4b6) 55%, transparent); }
 }

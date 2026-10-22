@@ -1,6 +1,6 @@
 <div class="card dc-card">
   <div class="card-body">
-    <ng-container *ngIf="kind !== 'peg' && kind !== 'stake' && kind !== 'mining'">
+    <ng-container *ngIf="kind !== 'peg' && kind !== 'mining'">
       <ng-container *ngIf="data$ | async as d; else loading">
 
         <!-- treasury -->
@@ -8,23 +8,23 @@
           <div class="big-row">
             <div class="big">
               <div class="big-value"><app-amount [satoshis]="d.live.escrowTotal" digitsInfo="1.0-0" [noFiat]="true"></app-amount></div>
-              <div class="big-label">{{ profile.mainchain ? 'locked in ' + d.live.sidechains.length + ' sidechains' : 'in ' + profile.name + "'s escrow" }}</div>
+              <div class="big-label">locked in {{ d.live.sidechains.length }} sidechain{{ d.live.sidechains.length === 1 ? '' : 's' }}</div>
             </div>
             <div class="big">
               <div class="big-value">{{ pct(d.live.escrowShareOfSupply, 2) }}</div>
-              <div class="big-label">of the CHN issued</div>
+              <div class="big-label">of the {{ profile.unit }} issued</div>
             </div>
             <div class="big">
               <div class="big-value" [class.pos]="d.totals.netFlow > 0" [class.neg]="d.totals.netFlow < 0">{{ d.totals.netFlow > 0 ? '+' : '' }}{{ (d.totals.netFlow / 1e8) | number:'1.0-2' }}</div>
               <div class="big-label">net flow, 144 blocks</div>
             </div>
           </div>
-          <div class="stack" *ngIf="profile.mainchain">
-            <span *ngFor="let s of byEscrow(d); trackBy: trackSlot" class="seg" [style.flex]="s.escrow" [style.background]="colorOf(s.slot)" [title]="s.title + ': ' + (s.escrow / 1e8 | number:'1.0-2') + ' CHN'"></span>
+          <div class="stack">
+            <span *ngFor="let s of byEscrow(d); trackBy: trackSlot" class="seg" [style.flex]="s.escrow" [style.background]="colorOf(s.slot)" [title]="s.title + ': ' + (s.escrow / 1e8 | number:'1.0-2') + ' ' + profile.unit"></span>
           </div>
           <div class="list">
             <div class="li" *ngFor="let s of byEscrow(d).slice(0, 6); trackBy: trackSlot">
-              <span class="sc" [style.color]="colorOf(s.slot)"><app-svg-images name="chain-mark" [fill]="profileId(s.slot)" width="14" height="14"></app-svg-images></span>
+              <span class="sc" [style.color]="colorOf(s.slot)"><app-svg-images name="chain-mark" [fill]="markId(s.slot)" width="14" height="14"></app-svg-images></span>
               <a *ngIf="s.explorer; else plainName" [href]="s.explorer" class="nm">{{ s.title }}</a>
               <ng-template #plainName><span class="nm">{{ s.title }}</span></ng-template>
               <span class="bar"><span class="fill" [style.width.%]="d.live.escrowTotal ? 100 * s.escrow / d.live.escrowTotal : 0" [style.background]="colorOf(s.slot)"></span></span>
@@ -47,7 +47,7 @@
             </div>
             <div class="big">
               <div class="big-value">{{ (d.totals.bids / 1e8) | number:'1.0-5' }}</div>
-              <div class="big-label">CHN bids · {{ pct(d.totals.bidShareOfFees, 0) }} of fees</div>
+              <div class="big-label">{{ profile.unit }} bids · {{ pct(d.totals.bidShareOfFees, 0) }} of fees</div>
             </div>
           </div>
           <div class="grid">
@@ -56,7 +56,7 @@
               <span class="g-cells">
                 <ng-container *ngFor="let b of newest(d, 48)">
                   <a *ngIf="accepted(b, s.slot) as a; else off" class="cell on" [style.background]="colorOf(s.slot)"
-                     [routerLink]="profile.mainchain ? ['/block' | relativeUrl, b.hash] : null" [href]="blockLink(b.hash)"
+                     [routerLink]="['/block' | relativeUrl, b.hash]"
                      [title]="'Block ' + b.height + ' carried ' + s.title + (a.bid !== null ? ' · bid ' + a.bid + ' sats' : '')"></a>
                   <ng-template #off><span class="cell" [title]="'Block ' + b.height"></span></ng-template>
                 </ng-container>
@@ -72,30 +72,30 @@
           <p *ngIf="!d.live.bundles.length" class="empty">No withdrawal bundle is pending.</p>
           <div class="bundle" *ngFor="let b of d.live.bundles.slice(0, 5)">
             <div class="b-top">
-              <span class="sc" [style.color]="colorOf(b.slot)"><app-svg-images name="chain-mark" [fill]="profileId(b.slot)" width="14" height="14"></app-svg-images></span>
+              <span class="sc" [style.color]="colorOf(b.slot)"><app-svg-images name="chain-mark" [fill]="markId(b.slot)" width="14" height="14"></app-svg-images></span>
               <b>{{ b.name }}</b>
               <span class="mono"><app-truncate [text]="b.hash" [lastChars]="8"></app-truncate></span>
-              <span class="ms-auto"><app-amount [satoshis]="b.total" digitsInfo="1.2-4" [noFiat]="true"></app-amount></span>
+              <span class="ms-auto" *ngIf="b.payable">payable</span>
             </div>
-            <div class="b-bar"><span class="b-fill" [style.width.%]="100 * progress(d, b)" [style.background]="canMake(d, b) ? colorOf(b.slot) : '#ff6b6b88'"></span><span class="b-txt">{{ b.score }} / {{ d.live.info.withdrawalminscore }}</span></div>
-            <div class="b-meta">{{ b.blocksleft }} blocks left · {{ canMake(d, b) ? 'payable in ≥ ' + (d.live.info.withdrawalminscore - b.score) + ' blocks' : 'cannot reach the score in time' }} · {{ b.payouts.length }} payout{{ b.payouts.length === 1 ? '' : 's' }}</div>
+            <div class="b-bar"><span class="b-fill" [style.width.%]="100 * progress(b)" [style.background]="canMake(b) ? colorOf(b.slot) : '#ff6b6b88'"></span><span class="b-txt">{{ b.score | number }} / {{ b.threshold | number }} votes</span></div>
+            <div class="b-meta">{{ b.blocksleft | number }} blocks left · {{ b.payable ? 'reached the threshold' : canMake(b) ? 'needs ' + ((b.threshold - b.score) | number) + ' more votes' : 'cannot reach the threshold in time' }} · proposed at {{ b.height | number }}</div>
           </div>
           <div class="foot"><span>{{ d.totals.bundlesPaid }} paid · {{ d.totals.bundlesFailed }} failed in 144 blocks</span><span>{{ d.totals.upvotes | number }} upvotes · {{ d.totals.downvotes | number }} downvotes</span></div>
         </ng-container>
 
-        <a class="more" [routerLink]="[cockpitPath | relativeUrl]">{{ profile.mainchain ? 'Drivechain cockpit' : 'BMM and peg' }} →</a>
+        <a class="more" [routerLink]="[cockpitPath | relativeUrl]">Drivechain cockpit →</a>
       </ng-container>
     </ng-container>
 
-    <!-- mining (Chains): hashrate, aserti3, pools by coinbase tag, halving -->
+    <!-- mining: hashrate, the 2016-block retarget, pools by coinbase tag, halving -->
     <ng-container *ngIf="kind === 'mining'">
       <ng-container *ngIf="mining$ | async as m; else loading">
         <div class="big-row">
           <div class="big"><div class="big-value">{{ hashrate(m.totals.hashrate) }}</div><div class="big-label">hashrate, 144 blocks</div></div>
-          <div class="big"><div class="big-value">{{ diff(m.asert?.nextDifficulty ?? m.totals.difficulty) }}</div><div class="big-label">next block difficulty</div></div>
-          <div class="big" *ngIf="m.asert && !m.asert.bootstrap">
-            <div class="big-value" [class.pos]="m.asert.drift < 0" [class.neg]="m.asert.drift > 0">{{ m.asert.blocksBehind > 0 ? '-' : '+' }}{{ (m.asert.blocksBehind < 0 ? -m.asert.blocksBehind : m.asert.blocksBehind) | number:'1.0-0' }}</div>
-            <div class="big-label">blocks {{ m.asert.drift > 0 ? 'behind' : 'ahead of' }} schedule</div></div>
+          <div class="big"><div class="big-value">{{ diff(m.totals.regularDifficulty ?? m.totals.difficulty) }}</div><div class="big-label">difficulty</div></div>
+          <div class="big" *ngIf="m.retarget?.change !== null && m.retarget?.change !== undefined">
+            <div class="big-value" [class.pos]="m.retarget.change > 0" [class.neg]="m.retarget.change < 0">{{ m.retarget.change > 0 ? '+' : '' }}{{ m.retarget.change * 100 | number:'1.1-1' }}%</div>
+            <div class="big-label">estimated at the retarget</div></div>
         </div>
         <div class="list">
           <div class="li" *ngFor="let p of m.pools.slice(0, 5)">
@@ -105,41 +105,11 @@
             <span class="flow">{{ p.datum ? 'DATUM · ' + p.miners.length + (p.miners.length === 1 ? ' miner' : ' miners') : p.blocks + ' blocks' }}</span>
           </div>
         </div>
+        <div class="b-bar mt-2" *ngIf="m.retarget as r"><span class="b-fill" [style.width.%]="100 * r.progress" [style.background]="profile.color"></span>
+          <span class="b-txt">retarget: {{ r.blocksLeft | number }} blocks to {{ r.nextRetarget | number }} · ~{{ r.eta * 1000 | date:'MMM d, HH:mm' }}</span></div>
         <div class="b-bar mt-2"><span class="b-fill" [style.width.%]="100 * m.halving.progress" [style.background]="profile.color"></span>
           <span class="b-txt">halving: {{ m.halving.blocksLeft | number }} blocks to {{ m.halving.nextHalving | number }}</span></div>
         <a class="more" [routerLink]="['/mining' | relativeUrl]">Mining →</a>
-      </ng-container>
-    </ng-container>
-
-    <!-- proof of stake (FastBlocks, Layers) -->
-    <ng-container *ngIf="kind === 'stake'">
-      <ng-container *ngIf="stake$ | async as s; else loading">
-        <div class="big-row">
-          <div class="big">
-            <div class="big-value">{{ s.pos.slot | number }}</div>
-            <div class="big-label">slot · {{ s.pos.slotseconds }} s each</div>
-          </div>
-          <div class="big">
-            <div class="big-value">{{ s.pos.epoch | number }}</div>
-            <div class="big-label">epoch · {{ (s.pos.validators?.length || s.vals?.validators?.length) }} validators</div>
-          </div>
-          <div class="big">
-            <div class="big-value" [class.pos]="!s.pos.stalled" [class.neg]="s.pos.stalled">{{ s.pos.stalled ? 'stalled' : (s.pos.active ? 'live' : 'inactive') }}</div>
-            <div class="big-label">{{ (s.pos.staking?.bonded || 0) | number:'1.0-0' }} CHN bonded</div>
-          </div>
-        </div>
-        <div class="b-bar"><span class="b-fill" [style.width.%]="100 * epochProgress(s.pos, s.vals)" [style.background]="profile.color"></span><span class="b-txt">epoch {{ s.pos.epoch }}: {{ (100 * epochProgress(s.pos, s.vals)) | number:'1.0-0' }}%</span></div>
-        <div class="list mt-2">
-          <div class="li"><span class="nm">Leader</span><span class="bar"></span><span class="mono">{{ keyShort(s.pos.leader) }}</span></div>
-          <div class="li"><span class="nm">Anchored</span><span class="bar"><span class="fill" [style.width.%]="s.tip ? 100 * s.pos.lastanchoredheight / s.tip : 0" [style.background]="'#5aa6ff'"></span></span><span class="num">{{ s.pos.lastanchoredheight | number }}</span><span class="flow">/ {{ s.tip | number }}</span></div>
-          <div class="li"><span class="nm">Anchors</span><span class="bar"></span><span class="num">{{ s.pos.anchors | number }}</span><span class="flow">Chains {{ s.pos.lastanchormainheight | number }}</span></div>
-          <div class="li" *ngFor="let v of s.vals?.validators?.slice(0, 4)">
-            <span class="nm mono" [title]="v.pubkey">{{ keyShort(v.pubkey) }}</span>
-            <span class="bar"><span class="fill" [style.width.%]="100 * v.stake / (s.vals.totalstake || 1)" [style.background]="profile.color"></span></span>
-            <span class="num">{{ v.stake / 1e8 | number:'1.0-0' }}</span><span class="flow">{{ v.slots }} slots</span>
-          </div>
-        </div>
-        <a class="more" [routerLink]="['/validators' | relativeUrl]">Validators →</a>
       </ng-container>
     </ng-container>
 
@@ -151,11 +121,10 @@
           <tbody>
             <tr *ngFor="let e of items">
               <td class="dir" [class.pos]="e.kind === 'deposit'" [class.neg]="e.kind === 'withdrawal'">{{ e.kind === 'deposit' ? '↓ in' : '↑ out' }}</td>
-              <td><span class="sc" [style.color]="colorOf(e.slot)"><app-svg-images name="chain-mark" [fill]="profileId(e.slot)" width="13" height="13"></app-svg-images></span> {{ e.name }}</td>
+              <td><span class="sc" [style.color]="colorOf(e.slot)"><app-svg-images name="chain-mark" [fill]="markId(e.slot)" width="13" height="13"></app-svg-images></span> {{ e.name }}</td>
               <td class="text-right"><app-amount [satoshis]="e.amount" digitsInfo="1.2-4" [noFiat]="true"></app-amount></td>
               <td class="text-right when">
-                <a *ngIf="profile.mainchain; else extTx" [routerLink]="['/tx' | relativeUrl, e.txid]"><app-time kind="since" [time]="e.time" [fastRender]="true"></app-time></a>
-                <ng-template #extTx><a [href]="txLink(e.txid)"><app-time kind="since" [time]="e.time" [fastRender]="true"></app-time></a></ng-template>
+                <a [routerLink]="['/tx' | relativeUrl, e.txid]"><app-time kind="since" [time]="e.time" [fastRender]="true"></app-time></a>
               </td>
             </tr>
           </tbody>
