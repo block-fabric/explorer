@@ -6,6 +6,7 @@ import { StateService } from '@app/services/state.service';
 import { hash, Hash } from '@app/shared/sha256';
 import { AddressType, AddressTypeInfo, detectAddressType } from '@app/shared/address-utils';
 import * as secp256k1 from '@noble/secp256k1';
+import { PROFILE } from '@app/chain/profiles';
 
 // Bitcoin Core default policy settings
 const MAX_STANDARD_TX_WEIGHT = 400_000;
@@ -471,6 +472,10 @@ function isDustOutput(value: number, scriptpubkey: string): boolean {
  * For now, just pull out individual rules into versioned functions where necessary.
  */
 export function isNonStandard(tx: Transaction, height?: number, network?: string): boolean {
+  // eCash Explorer: a sidechain's transactions follow its own rules, not Bitcoin Core's standardness (dust, sigops...)
+  if (PROFILE.kind === 'l2') {
+    return false;
+  }
   // version
   if (isNonStandardVersion(tx, height, network)) {
     return true;
@@ -1947,6 +1952,10 @@ function checkSigopsBIP54(tx: Transaction, limit: number = MAX_TX_LEGACY_SIGOPS)
 export function scriptPubKeyToAddress(scriptPubKey: string, network: string): { address: string, type: string } {
   // P2PKH
   if (/^76a914[0-9a-f]{40}88ac$/.test(scriptPubKey)) {
+    if (PROFILE.kind === 'l2') {
+      // eCash Explorer: a sidechain's address is the 20 bytes in base58, with no version byte and no checksum
+      return { address: base58Encode(hexStringToUint8Array(scriptPubKey.substring(6, 6 + 40))), type: 'p2pkh' };
+    }
     return { address: p2pkh(scriptPubKey.substring(6, 6 + 40), network), type: 'p2pkh' };
   }
   // P2PK

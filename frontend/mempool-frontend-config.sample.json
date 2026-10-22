@@ -39,5 +39,6 @@
   "SERVICES_API": "",
   "CHAIN_PROFILE": "ecash",
   "CHAIN_NETWORK": "ecashbeta",
-  "CHAIN_EXPLORER_URLS": ""
+  "CHAIN_EXPLORER_URLS": "",
+  "CHAIN_UI": "full"
 }

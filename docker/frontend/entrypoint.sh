@@ -68,7 +68,16 @@ __STRATUM_ENABLED__=${STRATUM_ENABLED:=false}
 __CHAIN_PROFILE__=${CHAIN_PROFILE:=ecash}
 __CHAIN_NETWORK__=${CHAIN_NETWORK:=ecashbeta}
 __CHAIN_EXPLORER_URLS__=${CHAIN_EXPLORER_URLS:=}
+# a sidechain explorer's UI: 'full' (upstream mempool's pages, websocket and APIs on the sidechain's upstream-shaped
+# backend, plus its sidechain pages and panels) or 'lean' (the L2 page set alone, on /api/v1/chain and /api/v1/l2/*);
+# the eCash explorer ignores it
+__CHAIN_UI__=${CHAIN_UI:=full}
+case "${__CHAIN_UI__}" in
+  full|lean) ;;
+  *) echo "CHAIN_UI must be full or lean, not '${__CHAIN_UI__}': using full" >&2; __CHAIN_UI__=full ;;
+esac
 export __CHAIN_PROFILE__
+export __CHAIN_UI__
 export __CHAIN_NETWORK__
 export __CHAIN_EXPLORER_URLS__
 

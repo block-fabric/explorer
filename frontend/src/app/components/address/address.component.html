@@ -73,6 +73,9 @@
       </div>
     </div>
 
+    <!-- eCash Explorer: a sidechain address's names and assets (chain/l2/full) -->
+    <app-l2-view view="address" [inputs]="{ address: addressString }"></app-l2-view>
+
     <ng-container *ngIf="(addressTypeInfo?.tapscript && addressTypeInfo?.scripts?.size > 0) || taprootPsbtExpanded"> 
       <br>
       <div class="title-tx">

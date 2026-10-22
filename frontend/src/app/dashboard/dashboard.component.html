@@ -1,8 +1,8 @@
 
 <div class="container-xl dashboard-container" *ngIf="(network$ | async) !== 'liquid'; else liquidDashboard">
-  <div class="row row-cols-1 row-cols-md-2" *ngIf="{ value: (mempoolInfoData$ | async) } as mempoolInfoData">
+  <div class="row row-cols-1 row-cols-md-2" *ngIf="{ value: (mempoolInfoData$ | async), fees: (hasFees$ | async) } as mempoolInfoData">
     <ng-container>
-      <div class="col card-wrapper">
+      <div class="col card-wrapper" *ngIf="mempoolInfoData.fees">
         <div class="main-title" i18n="fees-box.transaction-fees">Transaction Fees</div>
         <div class="card">
           <div class="card-body less-padding">
@@ -11,14 +11,19 @@
         </div>
       </div>
       <!-- eCash Explorer: mining from the coinbases (pools by tag, DATUM miners), the retarget and the halving -->
-      <div class="col card-wrapper">
+      <div class="col card-wrapper" *ngIf="!l2">
         <div class="main-title">Mining</div>
         <app-drivechain-widget kind="mining"></app-drivechain-widget>
       </div>
+      <!-- eCash Explorer: a sidechain (chain/l2/full): its tip, its eCash carrier block, counts -->
+      <div class="col card-wrapper" *ngIf="l2">
+        <div class="main-title">{{ profile.name }}</div>
+        <app-drivechain-widget kind="chain"></app-drivechain-widget>
+      </div>
     </ng-container>
-    <!-- eCash Explorer: drivechain widgets -->
+    <!-- eCash Explorer: drivechain widgets (a sidechain's: its escrow on eCash against its wealth, its BMM on eCash) -->
     <div class="col card-wrapper">
-      <div class="main-title">Sidechain treasury</div>
+      <div class="main-title">{{ l2 ? 'Escrow and wealth' : 'Sidechain treasury' }}</div>
       <app-drivechain-widget kind="treasury"></app-drivechain-widget>
     </div>
     <div class="col card-wrapper">
@@ -74,7 +79,7 @@
       </div>
     </div>
     <div class="col" style="max-height: 410px">
-      <div class="card" *ngIf="(network$ | async) !== 'liquidtestnet'; else latestBlocks">
+      <div class="card" *ngIf="(network$ | async) !== 'liquidtestnet' && !l2; else latestBlocks">
         <div class="card-body">
           <a class="title-link" href="" [routerLink]="['/rbf' | relativeUrl]">
             <h5 class="card-title d-inline" i18n="dashboard.recent-rbf-replacements">Recent Replacements</h5>
@@ -120,7 +125,7 @@
                 <th class="table-cell-height" i18n="dashboard.latest-blocks.height">Height</th>
                 <th class="table-cell-mined" i18n="dashboard.latest-blocks.mined">Mined</th>
                 <th class="table-cell-transaction-count" i18n="dashboard.latest-blocks.transaction-count">TXs</th>
-                <th class="table-cell-chain">Sidechains</th>
+                <th class="table-cell-chain">{{ l2 ? 'eCash block' : 'Sidechains' }}</th>
                 <th class="table-cell-size" i18n="dashboard.latest-blocks.size">Size</th>
               </thead>
               <tbody *ngIf="blocks$ | async as blocks; else blocksSkeleton">
@@ -156,13 +161,26 @@
       </div>
     </div>
     <div class="col card-wrapper">
-      <div class="main-title">Withdrawal bundles</div>
+      <div class="main-title">{{ l2 ? 'Pending withdrawal bundle' : 'Withdrawal bundles' }}</div>
       <app-drivechain-widget kind="bundles"></app-drivechain-widget>
     </div>
-    <div class="col card-wrapper">
-      <div class="main-title">Peg activity</div>
-      <app-drivechain-widget kind="peg"></app-drivechain-widget>
-    </div>
+    <!-- (a sidechain without fee estimates: deposits and withdrawals apart, to keep the grid even) -->
+    <ng-container *ngIf="!l2 || mempoolInfoData.fees; else splitPeg">
+      <div class="col card-wrapper">
+        <div class="main-title">Peg activity</div>
+        <app-drivechain-widget kind="peg"></app-drivechain-widget>
+      </div>
+    </ng-container>
+    <ng-template #splitPeg>
+      <div class="col card-wrapper">
+        <div class="main-title">Deposits</div>
+        <app-drivechain-widget kind="deposits"></app-drivechain-widget>
+      </div>
+      <div class="col card-wrapper">
+        <div class="main-title">Withdrawals</div>
+        <app-drivechain-widget kind="withdrawals"></app-drivechain-widget>
+      </div>
+    </ng-template>
   </div>
 </div>
 

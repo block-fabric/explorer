@@ -55,6 +55,23 @@ function resolveModule(): ChainFrontendModule {
 export const MODULE: ChainFrontendModule = resolveModule();
 export const PROFILE: ChainProfile = MODULE.profile;
 
+/**
+ * How a sidechain explorer (kind 'l2') shows its chain, per instance (window.__env.CHAIN_UI, CHAIN_UI in Docker):
+ *   'full'  upstream mempool's whole UI (dashboard with the block strip and mempool blocks, block, transaction and
+ *           address pages, search, websocket) on the sidechain's upstream-shaped backend, plus the sidechain's own
+ *           pages and panels (chain/l2/full/); the default
+ *   'lean'  the L2 page set alone (chain/l2/), on /api/v1/chain and /api/v1/l2/* only: no upstream API, no websocket
+ * The eCash explorer (kind 'l1') always runs upstream's UI ('full').
+ */
+export type ChainUi = 'full' | 'lean';
+/** the storage key of a sidechain explorer's amount mode ('sats' or 'btc', i.e. ECX) */
+export const L2_AMOUNT_MODE_KEY = 'l2-view-amount-mode';
+export const CHAIN_UI: ChainUi = PROFILE.kind === 'l2' && String(env.CHAIN_UI || '').toLowerCase() === 'lean' ? 'lean' : 'full';
+/** a sidechain explorer on upstream's UI */
+export const L2_FULL = PROFILE.kind === 'l2' && CHAIN_UI === 'full';
+/** a sidechain explorer on the lean L2 page set */
+export const L2_LEAN = PROFILE.kind === 'l2' && CHAIN_UI === 'lean';
+
 /** The eCash networks (backend/src/chain/networks.ts): their names and address prefixes (Bitcoin's) */
 export type NetworkId = 'ecash' | 'ecashbeta' | 'ecashtest';
 export const NETWORKS: Record<NetworkId, { id: NetworkId; name: string; bech32: string }> = {

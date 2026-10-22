@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { basePath } from '@app/chain/base-path';
-import { PROFILE } from '@app/chain/profiles';
+import { L2_LEAN } from '@app/chain/profiles';
 import { webSocket, WebSocketSubject } from 'rxjs/webSocket';
 import { WebsocketResponse } from '@interfaces/websocket.interface';
 import { StateService } from '@app/services/state.service';
@@ -56,9 +56,10 @@ export class WebsocketService {
     private cacheService: CacheService,
     private minersService: MinersService,
   ) {
-    if (PROFILE.kind === 'l2') {
-      // eCash Explorer: a sidechain explorer's backend serves no websocket (only /api/v1/chain and /api/v1/l2/*):
-      // never connect, and stay "online" so that nothing shows a reconnecting badge
+    if (L2_LEAN) {
+      // eCash Explorer: a sidechain explorer on the lean page set (CHAIN_UI 'lean') uses no websocket (only
+      // /api/v1/chain and /api/v1/l2/*): never connect, and stay "online" so that nothing shows a reconnecting badge.
+      // On upstream's UI (CHAIN_UI 'full') its upstream-shaped backend serves the websocket as the eCash one does.
       // @ts-ignore
       this.websocketSubject = { next: () => {}, complete: () => {} };
       this.subscription = new Subscription();

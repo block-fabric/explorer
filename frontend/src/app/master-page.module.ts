@@ -22,7 +22,27 @@ const browserWindow = window || {};
 // @ts-ignore
 const browserWindowEnv = browserWindow.__env || {};
 
-import { MODULE } from '@app/chain/profiles';
+import { L2_FULL, MODULE } from '@app/chain/profiles';
+import { L2_FEATURE_PAGES } from '@app/chain/l2/l2-nav';
+
+/**
+ * eCash Explorer: a sidechain explorer on upstream's UI (CHAIN_UI 'full'): its own pages, from the lean page set
+ * (chain/l2/pages): BMM on eCash, deposits and withdrawals, and its feature pages (the module's own first)
+ */
+const featureList = () => import('@app/chain/l2/pages/feature.page').then(m => m.L2FeaturePageComponent);
+const featureItem = () => import('@app/chain/l2/pages/feature.page').then(m => m.L2FeatureItemPage);
+const L2_FULL_ROUTES: Routes = L2_FULL ? [
+  { path: 'bmm', loadComponent: () => import('@app/chain/l2/pages/bmm.page').then(m => m.L2BmmPage) },
+  { path: 'deposits', data: { kind: 'deposits' }, loadComponent: () => import('@app/chain/l2/pages/transfers.page').then(m => m.L2TransfersPage) },
+  { path: 'withdrawals', data: { kind: 'withdrawals' }, loadComponent: () => import('@app/chain/l2/pages/transfers.page').then(m => m.L2TransfersPage) },
+  ...L2_FEATURE_PAGES
+    .filter(p => !(MODULE.routes ?? []).some(r => r.path === p.path))
+    .flatMap(p => [
+      { path: p.path, data: { page: p.path }, loadComponent: featureList },
+      ...(p.detail && !(MODULE.routes ?? []).some(r => r.path === p.path + '/:id')
+        ? [{ path: p.path + '/:id', data: { page: p.path }, loadComponent: featureItem }] : []),
+    ]),
+] : [];
 import { ChainSwitcherComponent } from '@app/chain/components/chain-switcher/chain-switcher.component';
 
 const routes: Routes = [
@@ -73,8 +93,9 @@ const routes: Routes = [
         path: 'drivechain',
         loadChildren: () => import('@app/chain/pages/cockpit/cockpit.module').then(m => m.ChainCockpitModule),
       },
-      // eCash Explorer: the pages of the chain module (chain/modules/<id>)
+      // eCash Explorer: the pages of the chain module (chain/modules/<id>), and a sidechain's own (above)
       ...(MODULE.routes ?? []),
+      ...L2_FULL_ROUTES,
       {
         path: 'txs',
         component: RecentTransactionsList,

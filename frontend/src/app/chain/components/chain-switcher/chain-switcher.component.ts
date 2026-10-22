@@ -30,13 +30,11 @@ import { ChainLink, chainLinks } from '@app/chain/chain-links';
       <div ngbDropdownMenu class="dropdown-menu-right">
         <ng-container *ngFor="let l of links">
           <span *ngIf="l.here; else other" ngbDropdownItem class="chain-switch-item active" [disabled]="true">
-            <app-svg-images name="chain-mark" [fill]="l.mark" width="18" height="18" class="cs-mark" [style]="'color: ' + l.color"></app-svg-images>
-            <span class="cs-name">{{ l.name }}</span><span class="cs-id">this explorer</span>
+            <span class="cs-name"><app-sidechain-label [chain]="l.id" [name]="l.name"></app-sidechain-label></span><span class="cs-id">this explorer</span>
           </span>
           <ng-template #other>
             <a ngbDropdownItem [href]="l.url" class="chain-switch-item">
-              <app-svg-images name="chain-mark" [fill]="l.mark" width="18" height="18" class="cs-mark" [style]="'color: ' + l.color"></app-svg-images>
-              <span class="cs-name">{{ l.name }}</span><span class="cs-id">{{ l.id === 'ecash' ? 'mainchain' : 'sidechain' }}</span>
+              <span class="cs-name"><app-sidechain-label [chain]="l.id" [name]="l.name"></app-sidechain-label></span><span class="cs-id">{{ l.id === 'ecash' ? 'mainchain' : 'sidechain' }}</span>
             </a>
           </ng-template>
         </ng-container>

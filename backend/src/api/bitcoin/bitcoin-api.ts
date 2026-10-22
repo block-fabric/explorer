@@ -9,6 +9,11 @@ import transactionUtils from '../transaction-utils';
 import { Common } from '../common';
 import addressIndex from '../../chain/address-index';
 import indexer from '../../indexer';
+import { PROFILE } from '../../chain/profile';
+
+// Chains Explorer: a sidechain's node is the Core JSON-RPC view of its index (chain/l2/core.ts): verbose transactions
+// come with every input's prevout and the fee (getrawtransaction 2, getblock 3) and fields of the chain's own
+const FACADE = PROFILE.kind === 'l2';
 
 class BitcoinApi implements AbstractBitcoinApi {
   private rawMempoolCache: IBitcoinApi.RawMempool | null = null;
@@ -45,7 +50,7 @@ class BitcoinApi implements AbstractBitcoinApi {
       return this.$addPrevouts(txInMempool);
     }
 
-    return this.bitcoindClient.getRawTransaction(txId, true)
+    return this.bitcoindClient.getRawTransaction(txId, FACADE ? 2 : true)
       .then((transaction: IBitcoinApi.Transaction) => {
         if (skipConversion) {
           transaction.vout.forEach((vout) => {
@@ -116,7 +121,7 @@ class BitcoinApi implements AbstractBitcoinApi {
 
   /** @asyncUnsafe */
   async $getTxsForBlock(hash: string, fallbackToCore = false): Promise<IEsploraApi.Transaction[]> {
-    const verboseBlock: IBitcoinApi.VerboseBlock = await this.bitcoindClient.getBlock(hash, 2);
+    const verboseBlock: IBitcoinApi.VerboseBlock = await this.bitcoindClient.getBlock(hash, FACADE ? 3 : 2);
     const transactions: IEsploraApi.Transaction[] = [];
     for (const tx of verboseBlock.tx) {
       const converted = await this.$convertTransaction(tx, true, false, verboseBlock.confirmations === -1);
@@ -371,6 +376,9 @@ class BitcoinApi implements AbstractBitcoinApi {
 
   /** @asyncUnsafe */
   protected async $convertTransaction(transaction: IBitcoinApi.Transaction, addPrevout: boolean, lazyPrevouts = false, allowMissingPrevouts = false): Promise<IEsploraApi.Transaction> {
+    if (FACADE) {
+      return this.convertFacadeTransaction(transaction);
+    }
     let esploraTransaction: IEsploraApi.Transaction = {
       txid: transaction.txid,
       version: transaction.version,
@@ -437,6 +445,76 @@ class BitcoinApi implements AbstractBitcoinApi {
     return esploraTransaction;
   }
 
+  /**
+   * Chains Explorer: a sidechain tx from the Core view of its index (chain/l2/core.ts) as Esplora's: the prevouts and
+   * the fee as given (an input the index cannot resolve, as a Hivemind market's, has no prevout; a tx may have no
+   * inputs), and the chain's own fields kept: tx data / shielded / peg (mainTxid, m6id), input deposit / kind,
+   * output content / withdrawal / memo
+   */
+  private convertFacadeTransaction(transaction: IBitcoinApi.Transaction): IEsploraApi.Transaction {
+    const t = transaction as any;
+    const out = (v: any): IEsploraApi.Vout => {
+      const o: any = {
+        value: Math.round(v.value * 100000000),
+        scriptpubkey: v.scriptPubKey.hex,
+        scriptpubkey_address: v.scriptPubKey.address ?? '',
+        scriptpubkey_asm: transactionUtils.convertScriptSigAsm(v.scriptPubKey.hex),
+        scriptpubkey_type: this.translateScriptPubKeyType(v.scriptPubKey.type),
+      };
+      for (const k of ['content', 'withdrawal', 'memo']) {
+        if (v[k] !== undefined) {
+          o[k] = v[k];
+        }
+      }
+      return o;
+    };
+    const tx: any = {
+      txid: t.txid,
+      version: t.version,
+      locktime: t.locktime,
+      size: t.size,
+      weight: t.weight,
+      fee: t.fee !== undefined ? Math.round(t.fee * 100000000) : 0,
+      vin: t.vin.map((vin: any) => {
+        const i: any = {
+          is_coinbase: vin.coinbase !== undefined,
+          prevout: vin.prevout ? out(vin.prevout) : null,
+          scriptsig: vin.coinbase ?? vin.scriptSig?.hex ?? '',
+          scriptsig_asm: transactionUtils.convertScriptSigAsm(vin.coinbase ?? vin.scriptSig?.hex ?? ''),
+          sequence: vin.sequence,
+          txid: vin.txid || '',
+          vout: vin.vout || 0,
+          witness: [],
+          inner_redeemscript_asm: '',
+          inner_witnessscript_asm: '',
+        };
+        if (vin.deposit) {
+          i.deposit = true;
+        }
+        if (vin.kind) {
+          i.kind = vin.kind;
+        }
+        return i;
+      }),
+      vout: t.vout.map(out),
+      status: { confirmed: false },
+    };
+    for (const k of ['data', 'shielded', 'peg', 'mainTxid', 'm6id']) {
+      if (t[k] !== undefined) {
+        tx[k] = t[k];
+      }
+    }
+    if (t.confirmations) {
+      tx.status = {
+        confirmed: true,
+        block_height: t.height ?? blocks.getCurrentBlockHeight() - t.confirmations + 1,
+        block_hash: t.blockhash,
+        block_time: t.blocktime,
+      };
+    }
+    return tx;
+  }
+
   private translateScriptPubKeyType(outputType: string): string {
     const map = {
       'pubkey': 'p2pk',
@@ -480,7 +558,7 @@ class BitcoinApi implements AbstractBitcoinApi {
   protected async $addPrevouts(transaction: TransactionExtended): Promise<TransactionExtended> {
     let addedPrevouts = false;
     for (const vin of transaction.vin) {
-      if (vin.prevout) {
+      if (vin.prevout || FACADE) { // Chains Explorer: the facade gives every prevout the index knows
         continue;
       }
       const innerTx = await this.$getRawTransaction(vin.txid, false, false);

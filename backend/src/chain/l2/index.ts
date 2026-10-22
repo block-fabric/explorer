@@ -40,13 +40,13 @@ const CACHE_VERSION = 1;
 const STEP = 25;          // blocks fetched per round
 const POLL_MS = 10000;
 
-interface RawOutput {
+export interface RawOutput {
   address: string;
   content: any;
   memo?: string | null;
 }
 
-interface StoredTx {
+export interface StoredTx {
   txid: string;
   size: number | null;
   inputs: any[];                  // OutPoint JSON
@@ -57,17 +57,17 @@ interface StoredTx {
   fee?: number;                   // the node's fee_sats, for a tx spending outputs no tx created
 }
 
-interface BundleEventRef {
+export interface BundleEventRef {
   m6id: string;
   kind: 'submitted' | 'succeeded' | 'failed';
   mainHeight: number;
 }
 
-interface MainBlock extends MainBlockRef {
+export interface MainBlock extends MainBlockRef {
   time: number;
 }
 
-interface StoredBlock {
+export interface StoredBlock {
   height: number;
   hash: string;
   prevHash: string | null;
@@ -83,7 +83,7 @@ interface StoredBlock {
 }
 
 /** An output, with what happened to it since */
-interface OutRef {
+export interface OutRef {
   key: string;
   outpoint: OutPoint;
   vout: number;
@@ -97,12 +97,13 @@ interface OutRef {
   m6id: string | null;            // spent by this bundle
 }
 
-interface TxEntry {
+export interface TxEntry {
   txid: string;
   height: number;
   index: number;
   size: number | null;
   inputs: Input[];
+  inKeys: string[];               // the index's key of each input's outpoint
   outputs: OutRef[];
   fee: number;
   data: any;
@@ -110,7 +111,7 @@ interface TxEntry {
   signers: (string | null)[];
 }
 
-interface BlockEntry {
+export interface BlockEntry {
   stored: StoredBlock;
   summary: BlockSummary;
   coinbase: TxEntry;
@@ -153,8 +154,10 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R
 
 const FILLABLE = new Set(['bitname', 'bitnameReservation', 'bitasset', 'bitassetControl', 'bitassetReservation', 'ammLpToken', 'dutchAuctionReceipt']);
 
-class L2Index {
-  readonly chain: L2Chain = MODULE.l2 as L2Chain;
+export class L2Index {
+  /** the chain's module; the default is CHAIN.PROFILE's (tests give one) */
+  constructor(readonly chain: L2Chain = MODULE.l2 as L2Chain) {}
+
   private stored: StoredBlock[] = [];
   private fills = new Map<string, any>();    // outpoint key -> the node's filled content
   private stateOutputs = new Map<string, { outpoint: any; output: RawOutput; height: number }>(); // stateUtxos: made by the state
@@ -180,6 +183,7 @@ class L2Index {
   private lastSave = 0;
   private dirtyFills = false;
   private fillTried = new Set<string>();     // outpoint keys asked for once already
+  private settled = -1;                      // stateUtxos: the tip list_utxos was last followed at
 
   start(): void {
     this.loadCache();
@@ -537,7 +541,7 @@ class L2Index {
       this.create(outPointJson('Coinbase', cbKey === 'txid' ? b.coinbase.txid : b.merkleRoot, vout, cbKey), o, vout, b.coinbase.txid, b.height));
     deltas(cbOutputs.map(r => [r.address, r.value]), b.coinbase.txid, 'coinbase');
     const coinbase: TxEntry = {
-      txid: b.coinbase.txid, height: b.height, index: -1, size: null, inputs: [], outputs: cbOutputs, fee: 0, data: null, shielded: null, signers: [],
+      txid: b.coinbase.txid, height: b.height, index: -1, size: null, inputs: [], inKeys: [], outputs: cbOutputs, fee: 0, data: null, shielded: null, signers: [],
     };
     this.txs.set(coinbase.txid, coinbase);
 
@@ -551,9 +555,11 @@ class L2Index {
       const moves: [string, number][] = [];
       let resolved = true;
       let inSum = 0;
+      const inKeys: string[] = [];
       const inputs: Input[] = t.inputs.map((opJson, vin) => {
         const op = outPoint(opJson);
         const { key, ...outpoint } = op;
+        inKeys.push(key);
         const ref = this.outputs.get(key);
         if (!ref) {
           resolved = false;
@@ -586,7 +592,7 @@ class L2Index {
       }
       deltas(moves, t.txid, 'tx');
       const e: TxEntry = {
-        txid: t.txid, height: b.height, index, size: t.size, inputs, outputs, fee, data: t.data, shielded: t.shielded, signers: t.signers,
+        txid: t.txid, height: b.height, index, size: t.size, inputs, inKeys, outputs, fee, data: t.data, shielded: t.shielded, signers: t.signers,
       };
       this.txs.set(t.txid, e);
       txs.push(e);
@@ -709,6 +715,17 @@ class L2Index {
       this.rebuild();
       this.saveCache(true);
     }
+    this.settled = tip;
+  }
+
+  /**
+   * The highest block whose outputs are final in the index: the tip, but on a chain whose state moves sats without a
+   * tx (stateUtxos), the tip list_utxos was last followed at (state outputs are filed under the tip they were first
+   * seen at). The Core view (core.ts) shows no block above it, so that its blocks do not change once read.
+   */
+  settledHeight(): number {
+    const tip = this.tipHeight();
+    return this.chain.stateUtxos ? Math.min(tip, this.settled) : tip;
   }
 
   // ------------------------------------------------------------------ queries
@@ -843,11 +860,16 @@ class L2Index {
   }
 
   heightOf(id: string): number | null {
-    if (/^\d+$/.test(id)) {
+    if (/^\d{1,10}$/.test(id)) { // a height; a 64-digit id is a hash
       const h = Number(id);
       return h < this.blocks.length ? h : null;
     }
     return this.byHash.get(id) ?? null;
+  }
+
+  /** The height of a block hash (never a height: a hash can be all digits) */
+  heightOfHash(hash: string): number | null {
+    return this.byHash.get(hash) ?? null;
   }
 
   hasTx(txid: string): boolean {
@@ -986,6 +1008,44 @@ class L2Index {
         first: e.txs[0]?.height ?? null, last: e.txs[e.txs.length - 1]?.height ?? null,
       });
     }
+  }
+
+  // ------------------------------------------------------------------ for the Core facade (core.ts)
+
+  /** The index's entry of a block (null: not indexed) */
+  blockEntry(height: number): BlockEntry | null {
+    return this.blocks[height] ?? null;
+  }
+
+  /** The latest occurrence of a txid (coinbases too) */
+  txEntry(txid: string): TxEntry | null {
+    return this.txs.get(txid) ?? null;
+  }
+
+  /** An output by its key (outPoint(json).key) */
+  outRef(key: string): OutRef | null {
+    return this.outputs.get(key) ?? null;
+  }
+
+  /** Every output the index holds, spent or not */
+  forEachOutRef(fn: (r: OutRef) => void): void {
+    for (const r of this.outputs.values()) {
+      fn(r);
+    }
+  }
+
+  /** A tx's TxData as the contract's data */
+  dataOf(raw: any): any {
+    return this.chain.data ? this.chain.data(raw ?? null) : liftData(raw ?? null);
+  }
+
+  /** Tests: replace what the index holds with these blocks (as the cache would) */
+  loadBlocks(stored: StoredBlock[]): void {
+    this.stored = stored;
+    this.rebuild();
+    this.ready = true;
+    this.settled = stored.length - 1;
+    this.nodeTip = stored.length - 1;
   }
 
   /** Σ of address balances (for checks against sidechain_wealth) */

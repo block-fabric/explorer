@@ -31,3 +31,18 @@ export function profileBySlot(slot: number): ChainProfile | undefined {
 }
 
 export const isMainchain = (): boolean => PROFILE.mainchain;
+
+/**
+ * What this backend runs for a sidechain (CHAIN.L2_ROLE): 'index' = the sidechain index, its routes and the Core
+ * JSON-RPC view (chain/l2/); 'full' = upstream mempool's backend reading that view as its node. Null: the mainchain.
+ */
+export function l2Role(): 'index' | 'full' | null {
+  if (PROFILE.kind !== 'l2') {
+    return null;
+  }
+  const role = config.CHAIN?.L2_ROLE ?? 'index';
+  if (role !== 'index' && role !== 'full') {
+    throw new Error(`CHAIN.L2_ROLE must be 'index' or 'full', not '${role}'`);
+  }
+  return role;
+}

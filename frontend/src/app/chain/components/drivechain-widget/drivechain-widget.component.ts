@@ -20,9 +20,11 @@ import { PROFILE, slotColor, slotMarkId } from '@app/chain/profiles';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DrivechainWidgetComponent implements OnInit {
-  @Input() kind: 'treasury' | 'bmm' | 'bundles' | 'peg' | 'mining' = 'treasury';
+  /** (a sidechain explorer's widgets, chain/l2/full/l2-widget.component.ts: chain, treasury, bmm, bundles, peg, deposits, withdrawals) */
+  @Input() kind: 'treasury' | 'bmm' | 'bundles' | 'peg' | 'mining' | 'chain' | 'deposits' | 'withdrawals' = 'treasury';
 
   profile = PROFILE;
+  l2 = PROFILE.kind === 'l2';
   cockpitPath = '/drivechain';
   data$: Observable<any>;
   peg$: Observable<any[]>;
@@ -31,6 +33,9 @@ export class DrivechainWidgetComponent implements OnInit {
   constructor(private live: DrivechainLiveService, private api: ChainApiService) {}
 
   ngOnInit(): void {
+    if (this.l2) {
+      return;
+    }
     this.data$ = this.live.cockpit$;
     this.peg$ = this.live.peg$;
     if (this.kind === 'mining') {

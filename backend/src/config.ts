@@ -199,6 +199,13 @@ interface IConfig {
     // A sidechain explorer: the eCash explorer backend's base URL (e.g. http://127.0.0.1:18950), whose drivechain
     // index gives the BMM views (chain/l2/mainchain.ts); empty = no BMM views
     MAINCHAIN_API: string;
+    // A sidechain explorer runs as two backends: 'index' = the sidechain index and its routes (chain/l2/: /api/v1/l2/*,
+    // /api/v1/chain) plus, with L2_RPC_PORT, a Bitcoin Core JSON-RPC view of the index (chain/l2/facade.ts); 'full' =
+    // upstream mempool's backend (database, mempool, websocket, statistics, block indexing) reading that view as its
+    // node (CORE_RPC), with the address index (ADDRESS_INDEX). Ignored by the eCash explorer (kind l1).
+    L2_ROLE: 'index' | 'full';
+    // 'index': the port of the Core JSON-RPC view, bound to 127.0.0.1; 0 = none
+    L2_RPC_PORT: number;
   }
 }
 
@@ -390,6 +397,8 @@ const defaults: IConfig = {
     },
     'MAINCHAIN_EXPLORER': '',
     'MAINCHAIN_API': '',
+    'L2_ROLE': 'index',
+    'L2_RPC_PORT': 0,
   }
 };
 

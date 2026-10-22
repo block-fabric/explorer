@@ -139,6 +139,8 @@ import { ChainBlockPanelComponent } from '@app/chain/components/chain-block-pane
 import { ChainBlockMarksComponent } from '@app/chain/components/block-marks/block-marks.component';
 import { ChainTxPanelComponent } from '@app/chain/components/chain-tx-panel/chain-tx-panel.component';
 import { DrivechainWidgetComponent } from '@app/chain/components/drivechain-widget/drivechain-widget.component';
+import { L2ViewComponent } from '@app/chain/l2/full/l2-view.component';
+import { SidechainLabelComponent } from '@app/chain/components/sidechain-label/sidechain-label.component';
 @NgModule({
   declarations: [
     ClipboardComponent,
@@ -283,6 +285,8 @@ import { DrivechainWidgetComponent } from '@app/chain/components/drivechain-widg
     NgbCollapseModule,
     NgbDatepickerModule,
     FontAwesomeModule,
+    SidechainLabelComponent, // eCash Explorer: a chain's mark and name
+    L2ViewComponent, // eCash Explorer: a sidechain's views on upstream's pages (chain/l2/full), loaded on demand
   ],
   providers: [
     BytesPipe,
@@ -296,6 +300,8 @@ import { DrivechainWidgetComponent } from '@app/chain/components/drivechain-widg
     FeeRoundingPipe,
   ],
   exports: [
+    L2ViewComponent,
+    SidechainLabelComponent,
     MenuComponent,
     RouterModule,
     ReactiveFormsModule,

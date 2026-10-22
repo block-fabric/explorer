@@ -7,6 +7,7 @@ import { ChainApiService } from '@app/chain/chain-api.service';
 import { ChainInfo } from '@app/chain/chain.interfaces';
 import { MODULE, NETWORK_NAME, PROFILE } from '@app/chain/profiles';
 import { SeoService } from '@app/services/seo.service';
+import { l2FeatureNav } from '@app/chain/l2/l2-nav';
 
 /** /about: what this explorer shows, where its data comes from, the other eCash networks, and where its code comes from */
 @Component({
@@ -30,6 +31,20 @@ import { SeoService } from '@app/services/seo.service';
     <h1><app-svg-images name="chain-mark" [fill]="profile.id" width="30" height="30" class="cmark"></app-svg-images> About the {{ profile.name }} Explorer</h1>
     <p class="lead">{{ profile.tagline }} · {{ networkName }}.</p>
 
+    <ng-container *ngIf="l2">
+      <p>{{ profile.name }} is a drivechain sidechain of eCash (BIP300 slot {{ profile.slot }}): ECX moves onto it by a deposit into its
+        escrow on eCash, and back by a withdrawal that eCash miners vote on in a bundle before it is paid. Its blocks are made by blind
+        merged mining (BIP301): an eCash miner commits to each one and is paid the bid of its BMM request. Amounts are in sats
+        (1 ECX = 100,000,000 sats); there is no proof of work, no mining pools and no price on the sidechain.</p>
+      <p>Besides blocks, transactions, addresses and the mempool, this explorer shows for each block the eCash block that carried it and the
+        bid paid for it, the deposits from eCash and the withdrawals to eCash, the
+        <a [routerLink]="['/bmm']">blind merged mining of the chain on eCash</a><ng-container *ngIf="nav.length">, and
+        <ng-container *ngFor="let n of nav; let last = last"><a [routerLink]="[n.path]">{{ n.title.toLowerCase() }}</a>{{ last ? '' : ', ' }}</ng-container></ng-container>.</p>
+      <h2>Where the data comes from</h2>
+      <p>The explorer reads the chain from a {{ profile.name }} node, indexes it, and reads the eCash side (deposits, withdrawal bundles,
+        BMM requests and accepts) from the eCash explorer of the same network.</p>
+    </ng-container>
+    <ng-container *ngIf="!l2">
     <p>eCash ({{ profile.unit }}) is a fork of Bitcoin with Bitcoin's own formats: the same addresses, 8-decimal amounts, 10-minute blocks,
       difficulty retargets every 2016 blocks and halvings every 210,000 blocks. It adds drivechains (BIP300 and BIP301): sidechains that
       lock {{ profile.unit }} in an escrow on eCash, have their blocks committed by eCash miners through blind merged mining, and send coins
@@ -46,6 +61,7 @@ import { SeoService } from '@app/services/seo.service';
       <li>a stock eCash node with <b>bip300301_enforcer</b> next to it;</li>
       <li><b>Backbone</b> (backboned), which enforces BIP300/301 itself and serves the same validator service.</li>
     </ul>
+    </ng-container>
 
     <ng-container *ngIf="chain$ | async as c">
       <h2>eCash networks</h2>
@@ -73,7 +89,8 @@ import { SeoService } from '@app/services/seo.service';
 export class ChainAboutPage implements OnInit {
   profile = PROFILE;
   networkName = NETWORK_NAME;
-  nav = MODULE.nav ?? [];
+  l2 = PROFILE.kind === 'l2';
+  nav = PROFILE.kind === 'l2' ? l2FeatureNav((MODULE.features ?? []) as string[]) : (MODULE.nav ?? []);
   chain$: Observable<ChainInfo | null>;
 
   constructor(private seo: SeoService, private api: ChainApiService) {}

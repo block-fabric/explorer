@@ -53,8 +53,10 @@ import stratumApi from './api/services/stratum';
 import drivechain from './chain/drivechain';
 import addressIndex from './chain/address-index';
 import drivechainRoutes, { moduleNewBlock } from './chain/drivechain.routes';
-import { PROFILE } from './chain/profile';
+import { PROFILE, l2Role } from './chain/profile';
 import l2Routes from './chain/l2/routes';
+import l2Index from './chain/l2/index';
+import { CoreFacade } from './chain/l2/facade';
 
 class Server {
   private wss: WebSocket.Server | undefined;
@@ -128,9 +130,11 @@ class Server {
       this.forceExit('unhandledRejection', 1);
     });
 
-    // Chains Explorer: a sidechain explorer (kind l2) serves its own index of the sidechain node (chain/l2/) and
-    // nothing of upstream's: no database, node, mempool, websocket, statistics or block indexing
-    if (PROFILE.kind === 'l2') {
+    // Chains Explorer: a sidechain explorer (kind l2) is two backends (CHAIN.L2_ROLE). 'index' serves its own index of
+    // the sidechain node (chain/l2/) and a Core JSON-RPC view of it, nothing of upstream's (no database, mempool,
+    // websocket, statistics or block indexing); 'full' is upstream's backend below, its node that view.
+    const role = l2Role();
+    if (role === 'index') {
       return this.startL2Server(worker);
     }
 
@@ -229,14 +233,20 @@ class Server {
     await chainTips.updateOrphanedBlocks();
 
     this.setUpHttpApiRoutes();
-    // Chains Explorer: the drivechain index (BIP300/301 on the mainchain; the BMM of this sidechain) and the chain module
-    drivechain.start();
     addressIndex.start(); // Chains Explorer: address lookups without electrs
-    blocks.setNewBlockCallback((block) => {
-      drivechain.onNewBlock(block);
-      addressIndex.onNewBlock();
-      moduleNewBlock(block);
-    });
+    if (role === 'full') {
+      // a sidechain: the drivechain index and the chain module are the eCash explorer's (the BMM views and the
+      // sidechain's features are the index backend's, /api/v1/l2/*)
+      blocks.setNewBlockCallback(() => addressIndex.onNewBlock());
+    } else {
+      // Chains Explorer: the drivechain index (BIP300/301 on the mainchain) and the chain module
+      drivechain.start();
+      blocks.setNewBlockCallback((block) => {
+        drivechain.onNewBlock(block);
+        addressIndex.onNewBlock();
+        moduleNewBlock(block);
+      });
+    }
 
     if (config.MEMPOOL.ENABLED) {
       void this.runMainUpdateLoop();
@@ -297,6 +307,9 @@ class Server {
       })
       .use(express.json({ limit: '1mb' }));
     l2Routes.initRoutes(this.app);
+    if (config.CHAIN.L2_RPC_PORT) {
+      new CoreFacade(l2Index).listen(config.CHAIN.L2_RPC_PORT); // for the 'full' backend of this sidechain
+    }
     this.server = http.createServer(this.app);
     this.server.listen(config.MEMPOOL.HTTP_PORT, () => {
       logger.notice(`Sidechain explorer (${PROFILE.id}) is running on port ${config.MEMPOOL.HTTP_PORT}${worker ? ' (worker)' : ''}`);
@@ -446,7 +459,9 @@ class Server {
     if (!config.MEMPOOL.OFFICIAL) {
       aboutRoutes.initRoutes(this.app);
     }
-    drivechainRoutes.initRoutes(this.app); // Chains Explorer: /api/v1/chain, /api/v1/drivechain/*, /api/v1/sidechain/*
+    if (l2Role() !== 'full') { // a sidechain's /api/v1/chain and /api/v1/l2/* are its index backend's
+      drivechainRoutes.initRoutes(this.app); // Chains Explorer: /api/v1/chain, /api/v1/drivechain/*, /api/v1/chain/*
+    }
   }
 
   healthCheck(): void {

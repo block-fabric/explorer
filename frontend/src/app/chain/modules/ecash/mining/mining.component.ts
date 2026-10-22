@@ -112,34 +112,100 @@ export class ChainMiningComponent implements OnInit, OnDestroy {
     return { trigger: 'axis', backgroundColor: 'rgba(17,19,31,0.95)', borderColor: '#000', textStyle: { color: '#fff', fontSize: 12 }, confine: true, ...extra };
   }
 
+  /**
+   * The pools as an "onion" donut (as on mempool.guide/mining): one wedge per pool, its angle the pool's share of the
+   * blocks; a DATUM pool's wedge is split into concentric bands from the hole outward, one per DATUM miner, each band's
+   * AREA its share of the pool's blocks (r_i = sqrt(r0² + (R² − r0²) · cumulative share)). An ECharts custom series
+   * draws the annular sectors; a transparent pie of the same values on top carries the labels and their leader lines.
+   */
+  private onion(pools: any[]): any {
+    const R0 = 0.16;
+    const R1 = 0.62;
+    const total = pools.reduce((a, p) => a + (p.blocks || 0), 0) || 1;
+    // value: [start, end] as fractions of the circle, [inner, outer] as fractions of the pool's blocks
+    const items: { value: number[]; fill: string; tip: string }[] = [];
+    let acc = 0;
+    for (const p of pools) {
+      const color = this.colorOf(p.tag);
+      const name = p.name || this.nameOf(p.tag);
+      const a0 = acc / total;
+      acc += p.blocks || 0;
+      const a1 = acc / total;
+      const poolTip = `<b>${escapeHtml(name)}</b><br>${p.blocks} blocks (${this.pct(p.share, 1)})`;
+      const bands: { label: string; blocks: number; tagged: boolean }[] = [];
+      if (p.datum && p.miners?.length) {
+        const miners = [...p.miners].sort((x: any, y: any) => y.blocks - x.blocks);
+        for (const m of miners) {
+          bands.push({ label: m.name || m.tag, blocks: m.blocks, tagged: true });
+        }
+        const known = miners.reduce((x: number, m: any) => x + m.blocks, 0);
+        if (p.blocks > known) {
+          bands.push({ label: 'no miner tag', blocks: p.blocks - known, tagged: false });
+        }
+      }
+      if (!bands.length || !p.blocks) {
+        items.push({ value: [a0, a1, 0, 1], fill: color, tip: poolTip });
+        continue;
+      }
+      let cum = 0;
+      bands.forEach((b, i) => {
+        const f0 = Math.min(1, cum / p.blocks);
+        cum += b.blocks;
+        const f1 = Math.min(1, cum / p.blocks);
+        // lighter and darker steps of the pool's colour, alternating so that neighbouring bands stay apart
+        const step = bands.length > 1 ? i / (bands.length - 1) : 0;
+        items.push({
+          value: [a0, a1, f0, f1],
+          fill: b.tagged ? mix(color, i % 2 ? '#000000' : '#ffffff', 0.06 + 0.4 * step) : mix(color, '#11131f', 0.6),
+          tip: `${poolTip}<br>${b.tagged ? 'DATUM miner ' : ''}<b>${escapeHtml(b.label)}</b>: ${b.blocks} block${b.blocks === 1 ? '' : 's'} (${this.pct(b.blocks / p.blocks, 1)} of the pool)`,
+        });
+      });
+    }
+    return {
+      animation: false, backgroundColor: 'transparent',
+      tooltip: { trigger: 'item', backgroundColor: 'rgba(17,19,31,0.95)', borderColor: '#000', textStyle: { color: '#fff', fontSize: 12 }, confine: true,
+        formatter: (x: any) => x.seriesType === 'custom' ? (items[x.dataIndex]?.tip ?? '') : '' },
+      series: [
+        {
+          type: 'custom', coordinateSystem: 'none', data: items.map(it => it.value),
+          renderItem: (params: any, api: any) => {
+            const it = items[params.dataIndex];
+            const [a0, a1, f0, f1] = it.value;
+            const w = api.getWidth();
+            const h = api.getHeight();
+            const size = Math.min(w, h) / 2;
+            const r0 = R0 * size;
+            const r1 = R1 * size;
+            const radius = (f: number) => Math.sqrt(r0 * r0 + (r1 * r1 - r0 * r0) * f);
+            return {
+              type: 'sector',
+              shape: { cx: w / 2, cy: h / 2, r0: radius(f0), r: radius(f1),
+                startAngle: -Math.PI / 2 + 2 * Math.PI * a0, endAngle: -Math.PI / 2 + 2 * Math.PI * a1, clockwise: true },
+              style: { fill: it.fill, stroke: '#11131f', lineWidth: f0 === 0 && f1 === 1 ? 1.2 : 0.5 },
+              emphasis: { style: { stroke: '#ffffff', lineWidth: 1.2 } },
+            };
+          },
+        },
+        {
+          // the labels and their leader lines: a pie of the same angles that draws nothing else
+          type: 'pie', silent: true, tooltip: { show: false }, radius: [`${R0 * 100}%`, `${R1 * 100}%`], center: ['50%', '50%'],
+          startAngle: 90, clockwise: true, minAngle: 0, avoidLabelOverlap: true, emphasis: { disabled: true }, z: 3,
+          itemStyle: { color: 'transparent', borderWidth: 0 },
+          label: { color: '#ffffffcc', fontSize: 11, alignTo: 'edge', edgeDistance: 6, overflow: 'truncate', formatter: (x: any) => `${x.name}  ${x.percent}%` },
+          labelLine: { length: 10, length2: 0, lineStyle: { color: '#ffffff55' } },
+          data: pools.map(p => {
+            const show = (p.blocks || 0) / total >= 0.012;
+            return { name: p.name || this.nameOf(p.tag), value: p.blocks, label: { show }, labelLine: { show } };
+          }),
+        },
+      ],
+    };
+  }
+
   private build(): void {
     const d = this.data;
     const pools: any[] = d.pools;
-    // the donut: pools inside; DATUM pools split into their miners outside
-    const inner = pools.map(p => ({ name: p.name || p.tag, value: p.blocks, itemStyle: { color: this.colorOf(p.tag) } }));
-    const outer: any[] = [];
-    for (const p of pools) {
-      if (p.datum && p.miners.length) {
-        const known = p.miners.reduce((a: number, m: any) => a + m.blocks, 0);
-        p.miners.forEach((m: any, i: number) => outer.push({
-          name: `${m.name || m.tag} (${p.name || p.tag})`, value: m.blocks,
-          itemStyle: { color: this.colorOf(p.tag), opacity: 0.45 + 0.55 * (1 - i / Math.max(1, p.miners.length)) },
-        }));
-        if (p.blocks > known) { outer.push({ name: `${p.name || p.tag}: no miner tag`, value: p.blocks - known, itemStyle: { color: '#ffffff18' } }); }
-      } else {
-        outer.push({ name: p.name || p.tag, value: p.blocks, itemStyle: { color: this.colorOf(p.tag), opacity: 0.25 } });
-      }
-    }
-    this.charts.donut = {
-      animation: false, backgroundColor: 'transparent',
-      tooltip: { trigger: 'item', backgroundColor: 'rgba(17,19,31,0.95)', textStyle: { color: '#fff', fontSize: 12 }, formatter: (x: any) => `${escapeHtml(x.name)}<br>${x.value} blocks (${x.percent}%)` },
-      series: [
-        { type: 'pie', radius: ['0%', '48%'], center: ['50%', '50%'], label: { position: 'inner', color: '#11131f', fontSize: 11, fontWeight: 700, formatter: (x: any) => x.percent > 6 ? x.name : '' },
-          itemStyle: { borderColor: '#11131f', borderWidth: 2 }, data: inner },
-        { type: 'pie', radius: ['55%', '78%'], center: ['50%', '50%'], label: { color: '#ffffffcc', fontSize: 11, formatter: (x: any) => x.percent > 3 ? `${x.name}\n${x.percent}%` : '' },
-          labelLine: { lineStyle: { color: '#ffffff44' } }, itemStyle: { borderColor: '#11131f', borderWidth: 1 }, data: outer },
-      ],
-    };
+    this.charts.donut = this.onion(pools);
 
     const s: any[] = d.series;
     const x = s.map(b => b.from === b.to ? `${b.to}` : `${b.from}-${b.to}`);
@@ -199,4 +265,13 @@ export class ChainMiningComponent implements OnInit, OnDestroy {
       series: [{ type: 'bar', barMaxWidth: 16, itemStyle: { color: '#f5b83d' }, data: s.map(b => b.fees / 1e8) }],
     };
   }
+}
+
+/** #rrggbb mixed towards another #rrggbb by t (0..1) */
+function mix(a: string, b: string, t: number): string {
+  const pa = parseInt(a.slice(1), 16);
+  const pb = parseInt(b.slice(1), 16);
+  const ch = (n: number, sh: number) => (n >> sh) & 255;
+  const c = [16, 8, 0].map(sh => Math.round(ch(pa, sh) * (1 - t) + ch(pb, sh) * t));
+  return '#' + c.map(x => x.toString(16).padStart(2, '0')).join('');
 }

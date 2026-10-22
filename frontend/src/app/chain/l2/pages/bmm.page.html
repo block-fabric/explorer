@@ -44,7 +44,7 @@
       </div>
       <div class="kpi">
         <div class="k-label">Bids paid to eCash miners</div>
-        <div class="k-value"><app-l2-amount [sats]="stats?.bids ?? 0"></app-l2-amount></div>
+        <div class="k-value"><app-l2-amount [sats]="stats?.bids ?? 0" [compact]="true" class="wrap"></app-l2-amount></div>
         <div class="k-sub">median {{ (stats?.bidMedian ?? 0) | number }} · avg {{ (stats?.bidAvg ?? 0) | number }} · max {{ (stats?.bidMax ?? 0) | number }} sats</div>
       </div>
       <div class="kpi">
@@ -60,12 +60,12 @@
       </div>
       <div class="kpi">
         <div class="k-label">Escrow on eCash</div>
-        <div class="k-value"><app-l2-amount [sats]="live?.escrow ?? 0"></app-l2-amount></div>
+        <div class="k-value"><app-l2-amount [sats]="live?.escrow ?? 0" [compact]="true" class="wrap"></app-l2-amount></div>
         <div class="k-sub">@if (live?.escrowTxid) {<app-l2-main-link kind="tx" [id]="live.escrowTxid" [short]="true"></app-l2-main-link>} @else {no escrow output}</div>
       </div>
       <div class="kpi">
         <div class="k-label">Net peg flow</div>
-        <div class="k-value"><app-l2-amount [sats]="stats?.netFlow ?? 0" [signed]="true"></app-l2-amount></div>
+        <div class="k-value"><app-l2-amount [sats]="stats?.netFlow ?? 0" [signed]="true" [compact]="true" class="wrap"></app-l2-amount></div>
         <div class="k-sub">{{ (stats?.deposits ?? 0) | number }} deposits in · {{ (stats?.withdrawals ?? 0) | number }} withdrawals out</div>
       </div>
       <div class="kpi">
@@ -79,7 +79,7 @@
     <h2 class="cp-h2">Blind merged mining, block by block <span class="cp-h2-sub">the newest {{ d.coverage.length }} eCash blocks; a lit cell carried a {{ profile.name }} block, brighter = higher bid</span></h2>
     <div class="box grid-box">
       <div class="cov-row" [style.--sc]="color">
-        <div class="cov-name">{{ profile.name }}</div>
+        <div class="cov-name"><app-sidechain-label [chain]="profile.id" [name]="profile.name"></app-sidechain-label></div>
         <div class="cov-cells">
           @for (b of d.coverage; track b.height) {
             @if (accepted(b); as a) {
@@ -174,7 +174,7 @@
       <div class="box table-box">
         <h5>eCash miners that carried {{ profile.name }} <small>{{ windowLabel() }}</small></h5>
         <table class="table table-borderless table-sm cp-table">
-          <thead><tr><th>Miner</th><th class="text-right">Blocks</th><th class="text-right">{{ profile.name }} blocks</th><th class="text-right">Bids earned</th></tr></thead>
+          <thead><tr><th>Miner</th><th class="text-right">Blocks</th><th class="text-right"><app-sidechain-label [chain]="profile.id" [name]="profile.name"></app-sidechain-label> blocks</th><th class="text-right">Bids earned</th></tr></thead>
           <tbody>
             @for (m of carriers(); track m.tag) {
               <tr>
@@ -217,10 +217,10 @@
         <table class="table table-borderless table-sm cp-table mt-2">
           <thead>
             <tr>
-              <th>eCash block</th><th>Age</th>
+              <th><app-sidechain-label chain="ecash" name="eCash"></app-sidechain-label> block</th><th>Age</th>
               @switch (feed) {
-                @case ('bmm') {<th>{{ profile.name }} block</th><th class="text-right">Bid</th>}
-                @case ('bmm-requests') {<th>{{ profile.name }} block asked for</th><th class="text-right">Bid</th>}
+                @case ('bmm') {<th><app-sidechain-label [chain]="profile.id" [name]="profile.name"></app-sidechain-label> block</th><th class="text-right">Bid</th>}
+                @case ('bmm-requests') {<th><app-sidechain-label [chain]="profile.id" [name]="profile.name"></app-sidechain-label> block asked for</th><th class="text-right">Bid</th>}
                 @case ('deposits') {<th>To</th><th class="text-right">Amount</th>}
                 @case ('withdrawals') {<th>Bundle</th><th class="text-right">Amount</th>}
                 @case ('bundles') {<th>Bundle</th><th class="text-right">Status</th>}

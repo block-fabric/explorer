@@ -3,10 +3,9 @@ import { UntypedFormBuilder, UntypedFormGroup } from '@angular/forms';
 import { StorageService } from '@app/services/storage.service';
 import { StateService } from '@app/services/state.service';
 
-import { PROFILE } from '@app/chain/profiles';
+import { L2_AMOUNT_MODE_KEY, PROFILE } from '@app/chain/profiles';
 
-/** the storage key of a sidechain explorer's amount mode ('sats' or 'btc', i.e. ECX) */
-export const L2_AMOUNT_MODE_KEY = 'l2-view-amount-mode';
+export { L2_AMOUNT_MODE_KEY } from '@app/chain/profiles';
 @Component({
   selector: 'app-amount-selector',
   templateUrl: './amount-selector.component.html',

@@ -9,6 +9,7 @@ import { WebsocketService } from '@app/services/websocket.service';
 import { SeoService } from '@app/services/seo.service';
 import { ActiveFilter, FilterMode, GradientMode, toFlags } from '@app/shared/filters.utils';
 import { detectWebGL } from '@app/shared/graphs.utils';
+import { PROFILE } from '@app/chain/profiles';
 
 interface MempoolBlocksData {
   blocks: number;
@@ -36,6 +37,11 @@ interface MempoolStatsData {
 })
 export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
   network$: Observable<string>;
+  /** eCash Explorer: a sidechain explorer (chain/l2/full): its sidechain widgets in place of the drivechain and mining ones */
+  l2 = PROFILE.kind === 'l2';
+  profile = PROFILE;
+  /** a sidechain backend may give no fee estimates (all zero): then the fees card stays out */
+  hasFees$: Observable<boolean>;
   mempoolBlocksData$: Observable<MempoolBlocksData>;
   mempoolInfoData$: Observable<MempoolInfoData>;
   mempoolLoadingStatus$: Observable<number>;
@@ -120,6 +126,11 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
     this.websocketService.want(['blocks', 'stats', 'mempool-blocks', 'live-2h-chart']);
     this.websocketService.startTrackRbfSummary();
     this.network$ = merge(of(''), this.stateService.networkChanged$);
+    this.hasFees$ = !this.l2 ? of(true) : this.stateService.recommendedFees$.pipe(
+      map(f => !!f && [f.fastestFee, f.halfHourFee, f.hourFee, f.economyFee, f.minimumFee].some(x => Number(x) > 0)),
+      startWith(false),
+      distinctUntilChanged(),
+    );
     this.mempoolLoadingStatus$ = this.stateService.loadingIndicators$
       .pipe(
         map((indicators) => indicators.mempool !== undefined ? indicators.mempool : 100)

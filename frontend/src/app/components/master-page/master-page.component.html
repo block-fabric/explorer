@@ -122,7 +122,7 @@
         </a>
       </li>
       <!-- eCash Explorer: the pages of this chain (Drivechain) and of its module -->
-      <li class="nav-item" routerLinkActive="active" *ngFor="let item of chainNav" [id]="'btn-' + item.path.slice(1)">
+      <li class="nav-item" routerLinkActive="active" *ngFor="let item of chainNav$ | async" [id]="'btn-' + item.path.slice(1)">
         <a class="nav-link" [routerLink]="[item.path | relativeUrl]" (click)="collapse()" [title]="item.title" [attr.aria-label]="item.title">
           <div class="svg-wrapper"><app-svg-images [name]="item.icon" [fill]="profile.id" width="21.59" height="100%"></app-svg-images></div>
         </a>

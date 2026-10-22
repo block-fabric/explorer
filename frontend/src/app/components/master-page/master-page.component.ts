@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, Input, ViewChild } from '@angular/core';
 import { Router } from '@angular/router';
 import { Env, StateService } from '@app/services/state.service';
-import { Observable, map, merge, of, Subscription } from 'rxjs';
+import { Observable, combineLatest, map, merge, of, startWith, Subscription } from 'rxjs';
 import { LanguageService } from '@app/services/language.service';
 import { EnterpriseService } from '@app/services/enterprise.service';
 import { NavigationService } from '@app/services/navigation.service';
@@ -11,6 +11,8 @@ import { AuthServiceMempool } from '@app/services/auth.service';
 
 import { CHAIN_NETWORK, MODULE, NETWORK_NAME, PROFILE, NavItem } from '@app/chain/profiles';
 import { ChainApiService } from '@app/chain/chain-api.service';
+import { L2ApiService } from '@app/chain/l2/l2-api.service';
+import { L2_NAV, l2FeatureNav } from '@app/chain/l2/l2-nav';
 @Component({
   selector: 'app-master-page',
   templateUrl: './master-page.component.html',
@@ -26,6 +28,9 @@ export class MasterPageComponent implements OnInit, OnDestroy {
     { path: '/drivechain', title: 'Drivechain: sidechains, BMM, deposits, withdrawals, votes', icon: 'nav-drivechain' },
     ...(MODULE.nav ?? []),
   ];
+  /** the nav entries of this chain's pages: the eCash explorer's above; a sidechain's (deposits and withdrawals, BMM,
+   * the feature pages its backend serves) from GET /api/v1/chain */
+  chainNav$: Observable<NavItem[]>;
   networks$: Observable<{ others: { id: string; name: string; explorer: string | null }[] }>;
   @Input() headerVisible = true;
   @Input() footerVisibleOverride: boolean | null = null;
@@ -63,9 +68,16 @@ export class MasterPageComponent implements OnInit, OnDestroy {
     private authService: AuthServiceMempool,
     private router: Router,
     private chainApi: ChainApiService,
+    private l2Api: L2ApiService,
   ) { }
 
   ngOnInit(): void {
+    this.chainNav$ = PROFILE.kind !== 'l2' ? of(this.chainNav) : combineLatest([
+      this.l2Api.features$, this.chainApi.chain$().pipe(startWith(null)),
+    ]).pipe(
+      // upstream's own Blocks entry stays; the BMM page only where the backend reads the eCash drivechain index
+      map(([f, c]) => [...L2_NAV.filter(n => n.path !== '/blocks' && (n.path !== '/bmm' || c?.bmm !== false)), ...l2FeatureNav(f, true)]),
+    );
     this.networks$ = this.chainApi.chain$().pipe(
       map(c => ({ others: (c?.networks ?? []).filter(n => n.id !== (c?.network ?? CHAIN_NETWORK) && !!n.explorer) })),
     );

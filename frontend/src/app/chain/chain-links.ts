@@ -1,5 +1,5 @@
 import { ChainInfo } from '@app/chain/chain.interfaces';
-import { PROFILE, PROFILES } from '@app/chain/profiles';
+import { NETWORKS, PROFILE, PROFILES } from '@app/chain/profiles';
 
 export interface ChainLink {
   id: string;
@@ -26,7 +26,10 @@ export function chainLinks(c: ChainInfo | null): ChainLink[] {
   const ecashUrl = PROFILE.mainchain ? null : (c?.mainchainExplorer ?? explorers['ecash'] ?? null);
   out.push(link('ecash', ecashUrl, 'eCash'));
   const slots = new Map((c?.sidechains ?? []).map(s => [s.id, s]));
-  const ids = Object.keys(explorers).filter(id => id !== 'ecash');
+  // the explorers map is keyed by chain (profile) id and, for the eCash explorer, by network id too (ecashbeta, ...):
+  // the network ids belong to the network switcher, not here; the eCash entry is the mainchain explorer above
+  const networkIds = new Set<string>([...Object.keys(NETWORKS), ...(c?.networks ?? []).map(n => n.id)]);
+  const ids = Object.keys(explorers).filter(id => id !== 'ecash' && (!networkIds.has(id) || !!PROFILES[id]));
   if (!PROFILE.mainchain && !ids.includes(PROFILE.id)) {
     ids.push(PROFILE.id);
   }

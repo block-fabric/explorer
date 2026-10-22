@@ -22,6 +22,8 @@ export class ChainBlockPanelComponent implements OnChanges, OnDestroy {
   @Input() height: number;
 
   profile = PROFILE;
+  /** a sidechain explorer: its own panel (chain/l2/full/l2-block-panel.component.ts) */
+  l2 = PROFILE.kind === 'l2';
   block: DrivechainBlock | null = null;
   loading = true;
   error: string | null = null;
@@ -34,7 +36,7 @@ export class ChainBlockPanelComponent implements OnChanges, OnDestroy {
     this.loading = true;
     this.block = null;
     this.error = null;
-    if (!this.blockHash) {
+    if (!this.blockHash || this.l2) {
       return;
     }
     // A new block can be shown before the index has it: ask again a few times

@@ -10,6 +10,7 @@ import { SeoService } from '@app/services/seo.service';
 import { OpenGraphService } from '@app/services/opengraph.service';
 import { seoDescriptionNetwork } from '@app/shared/common.utils';
 import { RelativeUrlPipe } from '@app/shared/pipes/relative-url/relative-url.pipe';
+import { PROFILE } from '@app/chain/profiles';
 
 @Component({
   selector: 'app-blocks-list',
@@ -25,6 +26,7 @@ export class BlocksList implements OnInit {
 
   isMempoolModule = false;
   indexingAvailable = false;
+  l2 = PROFILE.kind === 'l2'; // eCash Explorer: a sidechain explorer (chain/l2/full)
   auditAvailable = false;
   isLoading = true;
   fromBlockHeight = undefined;

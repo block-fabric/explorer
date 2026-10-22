@@ -11,25 +11,27 @@ import { PROFILE, slotColor } from '@app/chain/profiles';
 @Component({
   selector: 'app-chain-tx-panel',
   template: `
-    <ng-container *ngIf="info as i">
+    <!-- a sidechain transaction (chain/l2/full): what its outputs hold, its TxData, deposits, signers -->
+    <app-l2-view *ngIf="l2" view="tx" [inputs]="{ txid: txid }"></app-l2-view>
+    <ng-container *ngIf="!l2 && info as i">
       <div class="box ct-box" [style.--sc]="color">
         <div *ngIf="i.deposit as d" class="ct-row">
           <span class="ct-tag">M5</span>
           <span class="ct-main">Deposit of <b><app-amount [satoshis]="d.amount" digitsInfo="1.2-8" [noFiat]="true"></app-amount></b> into
-            <span class="sc-name">{{ d.name }}</span> <span class="ct-slot">slot {{ d.slot }}</span></span>
+            <app-sidechain-label [slot]="d.slot" [name]="d.name" [colored]="true"></app-sidechain-label> <span class="ct-slot">slot {{ d.slot }}</span></span>
           <span class="ct-sub">credited on the sidechain to <span class="mono">{{ destAddress(d.destination) }}</span>
             · escrow sequence {{ d.sequence | number }} · in block {{ i.height | number }}</span>
         </div>
         <div *ngIf="i.withdrawal as w" class="ct-row">
           <span class="ct-tag">M6</span>
           <span class="ct-main">Withdrawal of <b><app-amount [satoshis]="w.amount" digitsInfo="1.2-8" [noFiat]="true"></app-amount></b> from
-            <span class="sc-name">{{ w.name }}</span> <span class="ct-slot">slot {{ w.slot }}</span></span>
+            <app-sidechain-label [slot]="w.slot" [name]="w.name" [colored]="true"></app-sidechain-label> <span class="ct-slot">slot {{ w.slot }}</span></span>
           <span class="ct-sub">{{ w.payouts.length }} payout{{ w.payouts.length === 1 ? '' : 's' }} · bundle <app-truncate class="mono" [inline]="true" [text]="w.bundle" [lastChars]="8"></app-truncate> paid in block {{ i.height | number }} after the miners' vote</span>
         </div>
         <div *ngIf="i.bmmRequest as r" class="ct-row">
           <span class="ct-tag">M8</span>
           <span class="ct-main">BMM bid of <b>{{ r.bid | number }} sats</b> for a
-            <span class="sc-name">{{ r.name }}</span> block</span>
+            <app-sidechain-label [slot]="r.slot" [name]="r.name" [colored]="true"></app-sidechain-label> block</span>
           <span class="ct-sub">
             <app-truncate class="mono" [inline]="true" [text]="r.sideBlock" [lastChars]="8"></app-truncate>
             · <span [class.pos]="r.accepted" [class.neg]="!r.accepted">{{ r.accepted ? 'accepted (M7) by the miner of block ' + (i.height | number) : 'not accepted: the miner of block ' + (i.height | number) + ' took the fee and committed to another block' }}</span>
@@ -58,6 +60,8 @@ export class ChainTxPanelComponent implements OnChanges, OnDestroy {
   @Input() txid: string;
 
   profile = PROFILE;
+  /** a sidechain explorer: its own panel (chain/l2/full/l2-tx-panel.component.ts) */
+  l2 = PROFILE.kind === 'l2';
   info: ChainTxInfo | null = null;
   color = PROFILE.color;
   private sub: Subscription;
@@ -67,7 +71,7 @@ export class ChainTxPanelComponent implements OnChanges, OnDestroy {
   ngOnChanges(): void {
     this.sub?.unsubscribe();
     this.info = null;
-    if (!this.txid) { return; }
+    if (!this.txid || this.l2) { return; }
     this.sub = this.api.tx$(this.txid).subscribe((i) => {
       this.info = i && (i.deposit || i.withdrawal || i.bmmRequest) ? i : null;
       const slot = i?.deposit?.slot ?? i?.withdrawal?.slot ?? i?.bmmRequest?.slot;

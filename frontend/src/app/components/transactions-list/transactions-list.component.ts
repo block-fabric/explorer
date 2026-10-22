@@ -1,4 +1,4 @@
-import { Component, OnInit, Input, ChangeDetectionStrategy, OnChanges, Output, EventEmitter, ChangeDetectorRef, OnDestroy } from '@angular/core';
+import { Component, OnInit, Input, ChangeDetectionStrategy, OnChanges, Output, EventEmitter, ChangeDetectorRef, OnDestroy, Injector, inject } from '@angular/core';
 import { StateService, SignaturesMode } from '@app/services/state.service';
 import { CacheService } from '@app/services/cache.service';
 import { Observable, ReplaySubject, BehaviorSubject, merge, Subscription, of, forkJoin } from 'rxjs';
@@ -19,9 +19,11 @@ import { processInputSignatures, Sighash, SigInfo, SighashLabels, parseTaproot }
 import { ActivatedRoute } from '@angular/router';
 import { SighashFlag } from '@app/shared/transaction.utils';
 
-import { OutputLabel, labelEscrowInput, labelOutputs } from '@app/chain/output-labels';
+import { OutputLabel, labelEscrowInput, labelOutputs, sidechainName } from '@app/chain/output-labels';
 import { DrivechainLiveService } from '@app/chain/drivechain-live.service';
-import { slotMarkId } from '@app/chain/profiles';
+import { PROFILE, slotMarkId } from '@app/chain/profiles';
+import { L2LiveService } from '@app/chain/l2/full/l2-live.service';
+import { L2ApiService } from '@app/chain/l2/l2-api.service';
 @Component({
   selector: 'app-transactions-list',
   templateUrl: './transactions-list.component.html',
@@ -102,6 +104,15 @@ export class TransactionsListComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   ngOnInit(): void {
+    // eCash Explorer: a sidechain's inputs that spend deposits from eCash (chain/l2/full), once they are known
+    if (this.l2) {
+      this.l2Live = this.injector.get(L2LiveService);
+      this.l2DepositsSub = this.l2Live.txDeposits$.subscribe(() => this.ref.markForCheck());
+      this.l2MainSub = this.injector.get(L2ApiService).mainchain$.subscribe((base) => {
+        this.l2MainBase = base;
+        this.ref.markForCheck();
+      });
+    }
     // eCash Explorer: the output labels name the sidechains once their names come in
     this.sidechainNamesSub = this.drivechainLive.names$.subscribe(() => {
       this.chainLabelCache.clear();
@@ -526,8 +537,27 @@ export class TransactionsListComponent implements OnInit, OnChanges, OnDestroy {
     return labels;
   }
 
+  // eCash Explorer: a sidechain explorer: the input's eCash deposit transaction, when it spends a deposit (its outpoint
+  // is then an eCash txid, not a sidechain transaction)
+  l2 = PROFILE.kind === 'l2';
+  l2MainBase: string | null = null;
+  private l2Live: L2LiveService | null = null;
+  private l2DepositsSub: Subscription | null = null;
+  private l2MainSub: Subscription | null = null;
+  private injector = inject(Injector);
+  l2Deposit(tx: Transaction, vindex: number): string | null {
+    if (!this.l2Live || !tx?.txid || tx.vin?.[0]?.is_coinbase) {
+      return null;
+    }
+    return this.l2Live.depositOf(tx.txid, vindex) ?? null;
+  }
+
   escrowInputLabel(vin: any): OutputLabel | null {
     return labelEscrowInput(vin?.prevout?.scriptpubkey);
+  }
+
+  chainName(slot: number): string {
+    return sidechainName(slot);
   }
 
   chainMarkId(slot: number): string {
@@ -746,6 +776,8 @@ export class TransactionsListComponent implements OnInit, OnChanges, OnDestroy {
 
   ngOnDestroy(): void {
     this.sidechainNamesSub?.unsubscribe();
+    this.l2DepositsSub?.unsubscribe();
+    this.l2MainSub?.unsubscribe();
     this.outspendsSubscription.unsubscribe();
     this.currencyChangeSubscription?.unsubscribe();
     this.networkSubscription.unsubscribe();

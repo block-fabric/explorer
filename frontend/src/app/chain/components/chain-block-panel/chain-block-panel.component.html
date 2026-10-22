@@ -1,5 +1,7 @@
+<!-- a sidechain block (chain/l2/full): the eCash block that carried it, its BMM bid and competition, its deposits -->
+<app-l2-view *ngIf="l2" view="block" [inputs]="{ hash: blockHash, height: height }"></app-l2-view>
 <!-- What this block did for the drivechain -->
-<ng-container>
+<ng-container *ngIf="!l2">
   <div class="title-row">
     <h2 class="dc-title">Drivechain</h2>
     <span class="dc-sub" *ngIf="block">BIP300 / BIP301 messages and escrow changes of block {{ block.height }}</span>
@@ -19,7 +21,7 @@
           <thead><tr><th>Sidechain</th><th>Sidechain block</th><th class="text-right">Bid</th><th class="d-none d-md-table-cell">Request (M8)</th></tr></thead>
           <tbody>
             <tr *ngFor="let a of block.bmm">
-              <td><span class="sc-name" [style.--sc]="colorOf(a.slot)" [title]="a.name + ' (slot ' + a.slot + ')'">{{ a.name }}</span></td>
+              <td><app-sidechain-label [slot]="a.slot" [name]="a.name" [title]="a.name + ' (slot ' + a.slot + ')'"></app-sidechain-label></td>
               <td class="mono">
                 <span [title]="a.sideBlock"><app-truncate [text]="a.sideBlock" [lastChars]="8"></app-truncate></span>
               </td>
@@ -36,7 +38,7 @@
         <table class="table table-borderless table-sm dc-table">
           <tbody>
             <tr *ngFor="let r of unaccepted">
-              <td><span class="sc-name" [style.--sc]="colorOf(r.slot)" [title]="r.name + ' (slot ' + r.slot + ')'">{{ r.name }}</span></td>
+              <td><app-sidechain-label [slot]="r.slot" [name]="r.name" [title]="r.name + ' (slot ' + r.slot + ')'"></app-sidechain-label></td>
               <td class="mono" [title]="r.sideBlock"><app-truncate [text]="r.sideBlock" [lastChars]="8"></app-truncate></td>
               <td class="text-right"><app-amount [satoshis]="r.bid" digitsInfo="1.0-8" [noFiat]="true"></app-amount></td>
               <td class="mono"><a [routerLink]="['/tx' | relativeUrl, r.txid]"><app-truncate [text]="r.txid" [lastChars]="8"></app-truncate></a></td>
@@ -52,7 +54,7 @@
           <thead><tr><th>Sidechain</th><th>Destination</th><th class="text-right">Amount</th><th>Transaction</th></tr></thead>
           <tbody>
             <tr *ngFor="let d of block.deposits">
-              <td><span class="sc-name" [style.--sc]="colorOf(d.slot)" [title]="d.name + ' (slot ' + d.slot + ')'">{{ d.name }}</span></td>
+              <td><app-sidechain-label [slot]="d.slot" [name]="d.name" [title]="d.name + ' (slot ' + d.slot + ')'"></app-sidechain-label></td>
               <td class="mono dest" [title]="d.destination">{{ d.destination }}</td>
               <td class="text-right"><app-amount [satoshis]="d.amount" digitsInfo="1.2-8" [noFiat]="true"></app-amount></td>
               <td class="mono"><a [routerLink]="['/tx' | relativeUrl, d.txid]"><app-truncate [text]="d.txid" [lastChars]="8"></app-truncate></a></td>
@@ -68,7 +70,7 @@
           <thead><tr><th>Sidechain</th><th>Bundle</th><th class="text-right">Paid out</th><th>Transaction</th></tr></thead>
           <tbody>
             <tr *ngFor="let w of block.withdrawals">
-              <td><span class="sc-name" [style.--sc]="colorOf(w.slot)" [title]="w.name + ' (slot ' + w.slot + ')'">{{ w.name }}</span></td>
+              <td><app-sidechain-label [slot]="w.slot" [name]="w.name" [title]="w.name + ' (slot ' + w.slot + ')'"></app-sidechain-label></td>
               <td class="mono" [title]="w.bundle"><app-truncate [text]="w.bundle" [lastChars]="8"></app-truncate> <span class="text-muted">· {{ w.payouts.length }} payout{{ w.payouts.length === 1 ? '' : 's' }}</span></td>
               <td class="text-right"><app-amount [satoshis]="w.amount" digitsInfo="1.2-8" [noFiat]="true"></app-amount></td>
               <td class="mono"><a [routerLink]="['/tx' | relativeUrl, w.txid]"><app-truncate [text]="w.txid" [lastChars]="8"></app-truncate></a></td>
@@ -86,7 +88,7 @@
           <thead><tr><th>Sidechain</th><th>Vote</th><th>Bundle</th><th class="text-right">Score after</th></tr></thead>
           <tbody>
             <tr *ngFor="let v of castVotes">
-              <td><span class="sc-name" [style.--sc]="colorOf(v.slot)" [title]="v.name + ' (slot ' + v.slot + ')'">{{ v.name }}</span></td>
+              <td><app-sidechain-label [slot]="v.slot" [name]="v.name" [title]="v.name + ' (slot ' + v.slot + ')'"></app-sidechain-label></td>
               <td><span class="vote" [class.up]="v.vote === 'upvote'" [class.down]="v.vote === 'downvote'">{{ v.vote === 'upvote' ? '▲ upvote' : '▼ downvote all' }}</span></td>
               <td class="mono"><app-truncate *ngIf="v.bundle; else bundleIndex" [text]="v.bundle" [lastChars]="8"></app-truncate><ng-template #bundleIndex>{{ v.vote === 'upvote' ? '#' + v.value : '' }}</ng-template></td>
               <td class="text-right">{{ scoreAfter(v.slot, v.bundle) ?? '' }}</td>
@@ -101,12 +103,12 @@
         <table class="table table-borderless table-sm dc-table">
           <tbody>
             <tr *ngFor="let b of block.bundlesProposed">
-              <td><span class="sc-name" [style.--sc]="colorOf(b.slot)" [title]="b.name + ' (slot ' + b.slot + ')'">{{ b.name }}</span></td>
+              <td><app-sidechain-label [slot]="b.slot" [name]="b.name" [title]="b.name + ' (slot ' + b.slot + ')'"></app-sidechain-label></td>
               <td><span class="badge badge-secondary">proposed</span></td>
               <td class="mono" [title]="b.hash"><app-truncate [text]="b.hash" [lastChars]="8"></app-truncate></td>
             </tr>
             <tr *ngFor="let b of block.bundlesClosed">
-              <td><span class="sc-name" [style.--sc]="colorOf(b.slot)" [title]="b.name + ' (slot ' + b.slot + ')'">{{ b.name }}</span></td>
+              <td><app-sidechain-label [slot]="b.slot" [name]="b.name" [title]="b.name + ' (slot ' + b.slot + ')'"></app-sidechain-label></td>
               <td><span class="badge" [class.badge-success]="b.paid" [class.badge-danger]="!b.paid">{{ b.paid ? 'paid' : 'failed' }}</span></td>
               <td class="mono" [title]="b.hash"><app-truncate [text]="b.hash" [lastChars]="8"></app-truncate></td>
             </tr>
@@ -122,13 +124,13 @@
             <tr *ngFor="let p of block.proposals">
               <td>Slot {{ p.slot }}</td>
               <td><span class="badge badge-secondary">proposed</span></td>
-              <td><b>{{ p.title || '(undeclared)' }}</b> <span class="text-muted small">{{ p.description }}</span></td>
+              <td><b><app-sidechain-label [slot]="p.slot" [name]="p.title || '(undeclared)'"></app-sidechain-label></b> <span class="text-muted small">{{ p.description }}</span></td>
               <td class="mono" [title]="p.hash"><app-truncate [text]="p.hash" [lastChars]="8"></app-truncate></td>
             </tr>
             <tr *ngFor="let a of block.acks">
               <td>Slot {{ a.slot }}</td>
               <td><span class="badge badge-info">ack</span></td>
-              <td>{{ a.title || '' }}</td>
+              <td>@if (a.title) {<app-sidechain-label [slot]="a.slot" [name]="a.title"></app-sidechain-label>}</td>
               <td class="mono" [title]="a.hash"><app-truncate [text]="a.hash" [lastChars]="8"></app-truncate></td>
             </tr>
           </tbody>

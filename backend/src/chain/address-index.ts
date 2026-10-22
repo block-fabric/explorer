@@ -34,6 +34,7 @@ interface UndoOp {
   s: string;                  // script
   txid: string;
   out?: string;               // "txid:n" funded by this block
+  replaced?: [number, number]; // the unspent output of the same "txid:n" it replaced: value, height
   spent?: [string, number, number]; // "txid:n", value, height: spent by this block
   delta: number;
   newTx: boolean;
@@ -239,11 +240,18 @@ class AddressIndex {
         const e = this.entry(s, o.scriptPubKey.address ?? null);
         const key = `${tx.txid}:${o.n}`;
         const v = sats(o.value);
+        // a txid seen again while its output is unspent (a sidechain's recurring zero-input txs, BIP30's duplicate
+        // coinbases): the new output replaces the old one, as the node's UTXO set does
+        const replaced = e.u[key];
+        if (replaced) {
+          e.fc--;
+          e.fs -= replaced[0];
+        }
         e.u[key] = [v, block.height];
         e.fc++;
         e.fs += v;
         deltas.set(s, (deltas.get(s) ?? 0) + v);
-        ops.push({ s, txid: tx.txid, out: key, delta: 0, newTx: false });
+        ops.push({ s, txid: tx.txid, out: key, delta: 0, newTx: false, ...(replaced ? { replaced: [replaced[0], replaced[1]] as [number, number] } : {}) });
       }
       for (const [s, d] of deltas) {
         this.scripts.get(s)!.txs.push([tx.txid, block.height, block.time, d]);
@@ -270,6 +278,11 @@ class AddressIndex {
         delete e.u[op.out];
         e.fc--;
         e.fs -= v;
+        if (op.replaced) {
+          e.u[op.out] = [op.replaced[0], op.replaced[1]];
+          e.fc++;
+          e.fs += op.replaced[0];
+        }
       } else if (op.spent) {
         const [key, v, h] = op.spent;
         e.u[key] = [v, h];

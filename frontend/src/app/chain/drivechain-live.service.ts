@@ -4,6 +4,7 @@ import { ChainApiService } from '@app/chain/chain-api.service';
 import { DrivechainBlockSummary } from '@app/chain/chain.interfaces';
 import { setSidechainNames } from '@app/chain/output-labels';
 import { StateService } from '@app/services/state.service';
+import { PROFILE } from '@app/chain/profiles';
 
 /** What the block cubes and tables show for a block: its drivechain summary */
 export interface BlockMark {
@@ -32,6 +33,12 @@ export class DrivechainLiveService {
   private retries = new Map<string, number>();
 
   constructor(private api: ChainApiService, private stateService: StateService) {
+    if (PROFILE.kind === 'l2') {
+      // a sidechain explorer has no drivechain index of its own (its BMM marks: chain/l2/full/l2-live.service.ts)
+      this.cockpit$ = of(null);
+      this.peg$ = of([]);
+      return;
+    }
     const tick$ = merge(timer(0, 30000), this.stateService.blocks$.pipe(filter(b => !!b?.length), debounceTime(1500)));
 
     this.cockpit$ = tick$.pipe(
@@ -81,7 +88,7 @@ export class DrivechainLiveService {
 
   /** a mark for one block, wherever it is shown (block and transaction pages, old blocks) */
   requestHash(hash: string): void {
-    if (!hash || this.marks.has(hash) || this.asked.has(hash)) {
+    if (PROFILE.kind === 'l2' || !hash || this.marks.has(hash) || this.asked.has(hash)) {
       return;
     }
     this.asked.add(hash);
@@ -103,6 +110,9 @@ export class DrivechainLiveService {
 
   /** marks for blocks shown elsewhere (the blocks list page) */
   request(blocks: { hash: string; height: number }[]): void {
+    if (PROFILE.kind === 'l2') {
+      return;
+    }
     const missing = blocks.filter(b => !this.marks.has(b.hash));
     if (missing.length) {
       this.fetchMarks(missing).subscribe();

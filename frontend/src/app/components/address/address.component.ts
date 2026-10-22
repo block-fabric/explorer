@@ -14,6 +14,7 @@ import { seoDescriptionNetwork } from '@app/shared/common.utils';
 import { AddressInformation } from '@interfaces/node-api.interface';
 import { AddressTypeInfo } from '@app/shared/address-utils';
 import { extractTapLeaves, fillTapTree, convertTextToBuffer, PsbtKeyValue } from '@app/shared/transaction.utils';
+import { PROFILE } from '@app/chain/profiles';
 
 class AddressStats implements ChainStats {
   address: string;
@@ -198,7 +199,8 @@ export class AddressComponent implements OnInit, OnDestroy {
           this.psbtError = undefined;
           document.body.scrollTo(0, 0);
           this.addressString = params.get('id') || '';
-          if (/^[A-Z]{2,5}1[AC-HJ-NP-Z02-9]{8,100}|04[a-fA-F0-9]{128}|(02|03)[a-fA-F0-9]{64}$/.test(this.addressString)) {
+          // (eCash Explorer: not a sidechain's base58 addresses, which are case-sensitive and may look like upper-case bech32)
+          if (PROFILE.kind !== 'l2' && /^[A-Z]{2,5}1[AC-HJ-NP-Z02-9]{8,100}|04[a-fA-F0-9]{128}|(02|03)[a-fA-F0-9]{64}$/.test(this.addressString)) {
             this.addressString = this.addressString.toLowerCase();
           }
           this.seoService.setTitle($localize`:@@address.component.browser-title:Address: ${this.addressString}:INTERPOLATION:`);

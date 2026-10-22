@@ -9,6 +9,7 @@ import { filter, map, scan, share, shareReplay } from 'rxjs/operators';
 import { StorageService } from '@app/services/storage.service';
 import { hasTouchScreen } from '@app/shared/pipes/bytes-pipe/utils';
 import { ActiveFilter } from '@app/shared/filters.utils';
+import { L2_AMOUNT_MODE_KEY, PROFILE } from '@app/chain/profiles';
 
 export interface MarkBlockState {
   blockHeight?: number;
@@ -246,6 +247,18 @@ export class StateService {
       this.env.MINING_DASHBOARD = false;
     }
 
+    // eCash Explorer: a sidechain explorer (chain/profiles.ts L2_FULL) has no proof of work, no price, no lightning,
+    // no accelerator and no other network: whatever the container says, upstream's pages for those stay off
+    if (PROFILE.kind === 'l2') {
+      Object.assign(this.env, {
+        MINING_DASHBOARD: false, LIGHTNING: false, AUDIT: false, ACCELERATOR: false, ACCELERATOR_BUTTON: false,
+        PUBLIC_ACCELERATIONS: false, HISTORICAL_PRICE: false, ADDITIONAL_CURRENCIES: false, STRATUM_ENABLED: false,
+        TESTNET_ENABLED: false, TESTNET4_ENABLED: false, SIGNET_ENABLED: false, REGTEST_ENABLED: false,
+        LIQUID_ENABLED: false, LIQUID_TESTNET_ENABLED: false, MAINNET_ENABLED: true, BASE_MODULE: 'mempool', ROOT_NETWORK: '',
+        OFFICIAL_MEMPOOL_SPACE: false, BLOCK_WEIGHT_UNITS: PROFILE.blockWeightUnits || this.env.BLOCK_WEIGHT_UNITS,
+      });
+    }
+
     if (document.location.hostname.endsWith('.onion')) {
       this.env.SERVICES_API = 'http://mempoolhqx4isw62xs7abwphsq7ldayuidyx2v2oethdhhj6mlo2r6ad.onion/api/v1/services';
     }
@@ -391,6 +404,10 @@ export class StateService {
 
     const viewAmountModePreference = this.storageService.getValue('view-amount-mode') as 'btc' | 'sats' | 'fiat';
     this.viewAmountMode$ = new BehaviorSubject<'btc' | 'sats' | 'fiat'>(viewAmountModePreference || 'btc');
+    if (PROFILE.kind === 'l2') {
+      // eCash Explorer: a sidechain counts in sats ('btc' shows ECX), under its own key, sats by default; never fiat
+      this.viewAmountMode$.next(this.storageService.getValue(L2_AMOUNT_MODE_KEY) === 'btc' ? 'btc' : 'sats');
+    }
 
     const timezonePreference = this.storageService.getValue('timezone-preference');
     this.timezone$ = new BehaviorSubject<string>(timezonePreference || 'local');

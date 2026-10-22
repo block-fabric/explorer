@@ -3,7 +3,8 @@ import { ScriptInfo } from '@app/shared/script.utils';
 import { Vin, Vout } from '@interfaces/electrs.interface';
 import { BECH32_CHARS_LW, BASE58_CHARS, HEX_CHARS } from '@app/shared/regex.utils';
 import { parseTaproot } from './transaction.utils';
-import { CHAIN_NETWORK } from '@app/chain/profiles';
+import { CHAIN_NETWORK, PROFILE } from '@app/chain/profiles';
+import { isL2Address } from '@app/chain/l2/l2-address';
 
 export type AddressType = 'fee'
   | 'empty'
@@ -94,6 +95,10 @@ const pubkeyRegex = RegExp('^' + `(04${HEX_CHARS}{128})|(0[23]${HEX_CHARS}{64})$
 
 export function detectAddressType(address: string, network: string): AddressType {
   network = network || 'mainnet';
+  // eCash Explorer: a sidechain's addresses are its own (chain/l2/l2-address.ts): the hash of a key, as P2PKH is
+  if (PROFILE.kind === 'l2') {
+    return isL2Address(address) ? 'p2pkh' : 'unknown';
+  }
   // normal address types
   const firstChar = address.substring(0, 1);
   if (ADDRESS_PREFIXES[network].base58.pubkey.includes(firstChar) && base58Regex.test(address.slice(1))) {

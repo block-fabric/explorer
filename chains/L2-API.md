@@ -1,12 +1,18 @@
 # Sidechain explorers (L2): backend API
 
-The sidechain explorers run from the same images as the eCash explorer, one backend instance per sidechain and
-network, with `CHAIN.PROFILE` set to the sidechain's module (`thunder`, `bitnames`, `bitassets`, `hivemind`, `zside`, `coinshift`).
-Their nodes are the LayerTwo-API drop-ins (backbone-*), read over plain JSON-RPC 2.0 (`CHAIN.SIDECHAIN_RPC`); the
-eCash side comes from the enforcer (`CHAIN.ENFORCER`), and the BMM views from the eCash explorer's drivechain index
-(`CHAIN.MAINCHAIN_API`: the eCash explorer backend's base URL, e.g. `http://127.0.0.1:18950`; empty = no BMM views,
-`bmm` fields null). An L2 instance does not start upstream mempool's node, mempool,
-statistics or block indexing: it serves only the routes below and `GET /api/v1/chain`.
+The sidechain explorers run from the same images as the eCash explorer, two backend instances per sidechain and
+network, with `CHAIN.PROFILE` set to the sidechain's module (`thunder`, `bitnames`, `bitassets`, `hivemind`, `zside`, `coinshift`)
+and `CHAIN.L2_ROLE` saying which one it is:
+- `index`: the sidechain index (backend/src/chain/l2/). Its nodes are the LayerTwo-API drop-ins (backbone-*), read over
+  plain JSON-RPC 2.0 (`CHAIN.SIDECHAIN_RPC`); the eCash side comes from the enforcer (`CHAIN.ENFORCER`), and the BMM
+  views from the eCash explorer's drivechain index (`CHAIN.MAINCHAIN_API`: the eCash explorer backend's base URL, e.g.
+  `http://127.0.0.1:18950`; empty = no BMM views, `bmm` fields null). It serves the routes below and
+  `GET /api/v1/chain`, and with `CHAIN.L2_RPC_PORT` a Bitcoin Core JSON-RPC view of the index on 127.0.0.1 (see "Core
+  view" at the end). No database, mempool, websocket, statistics or block indexing.
+- `full`: upstream mempool's backend (MariaDB, mempool, websocket, statistics, block indexing, the address index with
+  `CHAIN.ADDRESS_INDEX: true`) whose node (`CORE_RPC`) is that Core view: the whole upstream API (`/api/v1/blocks`,
+  `/api/v1/tx/:txid`, `/api/v1/address/:address`, `/api/v1/mining/...`, the websocket). The eCash drivechain index and
+  the chain module's routes do not run there; nginx sends `/api/v1/chain` and `/api/v1/l2/` to the index instance.
 
 Conventions:
 - Amounts are sats (integers). Sidechain hashes and txids are lower-case hex, not reversed (the nodes' own display
@@ -198,3 +204,37 @@ Replies are cached (15 s cockpit, 10 s events; at most 1000 entries).
 BMM accepts and requests from `l2/bmm/events/bmm`, `l2/bmm/events/bmm-requests` and the cockpit's `coverage[].accepts[]`
 carry `published: boolean`: whether the committed sidechain block exists in this chain. Under BMM an eCash block can
 accept a commitment to a block its producer never broadcasts, so `published: false` is normal ("never published").
+
+## Core view (CHAIN.L2_ROLE index, CHAIN.L2_RPC_PORT): what the full backend reads
+backend/src/chain/l2/core.ts and facade.ts: JSON-RPC 1.0/2.0 POSTs to `/` on 127.0.0.1, Core's methods and error codes
+(-5 unknown tx or block, -8 bad parameter or height, -28 while the index is empty, -32601 anything else; read-only).
+getblockchaininfo (chain `main`), getblockcount, getblockhash, getbestblockhash, getchaintips, getblockheader,
+getblock 0-3, getblockstats, getrawtransaction 0-2 (+ blockhash), decoderawtransaction, gettxout, gettxspendingprevout,
+gettxoutsetinfo, getrawmempool, getmempoolinfo, getmempoolentry, getmempoolancestors/descendants (empty),
+getmininginfo / getnetworkhashps / getdifficulty (difficulty 1, hashrate 0), estimatesmartfee (1 sat/vB),
+getnetworkinfo, getindexinfo (txindex and txospenderindex), validateaddress, uptime.
+
+How the index looks as Bitcoin:
+- txids, block hashes and merkle roots are the chain's own; the header is a synthetic 80-byte Bitcoin header
+  (version 1, prev hash, merkle root, time, bits `1d00ffff`, nonce 0); `time` the BMM eCash block's, kept
+  non-decreasing; difficulty 1, chainwork (height + 1) × 0x100010001; size the chain's own tx size (else the synthetic
+  serialization's), weight = 4 × size; raw blocks and txs are Bitcoin serializations of the same inputs and outputs.
+- Every output's script is P2PKH-shaped, `76a914<the address's 20 bytes>88ac`, `address` the chain's base58; `value` its
+  sats (0 for non-sats content). Extra fields (also on `prevout`): `content` (Content, for anything but sats),
+  `withdrawal: { main_address, value, main_fee }` (value counts value + main fee), `memo`.
+- Inputs name (txid, n) of the tx that made the output (Coinshift's merkle-root coinbase outpoints: the coinbase's
+  txid), `prevout` inline (`getblock 3`, `getrawtransaction 2`), `deposit: true` on a deposit's, `kind: "marketFunds" |
+  "payout"` on Hivemind's (no prevout when the index cannot resolve one). Tx extras: `data` (TxData), `shielded`
+  (zSide), `fee` from the index.
+- Coins that move without a sidechain tx get a synthetic tx with `peg`, after the block's own txs:
+  `peg: "deposit"` (txid = the eCash deposit txid, `mainTxid`; one coinbase-shaped input; the deposit at its eCash vout,
+  lower vouts zero-value OP_RETURN padding), `peg: "withdrawal"` (txid = the bundle's M6 id, `m6id`; spends the
+  bundled withdrawal outputs into one OP_RETURN output of their value), `peg: "state"` (Hivemind: what the chain state
+  consumed and made at that height). A bundle that failed later gave its outputs back and has no withdrawal tx.
+- Txs with no inputs (BitNames' recurring zero-input txs, zSide's shielded-only txs) have `vin: []`; a recurring txid
+  answers with its latest block (`getrawtransaction txid 1 <blockhash>` for another).
+- On a chain whose state moves sats without txs (Hivemind) the view's tip is the height the index last followed
+  list_utxos at, so that a block does not change after the full backend read it.
+
+The full backend's Esplora-style JSON keeps those fields: a tx's `data`, `shielded`, `peg`, `mainTxid`, `m6id`; a vin's
+`deposit`, `kind`; a vout's or prevout's `content`, `withdrawal`, `memo`. Addresses' balances equal the index's.

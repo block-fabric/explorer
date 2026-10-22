@@ -56,6 +56,11 @@ export function setSidechainNames(names: Record<number, string>): void {
   sidechainNames = { ...names };
 }
 
+/** a sidechain's name by its slot (the enforcer's title, else the profile's, else 'slot N') */
+export function sidechainName(slot: number): string {
+  return sideName(slot);
+}
+
 function sideName(slot: number): string {
   return sidechainNames[slot] ?? profileBySlot(slot)?.name ?? `slot ${slot}`;
 }

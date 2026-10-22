@@ -30,7 +30,7 @@
     <div class="cp-chips">
       <button class="cp-chip" [class.on]="slot === null" (click)="setSlot(null)">All sidechains</button>
       <button *ngFor="let s of d.live.allSidechains; trackBy: trackSlot" class="cp-chip" [class.on]="slot === s.slot" [style.--sc]="colorOf(s.slot)" (click)="setSlot(slot === s.slot ? null : s.slot)">
-        <app-svg-images name="chain-mark" [fill]="s.profile || 'sidechain'" width="14" height="14"></app-svg-images> {{ s.title || 'Slot ' + s.slot }}
+        <app-sidechain-label [slot]="s.slot" [name]="s.title || 'Slot ' + s.slot"></app-sidechain-label>
       </button>
     </div>
 
@@ -85,7 +85,7 @@
     <div class="sc-grid">
       <div class="sc-card" *ngFor="let s of d.live.sidechains; trackBy: trackSlot" [style.--sc]="colorOf(s.slot)" (click)="setSlot(slot === s.slot ? null : s.slot)" [class.clickable]="true">
         <div class="sc-top">
-          <app-svg-images name="chain-mark" [fill]="s.profile || 'sidechain'" width="26" height="26" class="sc-mark"></app-svg-images>
+          <app-svg-images name="chain-mark" [fill]="markId(s.slot, s.title)" width="26" height="26" class="sc-mark"></app-svg-images>
           <div class="sc-title">
             <div class="sc-name">{{ s.title || 'Slot ' + s.slot }} <span class="sc-slot">slot {{ s.slot }}</span></div>
             <div class="sc-desc">{{ s.description }}</div>
@@ -123,7 +123,7 @@
     <h2 class="cp-h2">Blind merged mining, block by block <span class="cp-h2-sub">the newest {{ d.coverage.length }} {{ profile.name }} blocks; a lit cell is a sidechain block carried, brighter = higher bid</span></h2>
     <div class="box grid-box">
       <div class="cov-row" *ngFor="let s of d.live.sidechains; trackBy: trackSlot" [style.--sc]="colorOf(s.slot)">
-        <div class="cov-name">{{ s.title }}</div>
+        <div class="cov-name"><app-sidechain-label [slot]="s.slot" [name]="s.title"></app-sidechain-label></div>
         <div class="cov-cells">
           <ng-container *ngFor="let b of d.coverage; trackBy: trackHeight">
             <a *ngIf="accepted(b, s.slot) as a; else emptyCell" class="cov-cell on" [routerLink]="['/block' | relativeUrl, b.hash]"
@@ -182,7 +182,7 @@
         <p *ngIf="!d.live.bundles.length" class="text-muted mb-0">No withdrawal bundle is pending.</p>
         <div class="bundle" *ngFor="let b of d.live.bundles" [style.--sc]="colorOf(b.slot)">
           <div class="b-head">
-            <span class="sc-label" [style.--sc]="colorOf(b.slot)">{{ b.name }}</span>
+            <app-sidechain-label [slot]="b.slot" [name]="b.name"></app-sidechain-label>
             <span class="mono" [title]="b.hash"><app-truncate [text]="b.hash" [lastChars]="8"></app-truncate></span>
             <span class="b-amt pos" *ngIf="b.payable">payable</span>
           </div>
@@ -218,7 +218,7 @@
         </thead>
         <tbody>
           <tr *ngFor="let s of d.slots; trackBy: trackSlot">
-            <td><span class="sc-label" [style.--sc]="colorOf(s.slot)">{{ s.name }}</span></td>
+            <td><app-sidechain-label [slot]="s.slot" [name]="s.name"></app-sidechain-label></td>
             <td class="text-right">{{ s.accepts | number }}</td>
             <td class="text-right">{{ pct(s.coverage, 0) }}</td>
             <td class="text-right">{{ s.requests | number }}</td>
@@ -278,7 +278,7 @@
         <h5>Sidechain proposals <small>{{ d.totals.proposals }} proposed · {{ d.totals.acks }} acks {{ windowLabel() }}</small></h5>
         <ng-container *ngIf="d.live.proposals?.length; else noProposals">
           <div class="proposal" *ngFor="let p of d.live.proposals">
-            <b>{{ p.title || ('slot ' + p.slot) }}</b> <span class="text-muted small">slot {{ p.slot }}</span>
+            <b><app-sidechain-label [slot]="p.slot" [name]="p.title || ('slot ' + p.slot)"></app-sidechain-label></b> <span class="text-muted small">slot {{ p.slot }}</span>
             <div class="small text-muted">{{ p.description }}</div>
             <div class="small">{{ p.voteCount | number }} acks · proposed at {{ p.proposalHeight | number }} ({{ p.proposalAge | number }} blocks ago)</div>
           </div>
@@ -318,7 +318,7 @@
               <a [routerLink]="['/block' | relativeUrl, e.blockHash]">{{ e.height | number }}</a>
             </td>
             <td class="ev-t"><app-time kind="since" [time]="e.time" [fastRender]="true"></app-time></td>
-            <td><span *ngIf="e.slot >= 0" class="sc-label"><span class="sc" [style.color]="colorOf(e.slot)"><app-svg-images name="chain-mark" [fill]="markId(e.slot, e.name || e.title || nameOf(e.slot))" width="11" height="11"></app-svg-images></span> {{ e.name || e.title || nameOf(e.slot) }}</span></td>
+            <td><app-sidechain-label *ngIf="e.slot >= 0" [slot]="e.slot" [name]="e.name || e.title || nameOf(e.slot)"></app-sidechain-label></td>
             <ng-container [ngSwitch]="feed">
               <ng-container *ngSwitchCase="'bmm'">
                 <td class="mono"><app-truncate [text]="e.sideBlock" [lastChars]="8" [maxWidth]="150"></app-truncate></td>
@@ -341,7 +341,7 @@
                 <td class="text-right"><span class="badge" [class.badge-success]="e.type === 'paid'" [class.badge-danger]="e.type === 'failed'" [class.badge-secondary]="e.type === 'proposed'">{{ e.type }}</span></td>
               </ng-container>
               <ng-container *ngSwitchCase="'proposals'">
-                <td>{{ e.type === 'M1' ? 'proposed' : 'ack' }} <b>{{ e.title || '' }}</b></td>
+                <td>{{ e.type === 'M1' ? 'proposed' : 'ack' }} @if (e.title) {<b><app-sidechain-label [slot]="e.slot" [name]="e.title"></app-sidechain-label></b>}</td>
                 <td class="mono text-right"><app-truncate [text]="e.hash" [lastChars]="8" [maxWidth]="150"></app-truncate></td>
               </ng-container>
             </ng-container>

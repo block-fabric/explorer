@@ -61,7 +61,7 @@ h5 { font-size: 0.95rem; margin-bottom: 8px; small { color: var(--transparent-fg
 
 .grid-box { overflow-x: auto; }
 .cov-row { --sc: var(--accent); display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-.cov-name { width: 90px; flex-shrink: 0; font-size: 0.78rem; color: var(--sc); text-align: right; }
+.cov-name { width: 90px; flex-shrink: 0; font-size: 0.78rem; color: var(--sc); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cov-meta .cov-name { color: var(--transparent-fg); }
 .cov-cells { display: flex; gap: 2px; }
 .cov-cell {

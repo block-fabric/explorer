@@ -1,5 +1,11 @@
 import { Env } from '@app/services/state.service';
-import { CHAIN_NETWORK } from '@app/chain/profiles';
+import { CHAIN_NETWORK, PROFILE } from '@app/chain/profiles';
+import { L2AddressRegExp } from '@app/chain/l2/l2-address';
+
+// eCash Explorer: a sidechain explorer (PROFILE.kind 'l2') has its own addresses (chain/l2/l2-address.ts: 20 bytes in
+// base58, no version byte, no checksum) and none of Bitcoin's; and its block hashes have no proof-of-work zeros, so a
+// 64-hex string can be a block as well as a transaction (the search form asks the backend)
+const L2 = PROFILE.kind === 'l2';
 
 // all base58 characters
 export const BASE58_CHARS = `[a-km-zA-HJ-NP-Z1-9]`;
@@ -169,6 +175,9 @@ export const ADDRESS_REGEXES: [RegExp, Network][] = NETWORKS
   .map(network => [getRegex('address', network), network]);
 
 export function findOtherNetworks(address: string, skipNetwork: Network, env: Env): { network: Network, address: string, isNetworkAvailable: boolean }[] {
+  if (L2) {
+    return [];
+  }
   return ADDRESS_REGEXES
     .filter(([regex, network]) => network !== skipNetwork && regex.test(address))
     .map(([, network]) => ({ network, address, isNetworkAvailable: isNetworkAvailable(network, env) }));
@@ -226,6 +235,12 @@ export function getRegex(type: RegexTypeNoAddrNoBlockHash): RegExp;
 export function getRegex(type: 'address', network: Network): RegExp;
 export function getRegex(type: 'blockhash', network: Network): RegExp;
 export function getRegex(type: RegexType, network?: Network): RegExp {
+  if (L2 && type === `address`) {
+    return new L2AddressRegExp();
+  }
+  if (L2 && type === `blockhash`) {
+    return /^(?!)$/; // never: see above
+  }
   let regex = `^`; // ^ = Start of string
   switch (type) {
     // Match a block height number

@@ -294,6 +294,15 @@ export class SearchFormComponent implements OnInit {
                   );
               }
             });
+        } else if (PROFILE.kind === 'l2') {
+          // eCash Explorer: a sidechain's block hashes have no proof-of-work zeros: a block if there is one, else a tx
+          this.electrsApiService.getBlock$(matches[0]).pipe(catchError(() => of(null))).subscribe((block) => {
+            if (block?.id) {
+              this.navigate('/block/', matches[0], { state: { data: { block } } });
+            } else {
+              this.navigate('/tx/', matches[0]);
+            }
+          });
         } else {
           this.navigate('/tx/', matches[0]);
         }

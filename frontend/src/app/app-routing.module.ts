@@ -1,5 +1,5 @@
 import { NgModule } from '@angular/core';
-import { Routes, RouterModule } from '@angular/router';
+import { Routes, RouterModule, UrlSegment } from '@angular/router';
 import { AppPreloadingStrategy } from '@app/app.preloading-strategy';
 import { BlockViewComponent } from '@components/block-view/block-view.component';
 import { EightBlocksComponent } from '@components/eight-blocks/eight-blocks.component';
@@ -8,7 +8,7 @@ import { ClockComponent } from '@components/clock/clock.component';
 import { StatusViewComponent } from '@components/status-view/status-view.component';
 import { AddressGroupComponent } from '@components/address-group/address-group.component';
 import { TrackerGuard } from '@app/route-guards';
-import { PROFILE } from '@app/chain/profiles';
+import { L2_FULL, L2_LEAN } from '@app/chain/profiles';
 
 const browserWindow = window as typeof window & { __env?: any };
 const browserWindowEnv = browserWindow.__env || {};
@@ -367,9 +367,24 @@ if (browserWindowEnv && browserWindowEnv.BASE_MODULE === 'liquid') {
   ];
 }
 
-// eCash Explorer: a sidechain explorer (PROFILE.kind 'l2') has its own lean page set (chain/l2/), on its own API
-// (/api/v1/chain, /api/v1/l2/*): none of upstream's routes, so none of upstream's pages, websocket or APIs
-if (PROFILE.kind === 'l2') {
+// eCash Explorer: a sidechain explorer (PROFILE.kind 'l2') on upstream's UI (CHAIN_UI 'full', chain/profiles.ts) keeps
+// upstream's routes (its sidechain pages are in master-page.module.ts), but not the pages of what a sidechain has not:
+// proof of work (mining, pools, hashrate), the accelerator, lightning, the price, the eCash drivechain cockpit
+const L2_NOT_HERE = /^(mining|acceleration|lightning|stratum|drivechain|graphs\/(mining|acceleration|lightning|price))(\/|$)/;
+if (L2_FULL) {
+  routes = [
+    {
+      matcher: (segments: UrlSegment[]) => L2_NOT_HERE.test(segments.map(s => s.path).join('/'))
+        ? { consumed: segments } : null,
+      redirectTo: (r) => r.url.map(s => s.path).join('/').startsWith('drivechain') ? '/bmm' : '/',
+    },
+    ...routes,
+  ];
+}
+
+// eCash Explorer: a sidechain explorer on the lean page set (CHAIN_UI 'lean') has its own pages (chain/l2/), on its
+// own API (/api/v1/chain, /api/v1/l2/*): none of upstream's routes, so none of upstream's pages, websocket or APIs
+if (L2_LEAN) {
   routes = [
     {
       path: '',

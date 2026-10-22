@@ -49,9 +49,20 @@
                       </ng-template>
                     </ng-template>
                     <ng-template #defaultPrevout>
+                      <!-- eCash Explorer: a sidechain input that spends a deposit: its outpoint is the eCash deposit transaction -->
+                      @if (l2 && l2Deposit(tx, vindex); as dep) {
+                        @if (l2MainBase) {
+                          <a [href]="l2MainBase + '/tx/' + dep" class="red" title="Deposit from eCash: its eCash transaction">
+                            <fa-icon [icon]="['fas', 'arrow-alt-circle-right']" [fixedWidth]="true"></fa-icon>
+                          </a>
+                        } @else {
+                          <span class="red" [title]="'Deposit from eCash transaction ' + dep"><fa-icon [icon]="['fas', 'arrow-alt-circle-right']" [fixedWidth]="true"></fa-icon></span>
+                        }
+                      } @else {
                       <a [routerLink]="['/tx/' | relativeUrl, vin.txid]" [fragment]="'vout=' + vin.vout" class="red">
                         <fa-icon [icon]="['fas', 'arrow-alt-circle-right']" [fixedWidth]="true"></fa-icon>
                       </a>
+                      }
                     </ng-template>
                   </ng-template>
                 </td>
@@ -114,8 +125,7 @@
                           <ng-container *ngIf="escrowInputLabel(vin) as cl; else plainVinType">
                             <span class="chain-label" [style.--cl]="cl.color" [ngbTooltip]="cl.help" placement="bottom">
                               <span class="cl-tag">{{ cl.tag }}</span>
-                              <app-svg-images name="chain-mark" [fill]="chainMarkId(cl.slot)" width="13" height="13" class="cl-mark"></app-svg-images>
-                              {{ cl.text }}
+                              <app-sidechain-label [slot]="cl.slot" [markOf]="chainName(cl.slot)" [name]="cl.text"></app-sidechain-label>
                             </span>
                           </ng-container>
                           <ng-template #plainVinType>{{ vin.prevout.scriptpubkey_type?.toUpperCase() }}</ng-template>
@@ -123,6 +133,14 @@
                         <div>
                           <app-address-labels  [vin]="vin" [channel]="tx._channels && tx._channels.inputs[vindex] ? tx._channels.inputs[vindex] : null"></app-address-labels>
                         </div>
+                        <!-- eCash Explorer: a sidechain input that spends a deposit from eCash -->
+                        @if (l2 && l2Deposit(tx, vindex); as dep) {
+                          <div class="chain-label small-label" style="--cl: var(--chain-accent, #2ec4b6)" [ngbTooltip]="'Credited by eCash transaction ' + dep + ':' + vin.vout" placement="bottom">
+                            <span class="cl-tag">deposit</span>
+                            from <app-sidechain-label chain="ecash" name="eCash"></app-sidechain-label>
+                            @if (l2MainBase) {<a [href]="l2MainBase + '/tx/' + dep" class="mono">{{ dep | slice:0:8 }}…{{ dep | slice:-8 }}</a>} @else {<span class="mono">{{ dep | slice:0:8 }}…{{ dep | slice:-8 }}</span>}
+                          </div>
+                        }
                       </ng-template>
                     </ng-container>
                   </div>
@@ -347,8 +365,7 @@
                     <ng-container *ngIf="chainLabels(tx)[vindex] as cl; else plainPubkeyType">
                       <span class="chain-label" [style.--cl]="cl.color" [ngbTooltip]="cl.help" placement="bottom">
                         <span class="cl-tag">{{ cl.tag }}</span>
-                        <app-svg-images *ngIf="cl.slot !== undefined" name="chain-mark" [fill]="chainMarkId(cl.slot)" width="13" height="13" class="cl-mark"></app-svg-images>
-                        {{ cl.text }}
+                        @if (cl.slot !== undefined) {<app-sidechain-label [slot]="cl.slot" [markOf]="chainName(cl.slot)" [name]="cl.text"></app-sidechain-label>} @else {<span>{{ cl.text }}</span>}
                       </span>
                     </ng-container>
                     <ng-template #plainPubkeyType>
@@ -363,7 +380,7 @@
                     <app-address-labels [vout]="vout" [channel]="tx._channels && tx._channels.outputs[vindex] ? tx._channels.outputs[vindex] : null"></app-address-labels>
                     <!-- eCash Explorer: a payout of a withdrawal from a sidechain -->
                     <span *ngIf="vout.scriptpubkey_address && chainLabels(tx)[vindex] as cl" class="chain-label small-label" [style.--cl]="cl.color" [ngbTooltip]="cl.help" placement="bottom">
-                      <span class="cl-tag">{{ cl.tag }}</span> {{ cl.text }}
+                      <span class="cl-tag">{{ cl.tag }}</span> @if (cl.slot !== undefined) {<app-sidechain-label [slot]="cl.slot" [markOf]="chainName(cl.slot)" [name]="cl.text"></app-sidechain-label>} @else {<span>{{ cl.text }}</span>}
                     </span>
                   </div>
                   <ng-template #scriptpubkey_type>

@@ -14,7 +14,7 @@
       <thead>
         <th class="height text-start" [ngClass]="{'widget': widget, 'legacy': !isMempoolModule}" i18n="latest-blocks.height">Height</th>
         <th *ngIf="isMempoolModule" class="pool text-start" [ngClass]="{'widget': widget, 'legacy': !isMempoolModule}" i18n="mining.pool-name"
-          i18n-ngbTooltip="mining.pool-name" ngbTooltip="Pool" placement="bottom" #miningpool [disableTooltip]="!isEllipsisActive(miningpool)">Pool</th>
+          i18n-ngbTooltip="mining.pool-name" ngbTooltip="Pool" placement="bottom" #miningpool [disableTooltip]="!isEllipsisActive(miningpool) || l2">{{ l2 ? 'eCash block' : 'Pool' }}</th>
         <th class="timestamp" i18n="latest-blocks.timestamp" *ngIf="!widget" [class]="isMempoolModule ? '' : 'legacy'">Timestamp</th>
         <th *ngIf="auditAvailable" class="health text-end" i18n="latest-blocks.health" [ngClass]="{'widget': widget, 'legacy': !isMempoolModule}"
           i18n-ngbTooltip="latest-blocks.health" ngbTooltip="Health" placement="bottom" #health [disableTooltip]="!isEllipsisActive(health)">Health</th>
@@ -33,13 +33,15 @@
             <a [routerLink]="['/block' | relativeUrl, block.id]" [state]="{ data: { block: block } }">{{ block.height }}</a>
           </td>
           <td  *ngIf="isMempoolModule" class="pool text-start" [ngClass]="{'widget': widget, 'legacy': !isMempoolModule}">
-            <div *ngIf="indexingAvailable" class="tooltip-custom">
+            <!-- eCash Explorer: a sidechain block has no pool: the eCash block that carried it (BMM) -->
+            <app-chain-block-marks *ngIf="l2" [hash]="block.id" mode="inline" [size]="14"></app-chain-block-marks>
+            <div *ngIf="indexingAvailable && !l2" class="tooltip-custom">
               <a class="clear-link" [routerLink]="['/mining/pool' | relativeUrl, block.extras.pool.slug]">
                 <app-mining-pool [slug]="block.extras.pool.slug" [name]="block.extras.pool.name" [logoStyle]="'width:22px;height:22px;'" [textClass]="'truncate'"></app-mining-pool>
               </a>
               <span *ngIf="!widget" class="tooltiptext badge bg-secondary scriptmessage">{{ block.extras.coinbaseRaw | hex2ascii }}</span>
             </div>
-            <div *ngIf="!indexingAvailable" class="tooltip-custom">
+            <div *ngIf="!indexingAvailable && !l2" class="tooltip-custom">
                 <app-mining-pool [slug]="block.extras.pool.slug" [name]="block.extras.pool.name" [logoStyle]="'width:22px;height:22px;'" [textClass]="'truncate'"></app-mining-pool>
               <span *ngIf="!widget" class="tooltiptext badge bg-secondary scriptmessage">{{ block.extras.coinbaseRaw | hex2ascii }}</span>
             </div>

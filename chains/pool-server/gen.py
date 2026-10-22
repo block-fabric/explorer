@@ -2,8 +2,9 @@
 """
 The eCash explorers on the pool server (46.224.180.56), next to its eCash node and bip300301_enforcer. Run on the
 server, in ROOT; writes into OUT (default ./stage):
-  docker-compose.yml          db (MariaDB, host network, 127.0.0.1:3318) and api-<explorer> (backend, host network,
-                              127.0.0.1:<api port>), all with memory and CPU caps
+  docker-compose.yml          db (MariaDB, host network, 127.0.0.1:3318), db-setup (creates the databases, also on an
+                              existing db) and api-<explorer> (backend, host network, 127.0.0.1:<api port>); a
+                              sidechain explorer adds api-<explorer>-full; all with memory and CPU caps
   config/<explorer>.json      the backend's mempool-config.json
   initdb/databases.sql
   nginx-site.conf             the host nginx site: https://explorer.blockfab.org/<explorer>/
@@ -13,6 +14,11 @@ The frontends are served by the host nginx from www/<explorer>/ (the en-US bundl
 
 Node RPC credentials are not in this repository: secrets/<network>.rpc holds "user:password" of a read-only RPC
 user (rpcauth + rpcwhitelist on the node).
+A sidechain explorer is two backends of the same image: api-<explorer> (CHAIN.L2_ROLE index) indexes the sidechain
+node and serves /api/v1/l2/* and /api/v1/chain, plus a Bitcoin Core JSON-RPC view of its index on 127.0.0.1:<l2 rpc
+port>; api-<explorer>-full (CHAIN.L2_ROLE full) is upstream mempool's backend (MariaDB explorer_<id>, mempool,
+websocket, statistics, block indexing, address index) with that view as its node. nginx sends /api/v1/chain and
+/api/v1/l2/ to the first, the websocket and the rest of /api to the second.
   python3 gen.py [--out stage] [--tag local]
 """
 import argparse, json, os
@@ -36,11 +42,12 @@ EXPLORERS = [
 ] + [
     {
         'id': f'betanet-{profile}', 'path': f'betanet/{profile}', 'kind': 'l2', 'profile': profile, 'network': 'ecashbeta',
-        'api_port': port, 'sidechain_rpc': f'http://{SIDECHAIN_HOST}:{rpc}', 'enforcer': 'http://127.0.0.1:8123',
-        'weight': 4000000, 'mem': '384m', 'heap_mb': 256,
+        'api_port': 18951 + i, 'l2_rpc_port': 19951 + i, 'full_port': 18961 + i,
+        'sidechain_rpc': f'http://{SIDECHAIN_HOST}:{rpc}', 'enforcer': 'http://127.0.0.1:8123',
+        'weight': 4000000, 'mem': '384m', 'heap_mb': 256, 'full_mem': '512m', 'full_heap_mb': 384,
     }
-    for profile, port, rpc in [('thunder', 18951, 16009), ('bitnames', 18952, 16002), ('bitassets', 18953, 16004),
-                               ('hivemind', 18954, 16013), ('zside', 18955, 16098), ('coinshift', 18956, 16255)]
+    for i, (profile, rpc) in enumerate([('thunder', 16009), ('bitnames', 16002), ('bitassets', 16004),
+                                        ('hivemind', 16013), ('zside', 16098), ('coinshift', 16255)])
 ]
 # The front page goes to this explorer
 HOME = 'betanet'
@@ -48,6 +55,10 @@ HOME = 'betanet'
 # How many of the newest blocks the backend indexes into MariaDB (block stats, mining pages). Each one is read in
 # full from the node, which also serves the pool's block templates: two weeks of blocks, not the whole chain.
 INDEXING_BLOCKS = 2016
+
+
+def db_name(e):
+    return 'explorer_' + e['id'].replace('-', '_')
 
 
 def rpc_auth(network):
@@ -75,7 +86,7 @@ def backend_config(e, urls):
             'COOKIE': False,
         },
         'DATABASE': {
-            'ENABLED': True, 'HOST': '127.0.0.1', 'PORT': DB_PORT, 'DATABASE': f"explorer_{e['id']}",
+            'ENABLED': True, 'HOST': '127.0.0.1', 'PORT': DB_PORT, 'DATABASE': db_name(e),
             'USERNAME': 'mempool', 'PASSWORD': 'mempool',
         },
         'STATISTICS': {'ENABLED': True, 'TX_PER_SECOND_SAMPLE_PERIOD': 150},
@@ -91,7 +102,8 @@ def backend_config(e, urls):
 
 
 def l2_config(e, urls):
-    """A sidechain explorer: only its own indexer and routes run (no eCash node, database or mempool)"""
+    """A sidechain explorer's index backend: its own indexer and routes, and the Core JSON-RPC view of the index for
+    its full backend (no eCash node, database or mempool)"""
     return {
         'MEMPOOL': {
             'NETWORK': 'mainnet', 'BACKEND': 'none', 'HTTP_PORT': e['api_port'], 'CACHE_DIR': '/backend/cache',
@@ -111,6 +123,39 @@ def l2_config(e, urls):
             'MAINCHAIN_API': f"http://127.0.0.1:{l1_of(e['network'])['api_port']}",
             'EXPLORER_URLS': urls,
             'ADDRESS_INDEX': False,
+            'L2_ROLE': 'index',
+            'L2_RPC_PORT': e['l2_rpc_port'],
+        },
+    }
+
+
+def l2_full_config(e, urls):
+    """A sidechain explorer's full backend: upstream mempool's (database, mempool, websocket, statistics, block and
+    address indexing) on the Core JSON-RPC view its index backend serves (no credentials: loopback only)"""
+    return {
+        'MEMPOOL': {
+            'NETWORK': 'mainnet', 'BACKEND': 'none', 'HTTP_PORT': e['full_port'], 'CACHE_DIR': '/backend/cache',
+            # the sidechains are small (a block per eCash block at most): every block is indexed
+            'BLOCK_WEIGHT_UNITS': e['weight'], 'INDEXING_BLOCKS_AMOUNT': -1, 'USER_AGENT': 'ecash-explorer',
+            'STDOUT_LOG_MIN_PRIORITY': 'info', 'AUTOMATIC_POOLS_UPDATE': False, 'ENABLED': True,
+            'POLL_RATE_MS': 2000, 'API_URL_PREFIX': '/api/v1/', 'SPAWN_CLUSTER_PROCS': 0,
+        },
+        'CORE_RPC': {
+            'HOST': '127.0.0.1', 'PORT': e['l2_rpc_port'], 'USERNAME': 'explorer', 'PASSWORD': 'explorer', 'TIMEOUT': 60000,
+            'COOKIE': False,
+        },
+        'DATABASE': {
+            'ENABLED': True, 'HOST': '127.0.0.1', 'PORT': DB_PORT, 'DATABASE': db_name(e),
+            'USERNAME': 'mempool', 'PASSWORD': 'mempool',
+        },
+        'STATISTICS': {'ENABLED': True, 'TX_PER_SECOND_SAMPLE_PERIOD': 150},
+        'FIAT_PRICE': {'ENABLED': False},
+        'MAXMIND': {'ENABLED': False},
+        'CHAIN': {
+            'PROFILE': e['profile'], 'NETWORK': e['network'],
+            'EXPLORER_URLS': urls,
+            'ADDRESS_INDEX': True,
+            'L2_ROLE': 'full',
         },
     }
 
@@ -132,18 +177,20 @@ def main():
     for d in ('config', 'initdb'):
         os.makedirs(os.path.join(out, d), exist_ok=True)
 
-    for e in EXPLORERS:
-        path = os.path.join(out, 'config', f"{e['id']}.json")
+    configs = [(e['id'], backend_config(e, urls)) for e in EXPLORERS]
+    configs += [(f"{e['id']}-full", l2_full_config(e, urls)) for e in EXPLORERS if e['kind'] == 'l2']
+    for name, c in configs:
+        path = os.path.join(out, 'config', f"{name}.json")
         with open(path, 'w') as f:
-            json.dump(backend_config(e, urls), f, indent=2)
+            json.dump(c, f, indent=2)
         # it holds the node's RPC password: readable by the api container's user (1000) only
         os.chmod(path, 0o600)
         if os.geteuid() == 0:
             os.chown(path, 1000, 1000)
+    # every backend with a database: the eCash explorers and the sidechains' full backends
     with open(os.path.join(out, 'initdb', 'databases.sql'), 'w') as f:
         for e in EXPLORERS:
-            if e['kind'] == 'l1':
-                f.write(f"CREATE DATABASE IF NOT EXISTS explorer_{e['id']};\nGRANT ALL ON explorer_{e['id']}.* TO 'mempool'@'%';\n")
+            f.write(f"CREATE DATABASE IF NOT EXISTS {db_name(e)};\nGRANT ALL ON {db_name(e)}.* TO 'mempool'@'%';\n")
 
     L = ['# Written by gen.py (eCash explorers on the pool server); edit that and run it again.',
          'name: ecash-explorer', 'services:',
@@ -154,31 +201,48 @@ def main():
          ' "--max-connections=120", "--skip-name-resolve", "--innodb-log-buffer-size=8M", "--key-buffer-size=8M"]',
          '    volumes:', '      - ./mysql:/var/lib/mysql', '      - ./initdb:/docker-entrypoint-initdb.d:ro',
          '    healthcheck:', f'      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-P", "{DB_PORT}", "-umempool", "-pmempool"]',
-         '      interval: 10s', '      retries: 30']
+         '      interval: 10s', '      retries: 30',
+         # initdb/ runs only when the db's volume is new: this creates the databases added since (IF NOT EXISTS)
+         '  db-setup:', '    image: mariadb:10.5.21', '    container_name: ecash-explorer-db-setup', '    restart: "no"',
+         '    network_mode: host', '    depends_on:', '      db:', '        condition: service_healthy',
+         '    volumes:', '      - ./initdb:/initdb:ro',
+         f'    entrypoint: ["sh", "-c", "mysql -h 127.0.0.1 -P {DB_PORT} -uroot -padmin < /initdb/databases.sql"]']
+
+    def api(name, e, mem, cpus, heap, config, data, depends):
+        r = [f'  api-{name}:', f'    image: ecash-explorer/backend:{a.tag}', f'    container_name: ecash-explorer-api-{name}',
+             '    restart: unless-stopped', '    network_mode: host', '    user: "1000:1000"', f"    mem_limit: {mem}", f"    cpus: {cpus}"]
+        if depends:
+            r += ['    depends_on:'] + [f'      {d}:\n        condition: {c}' for d, c in depends]
+        return r + ['    environment:', '      MEMPOOL_CONFIG_FILE: /config/mempool-config.json',
+                    f'      NODE_OPTIONS: "--max-old-space-size={heap}"',
+                    '    volumes:', f'      - ./config/{config}.json:/config/mempool-config.json:ro', f'      - ./data/{data}:/backend/cache']
+
     for e in EXPLORERS:
         p = e['id']
-        L += [f'  api-{p}:', f'    image: ecash-explorer/backend:{a.tag}', f'    container_name: ecash-explorer-api-{p}',
-              '    restart: unless-stopped', '    network_mode: host', '    user: "1000:1000"',
-              f"    mem_limit: {e['mem']}", f"    cpus: {1.0 if e['kind'] == 'l1' else 0.5}"]
         if e['kind'] == 'l1':
-            L += ['    depends_on:', '      db:', '        condition: service_healthy']
-        L += ['    environment:', '      MEMPOOL_CONFIG_FILE: /config/mempool-config.json',
-              f"      NODE_OPTIONS: \"--max-old-space-size={e['heap_mb']}\"",
-              '    volumes:', f'      - ./config/{p}.json:/config/mempool-config.json:ro', f'      - ./data/{p}:/backend/cache']
+            L += api(p, e, e['mem'], 1.0, e['heap_mb'], p, p, [('db-setup', 'service_completed_successfully')])
+        else:
+            L += api(p, e, e['mem'], 0.5, e['heap_mb'], p, p, [])
+            L += api(f'{p}-full', e, e['full_mem'], 0.5, e['full_heap_mb'], f'{p}-full', f'{p}-full',
+                     [('db-setup', 'service_completed_successfully'), (f'api-{p}', 'service_started')])
     with open(os.path.join(out, 'docker-compose.yml'), 'w') as f:
         f.write('\n'.join(L) + '\n')
 
     # nginx: one server block, one sub-path per explorer (/betanet/, ...); the front page goes to HOME
     loc = []
     for e in EXPLORERS:
-        p, prt = e['path'], e['api_port']
+        # a sidechain: the index backend answers /api/v1/chain and /api/v1/l2/, the full backend the rest
+        p, prt = e['path'], e.get('full_port', e['api_port'])
+        idx = '' if e['kind'] == 'l1' else f'''    location = /{p}/api/v1/chain {{ proxy_pass http://127.0.0.1:{e['api_port']}/api/v1/chain; }}
+    location ^~ /{p}/api/v1/l2/ {{ proxy_pass http://127.0.0.1:{e['api_port']}/api/v1/l2/; }}
+'''
         loc.append(f'''    # {p}: {e['profile']} on {e['network']}
     location = /{p} {{ return 301 /{p}/; }}
     location = /{p}/resources/config.js {{ alias {ROOT}/www-config/{e['id']}.js; expires 5m; }}
     location ^~ /{p}/resources/ {{ alias {ROOT}/www/resources/; expires 1h; }}
     location ^~ /{p}/api/v1/ws {{ proxy_pass http://127.0.0.1:{prt}/; proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "Upgrade"; proxy_read_timeout 1h; }}
     location ^~ /{p}/api/v1/services {{ return 404; }}
-    location ^~ /{p}/api/v1 {{ proxy_pass http://127.0.0.1:{prt}/api/v1; }}
+{idx}    location ^~ /{p}/api/v1 {{ proxy_pass http://127.0.0.1:{prt}/api/v1; }}
     location ^~ /{p}/api/ {{ proxy_pass http://127.0.0.1:{prt}/api/v1/; }}
     location = /{p}/api {{ try_files /{p}/index.html =404; }}
     location ^~ /{p}/ {{ try_files $uri $uri/ /{p}/index.html; expires 10m; }}
@@ -226,7 +290,8 @@ server {{
     with open(os.path.join(out, 'explorers.json'), 'w') as f:
         json.dump(EXPLORERS, f, indent=2)
     for e in EXPLORERS:
-        src = f"rpc 127.0.0.1:{e['rpc_port']}" if e['kind'] == 'l1' else f"sidechain {e['sidechain_rpc']}"
+        src = f"rpc 127.0.0.1:{e['rpc_port']}" if e['kind'] == 'l1' else \
+            f"sidechain {e['sidechain_rpc']}  core view 127.0.0.1:{e['l2_rpc_port']}  full api 127.0.0.1:{e['full_port']} ({db_name(e)})"
         print(f"{e['id']:18} https://{DOMAIN}/{e['path']}/  {e['profile']} on {e['network']}  api 127.0.0.1:{e['api_port']}"
               f"  {src}  enforcer {e['enforcer']}")
 

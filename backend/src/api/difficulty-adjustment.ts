@@ -1,4 +1,5 @@
 import config from '../config';
+import { l2Role } from '../chain/profile';
 import { IDifficultyAdjustment } from '../mempool.interfaces';
 import blocks from './blocks';
 
@@ -173,10 +174,13 @@ class DifficultyAdjustmentApi {
     const nowSeconds = Math.floor(new Date().getTime() / 1000);
     const quarterEpochBlockTime = blocks.getQuarterEpochBlockTime();
 
-    return calcDifficultyAdjustment(
+    const da = calcDifficultyAdjustment(
       DATime, quarterEpochBlockTime, nowSeconds, blockHeight, previousRetarget,
       config.MEMPOOL.NETWORK, latestBlock.timestamp
     );
+    // Chains Explorer: a sidechain has no difficulty (its blocks come with its BMM on eCash; the Core view gives
+    // difficulty 1 throughout): the epoch's timing stays, no difficulty change is foreseen
+    return l2Role() === 'full' ? { ...da, difficultyChange: 0, previousRetarget: 0 } : da;
   }
 }
 

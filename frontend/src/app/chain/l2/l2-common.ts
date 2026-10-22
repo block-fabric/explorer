@@ -25,13 +25,16 @@ export function shortId(s: string | null | undefined, keep = 8): string {
   standalone: true,
   imports: [CommonModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styles: [`.u { opacity: 0.6; font-size: 0.85em; } .pos { color: #3bd16f; } .neg { color: #ff6b6b; } :host { white-space: nowrap; }`],
-  template: `@if (sats === null || sats === undefined) {<span class="u">–</span>} @else {<span [class.pos]="signed && sats > 0" [class.neg]="signed && sats < 0">{{ signed && sats > 0 ? '+' : (sats < 0 ? '−' : '') }}@if ((mode$ | async) === 'btc') {<span>{{ abs / 100000000 | number:'1.0-8' }}</span> <span class="u">ECX</span>} @else {<span>{{ abs | number }}</span> <span class="u">sats</span>}</span>}`,
+  styles: [`.u { opacity: 0.6; font-size: 0.85em; } .pos { color: #3bd16f; } .neg { color: #ff6b6b; } :host { white-space: nowrap; } :host(.wrap) { white-space: normal; overflow-wrap: anywhere; }`],
+  template: `@if (sats === null || sats === undefined) {<span class="u">–</span>} @else {<span [class.pos]="signed && sats > 0" [class.neg]="signed && sats < 0" [attr.title]="compact && abs >= compactFrom ? (abs | number) + ' sats' : null">{{ signed && sats > 0 ? '+' : (sats < 0 ? '−' : '') }}@if ((mode$ | async) === 'btc') {<span>{{ abs / 100000000 | number:(compact ? '1.0-2' : '1.0-8') }}</span> <span class="u">ECX</span>} @else if (compact && abs >= compactFrom) {<span>{{ abs / 100000000 | number:'1.0-2' }}</span> <span class="u">ECX</span>} @else {<span>{{ abs | number }}</span> <span class="u">sats</span>}</span>}`,
 })
 export class L2AmountComponent {
   @Input() sats: number | null | undefined;
   /** show + for a positive amount, in colour */
   @Input() signed = false;
+  /** a narrow cell (KPI tiles): from 1 ECX up, in ECX with two decimals (the exact sats in the tooltip) */
+  @Input() compact = false;
+  compactFrom = 100000000;
   mode$: Observable<string>;
 
   constructor(stateService: StateService) {
