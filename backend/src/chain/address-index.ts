@@ -7,12 +7,10 @@ import bitcoinClient from '../api/bitcoin/bitcoin-client';
 import mempool from '../api/mempool';
 import { IEsploraApi } from '../api/bitcoin/esplora-api.interface';
 import { PROFILE } from './profile';
-import { setTxLocatorFallback } from './tx-locator';
-import { clearAnchors, dumpAnchors, forgetAnchorAt, loadAnchors, recordAnchor } from './anchors';
 
 /**
  * The address index: address and scripthash lookups for a backend that only has the node's RPC (MEMPOOL.BACKEND
- * "none"), where upstream answers 405 (it needs electrs, which does not know the Chains networks).
+ * "none"), where upstream answers 405 (it needs electrs).
  *
  * Every block is read once (getblock verbosity 3: each input comes with the output it spends). Per output script:
  * the funded / spent counts and sums, the transactions with the value each one moved for the script, and the
@@ -41,7 +39,7 @@ interface UndoOp {
   newTx: boolean;
 }
 
-const CACHE_VERSION = 2; // 2: with the anchors of chains of stake
+const CACHE_VERSION = 3; // 3: eCash
 const UNDO_DEPTH = 100;
 const PAGE = 25;
 const sats = (v: number | undefined): number => Math.round((v ?? 0) * 1e8);
@@ -51,7 +49,6 @@ class AddressIndex {
   private byAddress = new Map<string, string>();      // address -> script
   private byScripthash = new Map<string, string>();   // sha256(script) hex, both byte orders -> script
   private hashes: string[] = [];                      // block hash per height
-  private txHeight = new Map<string, number>();       // txid -> height (chain/tx-locator.ts)
   private undo = new Map<number, UndoOp[]>();
   private genesis = '';
   private running = false;
@@ -71,7 +68,6 @@ class AddressIndex {
     if (!this.enabled) {
       return;
     }
-    setTxLocatorFallback((txid) => this.blockOf(txid));
     this.load();
     void this.run();
     setInterval(() => void this.run(), 15000);
@@ -95,10 +91,8 @@ class AddressIndex {
       }
       this.genesis = raw.genesis;
       this.hashes = raw.hashes;
-      loadAnchors(raw.anchors);
       for (const [s, e] of Object.entries(raw.scripts as Record<string, ScriptEntry>)) {
         this.put(s, e);
-        for (const t of e.txs) { this.txHeight.set(t[0], t[1]); }
       }
       logger.info(`Address index: ${this.scripts.size} scripts up to block ${this.hashes.length - 1} from the cache`);
     } catch (e) {
@@ -114,7 +108,7 @@ class AddressIndex {
     try {
       fs.mkdirSync(path.dirname(this.file()), { recursive: true });
       const tmp = this.file() + '.tmp';
-      fs.writeFileSync(tmp, JSON.stringify({ version: CACHE_VERSION, genesis: this.genesis, hashes: this.hashes, anchors: dumpAnchors(), scripts: Object.fromEntries(this.scripts) }));
+      fs.writeFileSync(tmp, JSON.stringify({ version: CACHE_VERSION, genesis: this.genesis, hashes: this.hashes, scripts: Object.fromEntries(this.scripts) }));
       fs.renameSync(tmp, this.file());
     } catch (e) {
       logger.warn(`Address index: cannot save the cache: ${e instanceof Error ? e.message : e}`);
@@ -149,8 +143,6 @@ class AddressIndex {
     this.byScripthash.clear();
     this.hashes = [];
     this.undo.clear();
-    this.txHeight.clear();
-    clearAnchors();
   }
 
   private async run(): Promise<void> {
@@ -221,9 +213,7 @@ class AddressIndex {
 
   private applyBlock(block: any): void {
     const ops: UndoOp[] = [];
-    recordAnchor(block); // chains of stake: the anchor ticket this block acknowledges (chain/anchors.ts)
     for (const tx of block.tx) {
-      this.txHeight.set(tx.txid, block.height);
       const deltas = new Map<string, number>();
       for (const vin of tx.vin) {
         const p = vin.prevout;
@@ -275,7 +265,6 @@ class AddressIndex {
       if (op.newTx) {
         const i = e.txs.findIndex(t => t[0] === op.txid && t[1] === height);
         if (i >= 0) { e.txs.splice(i, 1); }
-        if (this.txHeight.get(op.txid) === height) { this.txHeight.delete(op.txid); }
       } else if (op.out) {
         const v = e.u[op.out]?.[0] ?? 0;
         delete e.u[op.out];
@@ -289,7 +278,6 @@ class AddressIndex {
       }
     }
     this.undo.delete(height);
-    forgetAnchorAt(height);
     this.hashes.pop();
   }
 
@@ -385,12 +373,6 @@ class AddressIndex {
       }
     }
     return out;
-  }
-
-  /** the block hash of a confirmed transaction */
-  blockOf(txid: string): string | undefined {
-    const h = this.txHeight.get(txid);
-    return h === undefined ? undefined : this.hashes[h];
   }
 
   get scriptCount(): number {

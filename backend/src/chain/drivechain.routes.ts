@@ -4,34 +4,32 @@ import logger from '../logger';
 import { handleError } from '../utils/api';
 import bitcoinClient from '../api/bitcoin/bitcoin-client';
 import { MODULE, PROFILE, SIDECHAIN_PROFILES, profileBySlot } from './profile';
-import drivechain from './drivechain';
+import { NETWORK, NETWORKS } from './networks';
+import drivechain, { subsidyAt } from './drivechain';
+import enforcer, { ChainInfo, SidechainInfo } from './enforcer';
 import { ChainModuleContext } from './module';
 import { cockpit } from './cockpit';
-import { AsertParams, miningStats } from './mining';
-import { anchorAckedIn, anchorOf, anchorOfTicket } from './anchors';
+import { miningStats } from './mining';
 
 // Read-only JSON for the chain profiles. Rate limiting is nginx's, as for every /api/v1 route.
 //
-//   GET chain                          this explorer's profile: id, name, unit, slot, network, links to the others
-//
-// Mainchain profile (Chains):
-//   GET drivechain/summary             getdrivechaininfo, the active sidechains (escrow, pending bundles), proposals,
-//                                      withdrawal bundles with their scores, per-sidechain totals over the index
+//   GET chain                          this explorer's profile: id, name, unit, network, links to the others
+//   GET drivechain/summary             the BIP300 constants, the active sidechains (escrow, pending bundles), the
+//                                      sidechain proposals, the pending withdrawal bundles with their votes,
+//                                      per-sidechain totals over the index
 //   GET drivechain/blocks?to=&count=   per-block summaries (BMM, deposits, withdrawals, votes, proposals), newest first
 //   GET drivechain/block/:hashOrHeight everything a block did for the drivechain (DrivechainBlock)
 //   GET drivechain/events/:kind?slot=&before=&limit=
 //                                      kind: bmm | bmm-requests | deposits | withdrawals | votes | proposals | bundles
 //   GET drivechain/tx/:txid            what a transaction did for the drivechain (deposit / withdrawal / BMM request)
+//   GET drivechain/stats               per-sidechain totals over the index
+//   GET drivechain/cockpit?window=&slot=   statistics over a window of blocks, and the live state
+//   GET drivechain/mining?window=      pools by coinbase tag (DATUM miners), hashrate, difficulty, retarget, epochs
 //
-// Sidechain profiles:
-//   GET sidechain/summary              this sidechain on the mainchain (escrow, bundles) and the node's own view
-//   GET sidechain/block/:hash          the Chains block that committed to this block (BMM) and the bid
-//   GET drivechain/events/:kind        as above, this sidechain's slot only
-//
-// Chain module hooks (chain/modules/<id>/), under /api/v1/sidechain/ (a sidechain) or /api/v1/chain/ (the mainchain):
-//   GET <prefix>tx/:txid               the module's describeTx: what a transaction does on this chain
-//   GET <prefix>block/:hash/features   the module's describeBlock
-//   GET <prefix>...                    the module's own routes (initRoutes)
+// Chain module hooks (chain/modules/<id>/), under /api/v1/chain/:
+//   GET chain/tx/:txid                 the module's describeTx: what a transaction does on this chain
+//   GET chain/block/:hash/features     the module's describeBlock
+//   GET chain/...                      the module's own routes (initRoutes)
 
 const cache = new Map<string, { at: number; value: any }>();
 async function cached<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<T> {
@@ -80,7 +78,7 @@ export function moduleNewBlock(block: { id: string; height: number }): void {
   }
 }
 
-/** CHN issued up to a height: 50 CHN per block from height 1 (the genesis output cannot be spent), halving every 210,000 blocks */
+/** ECX issued up to a height: Bitcoin's schedule (the genesis output cannot be spent) */
 function issuedSupply(height: number): number {
   let total = -50 * 1e8;
   let reward = 50 * 1e8;
@@ -94,52 +92,58 @@ function issuedSupply(height: number): number {
   return total;
 }
 
+/** The drivechain's live state, from the enforcer: what the index cannot know until the next block */
+interface LiveState {
+  height: number;
+  chainInfo: ChainInfo;
+  sidechains: (SidechainInfo & { escrow: { txid: string; vout: number; amount: number; sequence: number } | null; bundles: { m6id: string; voteCount: number; proposalHeight: number }[] })[];
+  proposals: any[];
+}
+
+async function liveState(): Promise<LiveState> {
+  return cached('live', 5000, async () => {
+    const [tip, chainInfo, sidechains, proposals] = await Promise.all([
+      enforcer.getChainTip(), enforcer.getChainInfo(), enforcer.getSidechains(), enforcer.getSidechainProposals(),
+    ]);
+    const withState: LiveState['sidechains'] = [];
+    for (const s of sidechains.sort((a, b) => a.slot - b.slot)) {
+      withState.push({ ...s, escrow: await enforcer.getCtip(s.slot), bundles: await enforcer.getBundleProposals(s.slot) });
+    }
+    return { height: tip.height, chainInfo, sidechains: withState, proposals };
+  });
+}
+
+/** A pending bundle as the pages show it: its votes against the threshold, and the blocks it has left */
+function bundleView(live: LiveState, slot: number, b: { m6id: string; voteCount: number; proposalHeight: number }): any {
+  const c = live.chainInfo;
+  const age = live.height - b.proposalHeight;
+  return {
+    slot, name: live.sidechains.find(s => s.slot === slot)?.title ?? profileBySlot(slot)?.name ?? `Slot ${slot}`,
+    hash: b.m6id, score: b.voteCount, height: b.proposalHeight, threshold: c.bundleThreshold,
+    blocksleft: Math.max(0, c.bundleMaxAge - age), payable: b.voteCount >= c.bundleThreshold,
+  };
+}
+
 class DrivechainRoutes {
   public initRoutes(app: Application): void {
     const prefix = config.MEMPOOL.API_URL_PREFIX;
     app
       .get(prefix + 'chain', wrap(this.$getChain))
+      .get(prefix + 'drivechain/summary', wrap(this.$getSummary))
+      .get(prefix + 'drivechain/blocks', wrap(this.$getBlocks))
+      .get(prefix + 'drivechain/block/:id', wrap(this.$getBlock))
       .get(prefix + 'drivechain/events/:kind', wrap(this.$getEvents))
+      .get(prefix + 'drivechain/tx/:txid', wrap(this.$getTx))
       .get(prefix + 'drivechain/stats', wrap(async (req, res) => { res.json(drivechain.getStats()); }))
-      .get(prefix + 'drivechain/cockpit', wrap(this.$getCockpit));
-
-    if (PROFILE.mainchain) {
-      app
-        .get(prefix + 'drivechain/summary', wrap(this.$getSummary))
-        .get(prefix + 'drivechain/blocks', wrap(this.$getBlocks))
-        .get(prefix + 'drivechain/block/:id', wrap(this.$getBlock))
-        .get(prefix + 'drivechain/tx/:txid', wrap(this.$getTx))
-        .get(prefix + 'drivechain/mining', wrap(this.$getMining));
-    } else {
-      app
-        .get(prefix + 'sidechain/summary', wrap(this.$getSidechainSummary))
-        .get(prefix + 'sidechain/block/:hash', wrap(this.$getSidechainBlock))
-        .get(prefix + 'sidechain/blocks', wrap(this.$getSidechainBlocks))
-        // chains of stake: the block that acknowledged an anchor ticket (what a Chains block committed to)
-        .get(prefix + 'sidechain/anchor/:ticket', wrap(async (req, res) => {
-          const a = anchorOfTicket(String(req.params.ticket));
-          return a ? res.json(a) : handleError(req, res, 404, 'No block acknowledged this ticket (yet)');
-        }))
-      if (MODULE.describeBlock) {
-        // the module's block fields for several blocks at once (FastBlocks/Layers: kind, slot, proposer, finality)
-        app.get(prefix + 'sidechain/blocks-features', wrap(async (req, res) => {
-          const hashes = String(req.query.hashes ?? '').split(',').filter(h => /^[0-9a-f]{64}$/.test(h)).slice(0, 100);
-          const out: Record<string, any> = {};
-          await Promise.all(hashes.map(async (h) => {
-            out[h] = await cached('bf:' + h, 15000, async () => MODULE.describeBlock!(await bitcoinClient.getBlock(h, 1), moduleCtx!)).catch(() => null);
-          }));
-          res.json(out);
-        }));
-      }
-    }
-    this.initModule(app, prefix + (PROFILE.mainchain ? 'chain/' : 'sidechain/'));
+      .get(prefix + 'drivechain/cockpit', wrap(this.$getCockpit))
+      .get(prefix + 'drivechain/mining', wrap(this.$getMining));
+    this.initModule(app, prefix + 'chain/');
   }
 
   /** The chain module's hooks and its own routes */
   private initModule(app: Application, modulePrefix: string): void {
     const ctx: ChainModuleContext = {
       node: bitcoinClient,
-      mainchain: drivechain.mainchainClient,
       cached: (key, ttl, fn) => cached(PROFILE.id + ':' + key, ttl, fn),
       handler: wrap,
       fail: (req, res, status, message) => handleError(req, res, status, message),
@@ -179,146 +183,88 @@ class DrivechainRoutes {
       unit: PROFILE.unit,
       slot: PROFILE.slot,
       mainchain: PROFILE.mainchain,
-      network: config.CHAIN.NETWORK,
-      explorers: {
-        chains: explorerUrl('chains'),
-        ...Object.fromEntries(SIDECHAIN_PROFILES.map(p => [p.id, explorerUrl(p.id)])),
-      },
+      network: NETWORK.id,
+      networkName: NETWORK.name,
+      networks: Object.values(NETWORKS).map(n => ({ id: n.id, name: n.name, explorer: explorerUrl(n.id) })),
+      explorers: Object.fromEntries(SIDECHAIN_PROFILES.map(p => [p.id, explorerUrl(p.id)])),
       sidechains: SIDECHAIN_PROFILES.map(p => ({ id: p.id, name: p.name, slot: p.slot })),
       module: { describeTx: !!MODULE.describeTx, describeBlock: !!MODULE.describeBlock },
+      activationHeight: drivechain.getChainInfo()?.activationHeight ?? null,
       indexReady: drivechain.isReady(),
+    });
+  };
+
+  private $getSummary = async (req: Request, res: Response): Promise<void> => {
+    const live = await liveState();
+    const stats = drivechain.getStats();
+    res.json({
+      info: { ...live.chainInfo, height: live.height, network: NETWORK.id, enforcerNetwork: live.chainInfo.network },
+      sidechains: live.sidechains.map(s => {
+        const p = profileBySlot(s.slot);
+        return {
+          slot: s.slot, title: s.title ?? `Slot ${s.slot}`, description: s.description, hashId1: s.hashId1, hashId2: s.hashId2,
+          proposalHeight: s.proposalHeight, activationHeight: s.activationHeight, voteCount: s.voteCount,
+          escrow: s.escrow, pendingbundles: s.bundles.length,
+          profile: p?.id ?? null, explorer: p ? explorerUrl(p.id) : null,
+          stats: stats.slots.find((x: any) => x.slot === s.slot) ?? null,
+        };
+      }),
+      proposals: live.proposals,
+      bundles: live.sidechains.flatMap(s => s.bundles.map(b => bundleView(live, s.slot, b))),
+      indexed: { from: stats.from, to: stats.to },
     });
   };
 
   /**
-   * The cockpit: statistics over a window of mainchain blocks (cockpit.ts) and the live state from the node.
-   * window = number of blocks (0 = everything indexed); slot = one sidechain (a sidechain explorer: always its own)
+   * The cockpit: statistics over a window of mainchain blocks (cockpit.ts) and the live state from the enforcer.
+   * window = number of blocks (0 = everything indexed); slot = one sidechain
    */
   private $getCockpit = async (req: Request, res: Response): Promise<void> => {
     const window = intParam(req.query.window, 144, 0, 1e7) as number;
-    const slot = PROFILE.mainchain ? intParam(req.query.slot, null, 0, 255) : PROFILE.slot;
-    const main = drivechain.mainchainClient;
-    const live = await cached('cockpit-live', 5000, async () => {
-      const [info, active, proposals, bundles, mining, chainInfo] = await Promise.all([
-        main.call('getdrivechaininfo'),
-        main.call('listactivesidechains'),
-        main.call('listsidechainproposals').catch(() => null),
-        main.call('listwithdrawalbundles'),
-        main.call('getmininginfo').catch(() => null),
-        main.call('getblockchaininfo').catch(() => null),
-      ]);
-      return { info, active, proposals, bundles, mining, chainInfo };
-    });
-    const escrowNow: Record<number, number> = {};
-    for (const s of live.active) {
-      escrowNow[s.slot] = Math.round((s.escrow?.amount ?? 0) * 1e8);
-    }
-    const stats = cockpit(window, slot, escrowNow);
-    const height = live.info.height;
+    const slot = intParam(req.query.slot, null, 0, 255);
+    const live = await liveState();
+    const mining: any = await cached('mininginfo', 10000, () => bitcoinClient.getMiningInfo().catch(() => null));
+    const chainTip: any = await cached('blockchaininfo', 10000, () => bitcoinClient.getBlockchainInfo().catch(() => null));
+    const escrowNow: Record<number, number> = Object.fromEntries(live.sidechains.map(s => [s.slot, s.escrow?.amount ?? 0]));
+    const height = live.height;
     const supply = issuedSupply(height);
     const escrowTotal = Object.entries(escrowNow).filter(([s]) => slot === null || Number(s) === slot).reduce((a, [, v]) => a + v, 0);
     res.json({
-      ...stats,
+      ...cockpit(window, slot, escrowNow),
       live: {
         height,
-        info: live.info,
-        mining: live.mining ? { difficulty: live.mining.difficulty, networkhashps: live.mining.networkhashps, pooledtx: live.mining.pooledtx } : null,
-        chainwork: live.chainInfo?.chainwork ?? null,
+        info: live.chainInfo,
+        mining: mining ? { difficulty: mining.difficulty, networkhashps: mining.networkhashps, pooledtx: mining.pooledtx } : null,
+        chainwork: chainTip?.chainwork ?? null,
         supply,
-        subsidy: Math.floor(50 * 1e8 / Math.pow(2, Math.floor(height / 210000))),
+        subsidy: subsidyAt(height),
         nextHalving: (Math.floor(height / 210000) + 1) * 210000,
         escrowTotal,
         escrowShareOfSupply: supply ? escrowTotal / supply : 0,
-        allSidechains: live.active.map((s: any) => ({ slot: s.slot, title: s.title, profile: profileBySlot(s.slot)?.id ?? null })),
-        sidechains: live.active.filter((s: any) => slot === null || s.slot === slot).map((s: any) => {
+        allSidechains: live.sidechains.map(s => ({ slot: s.slot, title: s.title, profile: profileBySlot(s.slot)?.id ?? null })),
+        sidechains: live.sidechains.filter(s => slot === null || s.slot === slot).map(s => {
           const p = profileBySlot(s.slot);
           return {
-            slot: s.slot, title: s.title, description: s.description, activationheight: s.activationheight,
-            escrow: escrowNow[s.slot] ?? 0, escrowTxid: s.escrow?.txid ?? null, pendingbundles: s.pendingbundles,
+            slot: s.slot, title: s.title, description: s.description, activationHeight: s.activationHeight,
+            escrow: escrowNow[s.slot] ?? 0, escrowTxid: s.escrow?.txid ?? null, pendingbundles: s.bundles.length,
             profile: p?.id ?? null, explorer: p ? explorerUrl(p.id) : null,
           };
         }),
         proposals: live.proposals,
-        bundles: live.bundles.filter((b: any) => slot === null || b.slot === slot).map((b: any) => ({
-          ...b,
-          name: live.active.find((s: any) => s.slot === b.slot)?.title ?? profileBySlot(b.slot)?.name ?? `Slot ${b.slot}`,
-          fee: Math.round((b.fee ?? 0) * 1e8),
-          payouts: (b.payouts ?? []).map((p: any) => ({ ...p, amount: Math.round(p.amount * 1e8) })),
-          total: (b.payouts ?? []).reduce((a: number, p: any) => a + Math.round(p.amount * 1e8), 0),
-        })),
+        bundles: live.sidechains.filter(s => slot === null || s.slot === slot).flatMap(s => s.bundles.map(b => bundleView(live, s.slot, b))),
       },
       indexReady: drivechain.isReady(),
     });
   };
 
-  private asert: AsertParams | null = null;
-
-  /** the aserti3 anchor (chains/src/kernel/chainparams.cpp: height 2016, half-life 2 h, 60 s spacing), read once */
-  private async asertParams(): Promise<AsertParams | null> {
-    if (this.asert) { return this.asert; }
-    try {
-      const ANCHOR = 2016;
-      const [anchor, parent, info] = await Promise.all([
-        bitcoinClient.getBlockHash(ANCHOR).then((h: string) => bitcoinClient.getBlockHeader(h, true)),
-        bitcoinClient.getBlockHash(ANCHOR - 1).then((h: string) => bitcoinClient.getBlockHeader(h, true)),
-        bitcoinClient.getBlockchainInfo(),
-      ]);
-      this.asert = {
-        anchorHeight: ANCHOR, anchorDifficulty: anchor.difficulty, anchorParentTime: parent.time,
-        spacing: 60, halfLife: 7200, minDifficultyBlocks: info.chain !== 'main',
-      };
-    } catch (e) {
-      return null; // not past the anchor yet
-    }
-    return this.asert;
-  }
-
-  /** GET drivechain/mining?window=   pools by coinbase tag (DATUM miners), hashrate, difficulty, aserti3, epochs */
+  /** GET drivechain/mining?window=   pools by coinbase tag (DATUM miners), hashrate, difficulty, retarget, epochs */
   private $getMining = async (req: Request, res: Response): Promise<void> => {
-    const window = intParam(req.query.window, 1440, 0, 1e7) as number;
-    const asert = await this.asertParams();
+    const window = intParam(req.query.window, 1008, 0, 1e7) as number;
     res.json(await cached('mining:' + window + ':' + drivechain.tipHeight(), 10000, async () => {
-      const stats = miningStats(window, asert);
+      const stats = miningStats(window, { minDifficultyBlocks: NETWORK.minDifficultyBlocks });
       const mining: any = await cached('mininginfo', 10000, () => bitcoinClient.getMiningInfo().catch(() => null));
       return { ...stats, node: mining ? { difficulty: mining.difficulty, networkhashps: mining.networkhashps } : null, indexReady: drivechain.isReady() };
     }));
-  };
-
-  private $getSummary = async (req: Request, res: Response): Promise<void> => {
-    const summary = await cached('summary', 5000, async () => {
-      const [info, active, proposals, bundles, avgFee] = await Promise.all([
-        bitcoinClient.call('getdrivechaininfo'),
-        bitcoinClient.call('listactivesidechains'),
-        bitcoinClient.call('listsidechainproposals'),
-        bitcoinClient.call('listwithdrawalbundles'),
-        bitcoinClient.call('getaveragefee').catch(() => null),
-      ]);
-      const stats = drivechain.getStats();
-      return {
-        info,
-        averageFee: avgFee,
-        sidechains: active.map((s: any) => {
-          const p = profileBySlot(s.slot);
-          return {
-            ...s,
-            escrow: s.escrow ? { ...s.escrow, amount: Math.round(s.escrow.amount * 1e8) } : null,
-            profile: p?.id ?? null,
-            explorer: p ? explorerUrl(p.id) : null,
-            stats: stats.slots.find((x: any) => x.slot === s.slot) ?? null,
-          };
-        }),
-        proposals,
-        bundles: bundles.map((b: any) => ({
-          ...b,
-          name: active.find((s: any) => s.slot === b.slot)?.title ?? profileBySlot(b.slot)?.name ?? `Slot ${b.slot}`,
-          fee: Math.round((b.fee ?? 0) * 1e8),
-          payouts: (b.payouts ?? []).map((p: any) => ({ ...p, amount: Math.round(p.amount * 1e8) })),
-          total: (b.payouts ?? []).reduce((a: number, p: any) => a + Math.round(p.amount * 1e8), 0),
-        })),
-        indexed: { from: stats.from, to: stats.to },
-      };
-    });
-    res.json(summary);
   };
 
   private $getBlocks = async (req: Request, res: Response): Promise<void> => {
@@ -361,74 +307,6 @@ class DrivechainRoutes {
       return handleError(req, res, 400, 'Invalid txid');
     }
     res.json(drivechain.getTx(txid));
-  };
-
-  // --- sidechain profiles ---------------------------------------------------------------------------
-
-  private $getSidechainSummary = async (req: Request, res: Response): Promise<void> => {
-    const summary = await cached('sc-summary', 5000, async () => {
-      const main = drivechain.mainchainClient;
-      const [onMain, bundles, mainInfo, state, bmmInfo] = await Promise.all([
-        main.call('getsidechain', PROFILE.slot).catch(() => null),
-        main.call('listwithdrawalbundles', PROFILE.slot).catch(() => []),
-        bitcoinClient.call('getmainchaininfo').catch(() => null),
-        bitcoinClient.call('getsidechainstate').catch(() => null),
-        bitcoinClient.call('getbmminfo').catch(() => null),
-      ]);
-      const stats = drivechain.getStats();
-      return {
-        slot: PROFILE.slot,
-        name: PROFILE.name,
-        onMainchain: onMain ? { ...onMain, escrow: onMain.escrow ? { ...onMain.escrow, amount: Math.round(onMain.escrow.amount * 1e8) } : null } : null,
-        bundles: (bundles ?? []).map((b: any) => ({
-          ...b,
-          fee: Math.round((b.fee ?? 0) * 1e8),
-          payouts: (b.payouts ?? []).map((p: any) => ({ ...p, amount: Math.round(p.amount * 1e8) })),
-          total: (b.payouts ?? []).reduce((a: number, p: any) => a + Math.round(p.amount * 1e8), 0),
-        })),
-        mainchainInfo: mainInfo,
-        state,
-        bmmInfo,
-        stats: stats.slots.find((x: any) => x.slot === PROFILE.slot) ?? null,
-        indexed: { from: stats.from, to: stats.to },
-        mainchainExplorer: explorerUrl('chains'),
-      };
-    });
-    res.json(summary);
-  };
-
-  /**
-   * The Chains block behind a sidechain block. Chains of stake: a block that acknowledges an anchor gets the Chains
-   * block that committed to the ticket (role 'ticket'), and a block that was anchored gets the one that anchored it.
-   */
-  private carrierOf(hash: string): any {
-    const direct = drivechain.getCarrier(hash);
-    if (direct) { return direct; }
-    const acked = anchorAckedIn(hash);
-    if (acked) {
-      const c = drivechain.getCarrier(acked.ticket);
-      return { ...(c ?? { height: acked.mainheight, hash: null, time: null, bid: null, requestTxid: null }), role: 'ticket', ticket: acked.ticket, anchored: acked.anchored };
-    }
-    const by = anchorOf(hash);
-    if (by) {
-      const c = drivechain.getCarrier(by.ticket);
-      return { ...(c ?? { height: by.mainheight, hash: null, time: null, bid: null, requestTxid: null }), role: 'anchored', ticket: by.ticket, ackBlock: by.block, ackHeight: by.height };
-    }
-    return null;
-  }
-
-  private $getSidechainBlock = async (req: Request, res: Response): Promise<void> => {
-    const hash = String(req.params.hash);
-    if (!/^[0-9a-f]{64}$/.test(hash)) {
-      return handleError(req, res, 400, 'Invalid block hash');
-    }
-    res.json({ carrier: this.carrierOf(hash), mainchainExplorer: explorerUrl('chains') });
-  };
-
-  /** Carriers of several sidechain blocks at once (the block strip and the blocks table) */
-  private $getSidechainBlocks = async (req: Request, res: Response): Promise<void> => {
-    const hashes = String(req.query.hashes ?? '').split(',').filter(h => /^[0-9a-f]{64}$/.test(h)).slice(0, 100);
-    res.json(Object.fromEntries(hashes.map(h => [h, this.carrierOf(h)])));
   };
 }
 

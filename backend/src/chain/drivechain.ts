@@ -1,27 +1,34 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import * as bitcoinjs from 'bitcoinjs-lib';
 import config from '../config';
 import logger from '../logger';
 import bitcoinClient from '../api/bitcoin/bitcoin-client';
-import { PROFILE, SIDECHAIN_PROFILES, profileBySlot } from './profile';
-import { Bip300Message, VOTE_ABSTAIN, VOTE_DOWNVOTE, VOTE_FORMS, parseBip300Script } from './bip300';
-const rpcApi = require('../rpc-api/index');
+import { PROFILE, profileBySlot } from './profile';
+import { HALVING_INTERVAL } from './networks';
+import enforcer, { BundleEvent, ChainInfo, HeaderInfo, PegBlock, SidechainInfo } from './enforcer';
+import { Bip300Message, VOTE_ABSTAIN, VOTE_DOWNVOTE, VOTE_FORMS, isDrivechainScript, parseBip300Script } from './bip300';
 
 /**
- * The drivechain index.
+ * The drivechain index: every eCash block from the BIP300 activation height on, decoded for BIP300/301. Sidechain
+ * proposals (M1) and acks (M2), withdrawal bundles proposed (M3) and voted on (M4), BMM accepts (M7) and requests/bids
+ * (M8), deposits into and withdrawals out of each sidechain's escrow, bundles paid or failed, and the pending bundles
+ * with their vote counts after each block.
  *
- * Mainchain profile ('chains'): every block of the Chains chain, decoded for BIP300/301: sidechain proposals (M1)
- * and acks (M2), withdrawal bundles proposed (M3) and voted on (M4), BMM accepts (M7) and requests/bids (M8),
- * deposits into and withdrawals out of each sidechain's escrow, bundles closed, and the pending bundles with
- * their scores. Coinbase messages are decoded here; escrow changes and bundle state come from the node's
- * getsidechainevents (one call per active slot per 2000 blocks).
+ * Two sources, so that either a stock eCash node with a bip300301_enforcer or Backbone can serve it:
+ * - the node (Core JSON-RPC): each block, raw (getblock verbosity 0), for the coinbase messages, the M8 requests and
+ *   who mined it;
+ * - the enforcer (chain/enforcer.ts): the active sidechains, the BIP300 constants, and per sidechain the deposits,
+ *   withdrawal bundle events and accepted BMM commitments (GetTwoWayPegData).
  *
- * Sidechain profiles: the same scan of the mainchain, for this sidechain's slot only. It maps each sidechain
- * block to the Chains block that committed to it (M7) and the bid paid for it (M8), and lists the deposits
- * and withdrawals of this sidechain.
+ * The pending bundles and their vote counts are replayed here the way the enforcer counts them
+ * (lib/validator/task/mod.rs): an M3 adds a bundle with one vote, an upvote adds one to its bundle and takes one from
+ * every other bundle of the sidechain with votes, an alarm takes one from all of them, a paid or failed bundle
+ * leaves the list (keeping the order of the others, which upvotes index into). After each sync the replay is checked
+ * against the enforcer's own counts (GetWithdrawalBundleProposals).
  *
- * In memory, saved to <CACHE_DIR>/chain/drivechain-<profile>.json; reorgs are found by comparing stored hashes
- * with the node's.
+ * In memory, saved to <CACHE_DIR>/chain/drivechain-<profile>-<network>.json; reorgs are found by comparing stored
+ * hashes with the node's.
  */
 
 const sats = (v: number | undefined | null): number => Math.round((v ?? 0) * 1e8);
@@ -29,7 +36,7 @@ const sats = (v: number | undefined | null): number => Math.round((v ?? 0) * 1e8
 export interface VoteEntry {
   slot: number;
   name: string;
-  value: number;               // raw entry; 0xffff abstain, 0xfffe downvote, else bundle index
+  value: number;               // raw entry; 0xffff abstain, 0xfffe alarm (downvote all), else bundle index
   vote: 'abstain' | 'downvote' | 'upvote';
   bundle?: string;             // the bundle an upvote names
 }
@@ -57,8 +64,8 @@ export interface Deposit {
   name: string;
   txid: string;
   amount: number;              // sats added to the escrow
-  destination: string;
-  burnindex: number;
+  destination: string;         // the sidechain address, as text when it is printable, else hex
+  sequence: number;            // the escrow's sequence number after the deposit
 }
 
 export interface Withdrawal {
@@ -71,18 +78,24 @@ export interface Withdrawal {
   payouts: { amount: number; script: string }[];
 }
 
+export interface PendingBundle {
+  hash: string;                // M6 id
+  score: number;               // vote count
+  height: number;              // proposed at
+}
+
 /** Who mined a mainchain block and what it earned */
 export interface MinerInfo {
   tag: string | null;          // the pool or miner, from the coinbase text
   coinbaseText: string;        // the readable parts of the coinbase
   reward: number;              // sats: everything the coinbase pays
-  fees: number;                // sats: the block's transaction fees (BMM bids included)
-  subsidy: number;             // sats: reward - fees
+  fees: number;                // sats: the block's transaction fees (BMM bids included): reward - subsidy
+  subsidy: number;             // sats
   txCount: number;
   weight: number;
   difficulty: number;
   bits: string;
-  minDifficulty: boolean;      // mined at the proof-of-work limit (bootstrap, or a test network's min-difficulty rule)
+  minDifficulty: boolean;      // mined at the proof-of-work limit (a test network's min-difficulty rule)
   datum: boolean;              // a DATUM coinbase: pool tag and miner tag separated by 0x0f
   poolTag: string | null;      // the first coinbase tag (DATUM: the pool's)
   minerTag: string | null;     // DATUM: the miner's own tag
@@ -101,9 +114,8 @@ export interface DrivechainBlock {
   deposits: Deposit[];
   withdrawals: Withdrawal[];
   bundlesClosed: { slot: number; name: string; hash: string; paid: boolean }[];
-  pending: { [slot: number]: { hash: string; score: number }[] };
-  miner: MinerInfo | null;     // mainchain profile only
-  scanned: boolean;            // the block itself was read (coinbase + M8); false = only the node's events
+  pending: { [slot: number]: PendingBundle[] };                              // after this block
+  miner: MinerInfo | null;
 }
 
 export interface DrivechainBlockSummary {
@@ -127,23 +139,18 @@ export interface DrivechainBlockSummary {
   fees: number | null;
 }
 
-interface SlotInfo {
-  slot: number;
-  title: string;
-  activationheight: number;
-}
+const CACHE_VERSION = 4; // 4: eCash, from the enforcer
 
-const CACHE_VERSION = 3; // 3: difficulty and DATUM tags of the miner
+/** Blocks read per step: the node's blocks are full Bitcoin-size blocks, and the node also serves a pool */
+const STEP = 50;
 
-function slotName(slot: number, sidechains: SlotInfo[]): string {
-  return sidechains.find(s => s.slot === slot)?.title || profileBySlot(slot)?.name || `Slot ${slot}`;
-}
-
-/** Known coinbase tags of Chains miners and pools -> display name */
+/** Known coinbase tags of eCash miners and pools -> display name */
 const KNOWN_TAGS: [RegExp, string][] = [
   [/BlockFab/i, 'BlockFabric'],
-  [/chains-qt|chains-app|chainsd/i, 'Chains node (solo)'],
 ];
+
+/** The compact proof-of-work limit (Bitcoin's, on every eCash network) */
+const POW_LIMIT_BITS = 0x1d00ffff;
 
 /** The readable runs (4+ printable characters) of a coinbase script, the block height push left out */
 export function coinbaseText(hex: string): string[] {
@@ -185,14 +192,29 @@ export function coinbaseTags(hex: string): { datum: boolean; pool: string | null
   return { datum: false, pool: clean(raw), miner: null };
 }
 
-/** The compact proof-of-work limit of Chains (all networks): a block at it was mined at the minimum difficulty */
-const POW_LIMIT_BITS = '1d00ffff';
+/** The difficulty of a compact target, relative to the proof-of-work limit (as the node's RPCs report it) */
+export function difficultyOf(bits: number): number {
+  const target = (b: number) => (b & 0xffffff) * Math.pow(2, 8 * ((b >>> 24) - 3));
+  return target(POW_LIMIT_BITS) / target(bits);
+}
 
-function minerInfo(block: any): MinerInfo {
-  const cb = block.tx[0];
-  const runs = coinbaseText(cb.vin?.[0]?.coinbase);
+export function subsidyAt(height: number): number {
+  const halvings = Math.floor(height / HALVING_INTERVAL);
+  return halvings >= 64 ? 0 : Math.floor(50 * 1e8 / Math.pow(2, halvings));
+}
+
+/** A deposit's sidechain address: as text when every byte is printable, else hex */
+export function destinationText(hex: string): string {
+  const b = Buffer.from(hex, 'hex');
+  return b.length && b.every(c => c >= 0x20 && c < 0x7f) ? b.toString('latin1') : hex;
+}
+
+function minerInfo(block: bitcoinjs.Block, height: number): MinerInfo {
+  const cb = block.transactions![0];
+  const script = cb.ins[0].script.toString('hex');
+  const runs = coinbaseText(script);
   const text = runs.join(' · ');
-  const tags = coinbaseTags(cb.vin?.[0]?.coinbase);
+  const tags = coinbaseTags(script);
   let tag: string | null = null;
   for (const [re, name] of KNOWN_TAGS) {
     if (re.test(text)) { tag = name; break; }
@@ -203,11 +225,12 @@ function minerInfo(block: any): MinerInfo {
   if (!tag && runs.length) {
     tag = runs.reduce((a, r) => r.length > a.length ? r : a, '').slice(0, 32);
   }
-  const reward = (cb.vout as any[]).reduce((a, o) => a + sats(o.value), 0);
-  const fees = (block.tx as any[]).slice(1).reduce((a, t) => a + sats(t.fee), 0);
+  const reward = cb.outs.reduce((a, o) => a + o.value, 0);
+  const subsidy = subsidyAt(height);
   return {
-    tag, coinbaseText: text.slice(0, 120), reward, fees, subsidy: reward - fees, txCount: block.tx.length, weight: block.weight,
-    difficulty: block.difficulty, bits: block.bits, minDifficulty: block.bits === POW_LIMIT_BITS,
+    tag, coinbaseText: text.slice(0, 120), reward, fees: Math.max(0, reward - subsidy), subsidy,
+    txCount: block.transactions!.length, weight: block.weight(),
+    difficulty: difficultyOf(block.bits), bits: block.bits.toString(16).padStart(8, '0'), minDifficulty: block.bits === POW_LIMIT_BITS,
     datum: tags.datum, poolTag: tags.pool, minerTag: tags.miner,
   };
 }
@@ -225,58 +248,39 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R
   return out;
 }
 
+/** The pending bundles of every sidechain, as the enforcer keeps them; changed in place by the replay */
+type PendingState = Map<number, PendingBundle[]>;
+
 class Drivechain {
   private blocks: Map<number, DrivechainBlock> = new Map();
   private byHash: Map<string, number> = new Map();
-  private bySideBlock: Map<string, number> = new Map(); // sidechain block hash -> mainchain height (sidechain profiles)
   private byTxid: Map<string, number> = new Map();       // deposit / withdrawal / M8 txid -> mainchain height
-  private sidechains: SlotInfo[] = [];
+  private sidechains: SidechainInfo[] = [];
+  private chainInfo: ChainInfo | null = null;
   private genesis = '';
   private running = false;
   private again = false;
   private ready = false;
-  private client: any;
   private lastSave = 0;
-
-  constructor() {
-    if (PROFILE.mainchain) {
-      this.client = bitcoinClient;
-    } else {
-      const r = config.CHAIN.MAINCHAIN_RPC;
-      this.client = new rpcApi.Client({
-        host: r.HOST, port: r.PORT, user: r.USERNAME, pass: r.PASSWORD, timeout: r.TIMEOUT,
-        cookie: r.COOKIE ? r.COOKIE_PATH : undefined,
-      });
-    }
-  }
-
-  get enabled(): boolean {
-    return true;
-  }
-
-  get mainchainClient(): any {
-    return this.client;
-  }
+  private maxH = -1;
+  private minH = Infinity;
 
   isReady(): boolean {
     return this.ready;
   }
 
+  getChainInfo(): ChainInfo | null {
+    return this.chainInfo;
+  }
+
   start(): void {
-    if (!this.enabled) {
-      return;
-    }
     this.loadCache();
     void this.run();
-    // the sidechain profiles follow the mainchain on their own: a sidechain block can come long after the
-    // mainchain block that carried it
-    setInterval(() => void this.run(), PROFILE.mainchain ? 30000 : 10000);
+    setInterval(() => void this.run(), 30000);
   }
 
   onNewBlock(_block: any): void {
-    if (this.enabled) {
-      void this.run();
-    }
+    void this.run();
   }
 
   private cacheFile(): string {
@@ -314,27 +318,11 @@ class Drivechain {
     }
   }
 
-  private maxH = -1;
-  private minH = Infinity;
-
-  private top(): number {
-    return this.maxH;
-  }
-
-  private bottom(): number {
-    return this.minH === Infinity ? 0 : this.minH;
-  }
-
   private add(b: DrivechainBlock): void {
     this.blocks.set(b.height, b);
     this.maxH = Math.max(this.maxH, b.height);
     this.minH = Math.min(this.minH, b.height);
     this.byHash.set(b.hash, b.height);
-    for (const a of b.bmm) {
-      if (PROFILE.slot === a.slot) {
-        this.bySideBlock.set(a.sideBlock, b.height);
-      }
-    }
     for (const d of b.deposits) { this.byTxid.set(d.txid, b.height); }
     for (const w of b.withdrawals) { this.byTxid.set(w.txid, b.height); }
     for (const r of b.bmmRequests) { this.byTxid.set(r.txid, b.height); }
@@ -347,17 +335,12 @@ class Drivechain {
     }
     this.blocks.delete(height);
     this.byHash.delete(b.hash);
-    if (height === this.maxH) {
-      while (this.maxH >= 0 && !this.blocks.has(this.maxH)) { this.maxH--; }
-    }
     if (!this.blocks.size) {
       this.maxH = -1;
       this.minH = Infinity;
-    } else if (height === this.minH) {
+    } else {
+      while (this.maxH >= 0 && !this.blocks.has(this.maxH)) { this.maxH--; }
       while (!this.blocks.has(this.minH)) { this.minH++; }
-    }
-    for (const a of b.bmm) {
-      if (this.bySideBlock.get(a.sideBlock) === height) { this.bySideBlock.delete(a.sideBlock); }
     }
     for (const t of [...b.deposits, ...b.withdrawals, ...b.bmmRequests]) {
       if (this.byTxid.get(t.txid) === height) { this.byTxid.delete(t.txid); }
@@ -384,91 +367,83 @@ class Drivechain {
   }
 
   private async sync(): Promise<void> {
-    const genesis: string = await this.client.getBlockHash(0);
+    const genesis: string = await bitcoinClient.getBlockHash(0);
     if (this.genesis && this.genesis !== genesis) {
-      logger.notice('Drivechain index: the mainchain was started over; indexing again');
+      logger.notice('Drivechain index: the node follows another chain; indexing again');
       for (const h of [...this.blocks.keys()]) { this.remove(h); }
     }
     this.genesis = genesis;
-    const tip: number = await this.client.getBlockCount();
-
-    const active: any[] = await this.client.call('listactivesidechains');
-    this.sidechains = active.map(s => ({ slot: s.slot, title: s.title, activationheight: s.activationheight }));
+    this.chainInfo = await enforcer.getChainInfo();
+    this.sidechains = (await enforcer.getSidechains()).sort((a, b) => a.slot - b.slot);
+    // the enforcer's tip: its events go no further, and the node may be a block ahead of it
+    const tip = (await enforcer.getChainTip()).height;
 
     // reorg: walk back from the highest stored block until its hash is the node's
-    let top = this.blocks.size ? this.top() : -1;
+    let top = this.blocks.size ? this.maxH : -1;
     while (top >= 0) {
       const b = this.blocks.get(top);
-      if (b && top <= tip && b.hash === await this.client.getBlockHash(top)) {
+      if (b && top <= tip && b.hash === await bitcoinClient.getBlockHash(top)) {
         break;
       }
       this.remove(top);
       top--;
     }
-    // drop anything below the backfill window
-    const from = Math.max(0, tip - config.CHAIN.BACKFILL_BLOCKS + 1);
+    const from = this.chainInfo.activationHeight;
     if (top < from - 1) {
+      for (const h of [...this.blocks.keys()]) { this.remove(h); } // the cache started elsewhere
       top = from - 1;
     }
     if (top >= tip) {
       return;
     }
-    const start = top + 1;
-    if (tip - start > 10) {
-      logger.info(`Drivechain index: blocks ${start} to ${tip}`);
+    if (tip - top > 10) {
+      logger.info(`Drivechain index: blocks ${top + 1} to ${tip}`);
     }
-    for (let h = start; h <= tip; h += 500) {
-      await this.scanRange(h, Math.min(tip, h + 499));
-      this.saveCache(h + 500 > tip);
+    for (let h = top + 1; h <= tip; h += STEP) {
+      await this.scanRange(h, Math.min(tip, h + STEP - 1));
+      this.saveCache(h + STEP > tip);
     }
+    await this.checkPending();
   }
 
-  /** getsidechainevents for the slots this profile follows, heights first..last; keyed by height then slot */
-  private async events(first: number, last: number): Promise<Map<number, Map<number, any>>> {
-    const out = new Map<number, Map<number, any>>();
-    const slots = PROFILE.mainchain ? this.sidechains.map(s => s.slot) : [PROFILE.slot as number];
-    for (const slot of slots) {
-      for (let h = first; h <= last; h += 2000) {
-        let evs: any[] = [];
-        try {
-          evs = await this.client.call('getsidechainevents', slot, h, Math.min(2000, last - h + 1));
-        } catch (e) {
-          continue; // the slot is not active (yet)
-        }
-        for (const ev of evs) {
-          if (!out.has(ev.height)) { out.set(ev.height, new Map()); }
-          out.get(ev.height)!.set(slot, ev);
-        }
-      }
-    }
-    return out;
+  private name(slot: number): string {
+    return this.sidechains.find(s => s.slot === slot)?.title || profileBySlot(slot)?.name || `Slot ${slot}`;
+  }
+
+  /** The pending bundles after block `height` (empty before the first indexed block) */
+  private pendingAfter(height: number): PendingState {
+    const b = this.blocks.get(height);
+    return new Map(Object.entries(b?.pending ?? {}).map(([slot, list]) => [Number(slot), list.map(p => ({ ...p }))]));
   }
 
   private async scanRange(first: number, last: number): Promise<void> {
-    const evFirst = Math.max(0, first - 1); // the pending bundles before `first`, for its votes
-    const events = await this.events(evFirst, last);
+    const lastHash: string = await bitcoinClient.getBlockHash(last);
+    const headers: HeaderInfo[] = (await enforcer.getHeaders(lastHash, last - first + 2)).reverse(); // first - 1 .. last
+    const prevHash = headers[0]?.height === first - 1 ? headers[0].hash : null;
+
+    // per sidechain: deposits, bundle events, BMM; keyed by height then slot
+    const peg = new Map<number, Map<number, PegBlock>>();
+    for (const s of this.sidechains.filter(x => x.activationHeight <= last)) {
+      for (const p of await enforcer.getPegData(s.slot, prevHash, lastHash)) {
+        if (!peg.has(p.header.height)) { peg.set(p.header.height, new Map()); }
+        peg.get(p.header.height)!.set(s.slot, p);
+      }
+    }
+
+    const raw = new Map<number, bitcoinjs.Block>();
+    const byHeight = new Map(headers.map(h => [h.height, h]));
     const heights: number[] = [];
     for (let h = first; h <= last; h++) { heights.push(h); }
-
-    // the blocks themselves: every block on the mainchain profile; on a sidechain profile only those that
-    // carried one of its blocks (to find the bid)
-    const wanted = PROFILE.mainchain ? heights : heights.filter(h => events.get(h)?.get(PROFILE.slot as number)?.bmm);
-    const raw = new Map<number, any>();
-    await mapLimit(wanted, 4, async (h) => {
-      const hash = await this.client.getBlockHash(h);
-      raw.set(h, await this.client.getBlock(hash, 2));
+    await mapLimit(heights, Math.max(1, config.CHAIN.ENFORCER.MAX_CONCURRENT), async (h) => {
+      const hash = byHeight.get(h)?.hash ?? await bitcoinClient.getBlockHash(h);
+      raw.set(h, bitcoinjs.Block.fromHex(await bitcoinClient.getBlock(hash, 0)));
     });
 
+    const state = this.pendingAfter(first - 1);
     let lastVotes: VoteEntry[] = this.blocks.get(first - 1)?.votes?.entries ?? [];
     for (const h of heights) {
-      const ev = events.get(h) ?? new Map();
-      const prevEv = events.get(h - 1) ?? new Map();
-      let hash: string | undefined = raw.get(h)?.hash ?? [...ev.values()][0]?.hash;
-      if (!hash) {
-        hash = await this.client.getBlockHash(h);
-      }
-      const time = raw.get(h)?.time ?? [...ev.values()][0]?.time ?? 0;
-      const b = this.decode(h, hash as string, time, raw.get(h), ev, prevEv, lastVotes);
+      const block = raw.get(h)!;
+      const b = await this.decode(h, block.getId(), byHeight.get(h)?.time ?? block.timestamp, block, peg.get(h) ?? new Map(), state, lastVotes);
       if (b.votes) {
         lastVotes = b.votes.entries;
       }
@@ -476,140 +451,211 @@ class Drivechain {
     }
   }
 
-  private decode(height: number, hash: string, time: number, block: any, ev: Map<number, any>, prevEv: Map<number, any>,
-    lastVotes: VoteEntry[]): DrivechainBlock {
-    const sc = this.sidechains;
+  private async decode(height: number, hash: string, time: number, block: bitcoinjs.Block, peg: Map<number, PegBlock>,
+    state: PendingState, lastVotes: VoteEntry[]): Promise<DrivechainBlock> {
     const b: DrivechainBlock = {
       height, hash, time,
       proposals: [], acks: [], bundlesProposed: [], votes: null, bmm: [], bmmRequests: [],
-      deposits: [], withdrawals: [], bundlesClosed: [], pending: {}, miner: null, scanned: !!block,
+      deposits: [], withdrawals: [], bundlesClosed: [], pending: {}, miner: minerInfo(block, height),
     };
-    const pendingBefore = (slot: number): { hash: string; score: number }[] => prevEv.get(slot)?.pending ?? this.blocks.get(height - 1)?.pending?.[slot] ?? [];
+    const txs = block.transactions!;
+    const pendingOf = (slot: number): PendingBundle[] => {
+      if (!state.has(slot)) { state.set(slot, []); }
+      return state.get(slot)!;
+    };
+    // the sidechains M4 votes refer to: those active before this block, in slot order
+    const votable = this.sidechains.filter(s => s.activationHeight < height);
 
-    // escrow changes and bundle state, per slot
-    for (const [slot, e] of ev) {
-      const name = slotName(slot, sc);
-      if (e.bmm) {
-        b.bmm.push({ slot, name, sideBlock: e.bmm });
-      }
-      for (const d of e.deposits ?? []) {
-        if (d.destination === 'D' && d.bundle) {
-          const payouts = (d.payouts ?? []).map((p: any) => ({ amount: sats(p.amount), script: p.script }));
-          b.withdrawals.push({ slot, name, txid: d.txid, bundle: d.bundle, payouts, amount: payouts.reduce((a: number, p: any) => a + p.amount, 0), escrowDelta: sats(d.amount) });
-        } else {
-          b.deposits.push({ slot, name, txid: d.txid, amount: sats(d.amount), destination: d.destination, burnindex: d.burnindex });
-        }
-      }
-      for (const c of e.bundles ?? []) {
-        b.bundlesClosed.push({ slot, name, hash: c.hash, paid: !!c.paid });
-      }
-      if (!block) {
-        for (const p of e.proposed ?? []) {
-          b.bundlesProposed.push({ slot, name, hash: p });
-        }
-      }
-      if ((e.pending ?? []).length) {
-        b.pending[slot] = e.pending;
-      }
-    }
-
-    if (!block) {
-      return b;
-    }
-
-    if (PROFILE.mainchain) {
-      b.miner = minerInfo(block);
-      if (height === 0) {
-        b.miner.tag = 'Genesis';
-      }
-    }
-
-    // coinbase messages
-    let msgs: Bip300Message[] = [];
-    for (const out of block.tx[0].vout) {
-      const m = parseBip300Script(out.scriptPubKey?.hex);
-      if (m) { msgs.push(m); }
-    }
-    for (const m of msgs) {
+    // coinbase messages, in output order (as the enforcer applies them)
+    let m4 = false;
+    for (const out of txs[0].outs) {
+      const m = parseBip300Script(out.script.toString('hex'));
+      if (!m) { continue; }
       switch (m.kind) {
         case 'M1':
           b.proposals.push({ slot: m.slot!, hash: m.hash!, title: m.title, description: m.description, version: m.version, hashId1: m.hashId1, hashId2: m.hashId2 });
           break;
         case 'M2':
-          b.acks.push({ slot: m.slot!, hash: m.hash! });
+          b.acks.push({ slot: m.slot!, hash: m.hash!, title: this.proposalTitle(m.hash!) ?? undefined });
           break;
         case 'M3':
-          b.bundlesProposed.push({ slot: m.slot!, name: slotName(m.slot!, sc), hash: m.hash! });
+          b.bundlesProposed.push({ slot: m.slot!, name: this.name(m.slot!), hash: m.hash! });
+          pendingOf(m.slot!).push({ hash: m.hash!, score: 1, height });
           break;
         case 'M7':
           if (!b.bmm.some(a => a.slot === m.slot)) {
-            b.bmm.push({ slot: m.slot!, name: slotName(m.slot!, sc), sideBlock: m.hash! });
+            b.bmm.push({ slot: m.slot!, name: this.name(m.slot!), sideBlock: m.hash! });
           }
           break;
-        case 'M4': {
-          // votes refer to the sidechains active before this block, in slot order, and to their pending bundles then
-          const votable = sc.filter(s => s.activationheight < height).sort((x, y) => x.slot - y.slot);
-          const form = m.form ?? 0;
-          let entries: VoteEntry[] = [];
-          if (form === 1 || form === 2) {
-            entries = (m.votes ?? []).map((v, i) => {
-              const s = votable[i];
-              const slot = s ? s.slot : -1;
-              const e: VoteEntry = { slot, name: s ? s.title : '?', value: v, vote: v === VOTE_ABSTAIN ? 'abstain' : v === VOTE_DOWNVOTE ? 'downvote' : 'upvote' };
-              if (e.vote === 'upvote' && s) {
-                e.bundle = pendingBefore(slot)[v]?.hash;
-              }
-              return e;
-            });
-          } else if (form === 0) {
-            entries = lastVotes.map(e => ({ ...e }));
-          } else if (form === 3) {
-            for (const s of votable) {
-              const pend = [...pendingBefore(s.slot)].sort((x, y) => y.score - x.score);
-              if (pend.length && pend[0].score >= (pend[1]?.score ?? 0) + 50) {
-                entries.push({ slot: s.slot, name: s.title, value: 0, vote: 'upvote', bundle: pend[0].hash });
-              }
-            }
-          }
-          b.votes = { form, formName: VOTE_FORMS[form] ?? `form ${form}`, entries };
+        case 'M4':
+          m4 = true;
+          b.votes = this.applyVotes(m, votable, state, lastVotes);
           break;
-        }
       }
     }
-    for (const a of b.acks) {
-      a.title = this.blocksProposalTitle(a.hash) ?? undefined;
+    if (!m4) {
+      b.votes = null; // no M4: every sidechain abstains
     }
 
-    // M8: BMM requests in this block (output 0 of any transaction); the bid is the transaction's fee
-    for (const tx of block.tx.slice(1)) {
-      const m = parseBip300Script(tx.vout?.[0]?.scriptPubKey?.hex);
+    // BMM the enforcer accepted (the same as the M7s above, for a block it validated)
+    for (const [slot, p] of peg) {
+      if (p.bmmCommitment && !b.bmm.some(a => a.slot === slot)) {
+        b.bmm.push({ slot, name: this.name(slot), sideBlock: p.bmmCommitment });
+      }
+    }
+
+    // M8: BMM requests (output 0 of any transaction); the bid is the transaction's fee
+    for (const tx of txs.slice(1)) {
+      const m = parseBip300Script(tx.outs[0]?.script.toString('hex'));
       if (m && m.kind === 'M8') {
+        const txid = tx.getId();
         const accepted = b.bmm.some(a => a.slot === m.slot && a.sideBlock === m.hash);
-        const req: BmmRequest = { slot: m.slot!, name: slotName(m.slot!, sc), sideBlock: m.hash!, prevMainBlock: m.prevMainBlock, txid: tx.txid, bid: sats(tx.fee), accepted };
+        const req: BmmRequest = { slot: m.slot!, name: this.name(m.slot!), sideBlock: m.hash!, prevMainBlock: m.prevMainBlock, txid, bid: await this.feeOf(txid, hash), accepted };
         b.bmmRequests.push(req);
         if (accepted) {
           const a = b.bmm.find(x => x.slot === m.slot && x.sideBlock === m.hash)!;
-          a.requestTxid = tx.txid;
+          a.requestTxid = txid;
           a.bid = req.bid;
         }
       }
     }
-    if (!PROFILE.mainchain) {
-      // a sidechain profile keeps only its own slot
-      const own = (x: { slot: number }) => x.slot === PROFILE.slot;
-      b.bmmRequests = b.bmmRequests.filter(own);
-      b.bmm = b.bmm.filter(own);
-      b.proposals = b.proposals.filter(own);
-      b.acks = b.acks.filter(own);
-      b.bundlesProposed = b.bundlesProposed.filter(own);
-      if (b.votes) {
-        b.votes.entries = b.votes.entries.filter(own);
+
+    // escrow changes and bundle outcomes, per sidechain
+    for (const [slot, p] of peg) {
+      const name = this.name(slot);
+      for (const d of p.deposits) {
+        b.deposits.push({ slot, name, txid: d.txid, amount: d.amount, destination: destinationText(d.address), sequence: d.sequence });
+      }
+      for (const e of p.bundleEvents) {
+        await this.applyBundleEvent(b, slot, name, e, pendingOf(slot));
+      }
+    }
+
+    // bundles past their maximum age fail
+    const maxAge = this.chainInfo?.bundleMaxAge ?? Infinity;
+    for (const [slot, list] of state) {
+      for (const p of list.filter(x => height - x.height > maxAge)) {
+        if (!b.bundlesClosed.some(c => c.hash === p.hash)) {
+          b.bundlesClosed.push({ slot, name: this.name(slot), hash: p.hash, paid: false });
+        }
+      }
+      state.set(slot, list.filter(x => height - x.height <= maxAge));
+    }
+
+    for (const [slot, list] of state) {
+      if (list.length) {
+        b.pending[slot] = list.map(p => ({ ...p }));
       }
     }
     return b;
   }
 
-  private blocksProposalTitle(hash: string): string | null {
+  /** An M4: what each entry votes for, and its effect on the vote counts (lib/validator/task/mod.rs handle_m4_*) */
+  private applyVotes(m: Bip300Message, votable: SidechainInfo[], state: PendingState, lastVotes: VoteEntry[]): DrivechainBlock['votes'] {
+    const form = m.form ?? 0;
+    const pendingOf = (slot: number) => state.get(slot) ?? [];
+    let entries: VoteEntry[] = [];
+    if (form === 1 || form === 2) {
+      entries = (m.votes ?? []).map((v, i) => {
+        const s = votable[i];
+        const e: VoteEntry = { slot: s ? s.slot : -1, name: s ? this.name(s.slot) : '?', value: v, vote: v === VOTE_ABSTAIN ? 'abstain' : v === VOTE_DOWNVOTE ? 'downvote' : 'upvote' };
+        if (e.vote === 'upvote' && s) {
+          e.bundle = pendingOf(s.slot)[v]?.hash;
+        }
+        return e;
+      });
+    } else if (form === 0) {
+      // repeat the previous block's votes, against the bundles pending now
+      entries = lastVotes.filter(e => e.vote !== 'upvote' || pendingOf(e.slot).some(p => p.hash === e.bundle)).map(e => ({ ...e }));
+    } else if (form === 3) {
+      for (const s of votable) {
+        const pend = [...pendingOf(s.slot)].sort((x, y) => y.score - x.score);
+        if (pend.length && pend[0].score - (pend[1]?.score ?? 0) >= 50) {
+          entries.push({ slot: s.slot, name: this.name(s.slot), value: 0, vote: 'upvote', bundle: pend[0].hash });
+        }
+      }
+    }
+    for (const e of entries) {
+      const list = pendingOf(e.slot);
+      if (e.vote === 'upvote' && e.bundle) {
+        for (const p of list) {
+          if (p.hash === e.bundle) {
+            p.score = Math.min(0xffff, p.score + 1);
+          } else if (p.score > 0) {
+            p.score--;
+          }
+        }
+      } else if (e.vote === 'downvote') {
+        for (const p of list) { p.score = Math.max(0, p.score - 1); }
+      }
+    }
+    return { form, formName: VOTE_FORMS[form] ?? `form ${form}`, entries };
+  }
+
+  private async applyBundleEvent(b: DrivechainBlock, slot: number, name: string, e: BundleEvent, pending: PendingBundle[]): Promise<void> {
+    const drop = () => {
+      const i = pending.findIndex(p => p.hash === e.m6id);
+      if (i >= 0) { pending.splice(i, 1); }
+    };
+    if (e.kind === 'submitted') {
+      if (!b.bundlesProposed.some(p => p.hash === e.m6id)) {
+        b.bundlesProposed.push({ slot, name, hash: e.m6id });
+        pending.push({ hash: e.m6id, score: 1, height: b.height });
+      }
+    } else if (e.kind === 'failed') {
+      b.bundlesClosed.push({ slot, name, hash: e.m6id, paid: false });
+      drop();
+    } else {
+      b.bundlesClosed.push({ slot, name, hash: e.m6id, paid: true });
+      drop();
+      if (e.transaction) {
+        b.withdrawals.push(await this.withdrawal(slot, name, e.m6id, e.transaction, b.hash));
+      }
+    }
+  }
+
+  /** A paid bundle's M6 transaction: its payouts, and what left the escrow (payouts and fee) */
+  private async withdrawal(slot: number, name: string, bundle: string, txHex: string, blockHash: string): Promise<Withdrawal> {
+    const tx = bitcoinjs.Transaction.fromHex(txHex);
+    const txid = tx.getId();
+    const escrowOut = tx.outs.find(o => isDrivechainScript(o.script.toString('hex')));
+    const payouts = tx.outs
+      .filter(o => o !== escrowOut && o.script[0] !== 0x6a)
+      .map(o => ({ amount: o.value, script: o.script.toString('hex') }));
+    let escrowDelta = 0;
+    try {
+      const verbose = await bitcoinClient.call('getrawtransaction', txid, 2, blockHash);
+      escrowDelta = (escrowOut?.value ?? 0) - sats(verbose.vin?.[0]?.prevout?.value);
+    } catch (e) {
+      escrowDelta = -payouts.reduce((a, p) => a + p.amount, 0);
+    }
+    return { slot, name, txid, bundle, payouts, amount: payouts.reduce((a, p) => a + p.amount, 0), escrowDelta };
+  }
+
+  private async feeOf(txid: string, blockHash: string): Promise<number> {
+    try {
+      return sats((await bitcoinClient.call('getrawtransaction', txid, 2, blockHash)).fee);
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  /** The replayed vote counts against the enforcer's, at the tip */
+  private async checkPending(): Promise<void> {
+    const ours = this.pendingAfter(this.maxH);
+    for (const s of this.sidechains) {
+      const theirs = await enforcer.getBundleProposals(s.slot);
+      const mine = ours.get(s.slot) ?? [];
+      const same = theirs.length === mine.length && theirs.every(t => mine.some(p => p.hash === t.m6id && p.score === t.voteCount));
+      if (!same) {
+        logger.warn(`Drivechain index: the pending bundles of slot ${s.slot} differ from the enforcer's: `
+          + `ours ${JSON.stringify(mine.map(p => [p.hash.slice(0, 12), p.score]))}, `
+          + `the enforcer's ${JSON.stringify(theirs.map(t => [t.m6id.slice(0, 12), t.voteCount]))}`);
+      }
+    }
+  }
+
+  private proposalTitle(hash: string): string | null {
     for (const b of this.blocks.values()) {
       const p = b.proposals.find(x => x.hash === hash);
       if (p) { return p.title ?? null; }
@@ -630,14 +676,14 @@ class Drivechain {
   }
 
   tipHeight(): number {
-    return this.blocks.size ? this.top() : -1;
+    return this.blocks.size ? this.maxH : -1;
   }
 
   firstHeight(): number {
-    return this.blocks.size ? this.bottom() : 0;
+    return this.blocks.size ? this.minH : 0;
   }
 
-  getSidechains(): SlotInfo[] {
+  getSidechains(): SidechainInfo[] {
     return this.sidechains;
   }
 
@@ -671,9 +717,9 @@ class Drivechain {
 
   /** Summaries of the blocks at heights [to - count + 1, to] (newest first) */
   getSummaries(to: number | null, count: number): DrivechainBlockSummary[] {
-    const top = to ?? (this.blocks.size ? this.top() : -1);
+    const top = to ?? this.tipHeight();
     const out: DrivechainBlockSummary[] = [];
-    for (let h = top; h >= 0 && out.length < count; h--) {
+    for (let h = top; h >= this.firstHeight() && out.length < count; h--) {
       const b = this.blocks.get(h);
       if (b) { out.push(this.summarize(b)); }
     }
@@ -683,11 +729,10 @@ class Drivechain {
   /** A flat list of one kind of event, newest first */
   getEvents(kind: string, slot: number | null, before: number | null, limit: number): any[] {
     const out: any[] = [];
-    const top = before !== null ? before - 1 : (this.blocks.size ? this.top() : -1);
-    for (let h = top; h >= 0 && out.length < limit; h--) {
+    const top = before !== null ? before - 1 : this.tipHeight();
+    for (let h = top; h >= this.firstHeight() && out.length < limit; h--) {
       const b = this.blocks.get(h);
       if (!b) {
-        if (this.blocks.size && h < this.bottom()) { break; }
         continue;
       }
       const at = { height: b.height, blockHash: b.hash, time: b.time };
@@ -711,7 +756,7 @@ class Drivechain {
     return out;
   }
 
-  /** Totals over the indexed window, per slot */
+  /** Totals over the indexed blocks, per slot */
   getStats(): any {
     const per: Record<number, any> = {};
     const get = (slot: number, name: string) => per[slot] ??= { slot, name, bmmBlocks: 0, bids: 0, deposits: 0, depositAmount: 0, withdrawals: 0, withdrawalAmount: 0, lastBmmHeight: null };
@@ -739,21 +784,6 @@ class Drivechain {
       withdrawal: b.withdrawals.find(w => w.txid === txid) ?? null,
       bmmRequest: b.bmmRequests.find(r => r.txid === txid) ?? null,
     };
-  }
-
-  /** Sidechain profiles: the mainchain block that committed to a sidechain block */
-  getCarrier(sideBlockHash: string): any | null {
-    const h = this.bySideBlock.get(sideBlockHash);
-    if (h === undefined) {
-      return null;
-    }
-    const b = this.blocks.get(h)!;
-    const a = b.bmm.find(x => x.sideBlock === sideBlockHash);
-    return { height: b.height, hash: b.hash, time: b.time, bid: a?.bid ?? null, requestTxid: a?.requestTxid ?? null };
-  }
-
-  static sidechainProfiles() {
-    return SIDECHAIN_PROFILES;
   }
 }
 

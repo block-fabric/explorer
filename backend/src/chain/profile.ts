@@ -10,7 +10,7 @@ import { MODULES } from './modules';
 export type { ChainProfile } from './module';
 
 function resolve(): ChainModule {
-  const id = (config.CHAIN?.PROFILE || 'chains').toLowerCase();
+  const id = (config.CHAIN?.PROFILE || 'ecash').toLowerCase();
   const m = MODULES.find(x => x.profile.id === id);
   if (!m) {
     throw new Error(`Unknown CHAIN.PROFILE '${config.CHAIN?.PROFILE}'. Known: ${MODULES.map(x => x.profile.id).join(', ')}`);
@@ -21,9 +21,9 @@ function resolve(): ChainModule {
 export const MODULE: ChainModule = resolve();
 export const PROFILE: ChainProfile = MODULE.profile;
 
-/** The sidechains of the Chains network: every sidechain module but the template, in slot order */
+/** The sidechains this explorer has a module for, in slot order */
 export const SIDECHAIN_PROFILES: ChainProfile[] = MODULES.map(m => m.profile)
-  .filter(p => !p.mainchain && p.id !== 'sidechain-template')
+  .filter(p => !p.mainchain)
   .sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0));
 
 export function profileBySlot(slot: number): ChainProfile | undefined {

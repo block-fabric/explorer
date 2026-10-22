@@ -52,7 +52,6 @@ import walletApi from './api/services/wallets';
 import stratumApi from './api/services/stratum';
 import drivechain from './chain/drivechain';
 import addressIndex from './chain/address-index';
-import { chainDatabaseFixups } from './chain/db-fixups';
 import drivechainRoutes, { moduleNewBlock } from './chain/drivechain.routes';
 
 class Server {
@@ -140,7 +139,6 @@ class Server {
           await databaseMigration.$blocksReindexingTruncate();
         }
         await databaseMigration.$initializeOrMigrateDatabase();
-        await chainDatabaseFixups(); // Chains Explorer: columns the chains need wider (chain/db-fixups.ts)
       } catch (e) {
         throw new Error(e instanceof Error ? e.message : 'Error');
       }

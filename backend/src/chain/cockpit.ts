@@ -2,8 +2,8 @@ import drivechain, { DrivechainBlock } from './drivechain';
 import { PROFILE, profileBySlot } from './profile';
 
 /**
- * The drivechain cockpit: statistics over the drivechain index for a window of mainchain blocks, for every
- * sidechain (the Chains explorer) or one slot (a sidechain's explorer).
+ * The drivechain cockpit: statistics over the drivechain index for a window of eCash blocks, for every sidechain
+ * or one slot.
  *
  *   totals     BMM (blocks carrying sidechain blocks, accepts, requests, bids), miner revenue (subsidy, fees, bids),
  *              flows (deposits, withdrawals), votes, proposals, bundles
@@ -97,7 +97,7 @@ function compute(tip: number, window: number, slotFilter: number | null, escrowN
     }
     return slots.get(slot)!;
   };
-  for (const s of sidechains) { slotOf(s.slot, s.title); }
+  for (const s of sidechains) { slotOf(s.slot, s.title ?? `Slot ${s.slot}`); }
 
   const miners = new Map<string, CockpitMinerStats>();
   const totals = {

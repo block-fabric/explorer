@@ -418,13 +418,7 @@ class BitcoinApi implements AbstractBitcoinApi {
       };
     }
 
-    if (esploraTransaction.vin[0]?.is_coinbase) {
-      return esploraTransaction;
-    }
-    // Chains Explorer (zSide): a shielded transaction can have no inputs at all (its value comes out of the shielded
-    // pool); the node reports its fee, which the inputs cannot give
-    if (!esploraTransaction.vin.length) {
-      esploraTransaction.fee = Math.round(((transaction as any).fee ?? 0) * 100000000);
+    if (esploraTransaction.vin[0].is_coinbase) {
       return esploraTransaction;
     }
 
@@ -524,8 +518,8 @@ class BitcoinApi implements AbstractBitcoinApi {
 
   /** @asyncUnsafe */
   private async $calculateFeeFromInputs(transaction: IEsploraApi.Transaction, addPrevout: boolean, lazyPrevouts: boolean): Promise<IEsploraApi.Transaction> {
-    if (transaction.vin[0]?.is_coinbase || !transaction.vin.length) { // Chains Explorer: no inputs (zSide shielded)
-      transaction.fee = transaction.vin.length ? 0 : (transaction.fee ?? 0);
+    if (transaction.vin[0].is_coinbase) {
+      transaction.fee = 0;
       return transaction;
     }
     let totalIn = 0;

@@ -12,11 +12,9 @@ export interface ChainProfile {
   id: string;
   name: string;
   unit: string;
-  /** BIP300 slot on the Chains mainchain; null for the mainchain itself */
+  /** BIP300 slot on the eCash mainchain; null for the mainchain itself */
   slot: number | null;
   mainchain: boolean;
-  /** bech32 human-readable part per network */
-  bech32: { main: string; testnet: string; regtest: string };
   /** Bitcoin-style PoW with a block subsidy (the stock reward/subsidy maths apply) */
   subsidy: boolean;
 }
@@ -25,8 +23,6 @@ export interface ChainProfile {
 export interface ChainModuleContext {
   /** this chain's node (CORE_RPC); every RPC name of rpc-api/commands.ts, or node.call(method, ...params) */
   node: RpcClient;
-  /** the Chains mainchain node (this node on the mainchain profile, CHAIN.MAINCHAIN_RPC on a sidechain) */
-  mainchain: RpcClient;
   /** memoize an async value for ttlMs (per key) */
   cached<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<T>;
   /** wrap an express handler: errors become a JSON 500 (node errors) */
@@ -62,14 +58,4 @@ export interface ChainModule {
   describeTx?(tx: any, ctx: ChainModuleContext): Promise<unknown | null>;
   /** The same for a block (served at GET <prefix>block/:hash/features), e.g. FastBlocks' kind/proposer/finality */
   describeBlock?(block: any, ctx: ChainModuleContext): Promise<unknown | null>;
-}
-
-/** The usual bech32 prefixes of a Chains sidechain: <x> on main, t<x> on testnet */
-export function sidechainBech32(main: string, regtest = 'rsc'): ChainProfile['bech32'] {
-  return { main, testnet: 't' + main, regtest };
-}
-
-/** A sidechain profile with the Chains defaults (CHN, no subsidy) */
-export function sidechainProfile(id: string, name: string, slot: number, bech32Main: string, regtest = 'rsc'): ChainProfile {
-  return { id, name, unit: 'CHN', slot, mainchain: false, subsidy: false, bech32: sidechainBech32(bech32Main, regtest) };
 }

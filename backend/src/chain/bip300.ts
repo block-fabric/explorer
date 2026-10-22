@@ -1,8 +1,8 @@
 import { createHash } from 'crypto';
 
 /**
- * BIP300 / BIP301 messages as Chains writes them (chains/src/drivechain/sidechain.h). Every message is an
- * OP_RETURN output holding one data push that starts with a 4-byte tag; a slot is one byte.
+ * BIP300 / BIP301 messages as the bip300301_enforcer reads them (lib/messages.rs), on eCash as on Chains. Every
+ * message is an OP_RETURN output holding one data push that starts with a 4-byte tag; a slot is one byte.
  *
  *   M1 propose sidechain  d5e0c4af | slot | version(0) | title_len | title | description | hash_id1(32) | hash_id2(20)
  *   M2 ack proposal       d6e1c5df | slot | sha256d(M1 description)       (coinbase)
@@ -11,8 +11,8 @@ import { createHash } from 'crypto';
  *   M7 accept BMM         d1617368 | slot | sidechain block hash           (coinbase)
  *   M8 request BMM        00bf00   | slot | sidechain block hash | previous mainchain block hash (output 0 of a tx)
  *
- * Hashes on the wire are in internal byte order; everything returned here is in display order (reversed),
- * the order the node's RPCs (getsidechainevents, listwithdrawalbundles, ...) print them in.
+ * Hashes on the wire are in internal byte order; everything returned here is in display order (reversed), the
+ * order the node's RPCs print them in and chain/enforcer.ts returns them in.
  */
 
 export type Bip300Kind = 'M1' | 'M2' | 'M3' | 'M4' | 'M7' | 'M8';
@@ -41,7 +41,6 @@ export interface Bip300Message {
 const TAGS: Record<string, Bip300Kind> = {
   d5e0c4af: 'M1',
   d6e1c5df: 'M2',
-  d6e1c5bf: 'M2', // the spelling printed on bips.dev; never written by Chains, read for safety
   d45aa943: 'M3',
   d77d1776: 'M4',
   d1617368: 'M7',
@@ -160,10 +159,21 @@ export function parseBip300Script(scriptHex: string): Bip300Message | null {
   return null;
 }
 
-/** M5 escrow output script: OP_DRIVECHAIN(0xb4) 0x01 <slot> OP_TRUE */
+/**
+ * eCash's OP_DRIVECHAIN: OP_NOP8 (0xb7). The escrow (treasury) output of each sidechain is
+ * OP_DRIVECHAIN 0x01 <slot> OP_TRUE (the enforcer's OpDrivechain::script).
+ */
+export const OP_DRIVECHAIN = 0xb7;
+
+/** The slot of an escrow output script, or null */
 export function escrowSlot(scriptHex: string): number | null {
-  if (scriptHex && scriptHex.length === 8 && scriptHex.startsWith('b401') && scriptHex.endsWith('51')) {
+  const prefix = OP_DRIVECHAIN.toString(16) + '01';
+  if (scriptHex && scriptHex.length === 8 && scriptHex.startsWith(prefix) && scriptHex.endsWith('51')) {
     return parseInt(scriptHex.substring(4, 6), 16);
   }
   return null;
+}
+
+export function isDrivechainScript(scriptHex: string): boolean {
+  return escrowSlot(scriptHex) !== null;
 }

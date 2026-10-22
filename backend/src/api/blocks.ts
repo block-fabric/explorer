@@ -135,7 +135,7 @@ class Blocks {
     if (onlyCoinbase) {
       try {
         const coinbase = await transactionUtils.$getTransactionExtendedRetry(txIds[0], false, false, false, addMempoolData);
-        if (coinbase && coinbase.vin[0]?.is_coinbase) {
+        if (coinbase && coinbase.vin[0].is_coinbase) {
           return [coinbase];
         } else {
           const msg = `Expected a coinbase tx, but the backend API returned something else`;
@@ -189,7 +189,7 @@ class Blocks {
 
     // Require the first transaction to be a coinbase
     const coinbase = transactionMap[txIds[0]];
-    if (!coinbase || !coinbase.vin[0]?.is_coinbase) {
+    if (!coinbase || !coinbase.vin[0].is_coinbase) {
       const msg = `Expected first tx in a block to be a coinbase, but found something else`;
       logger.err(msg);
       throw new Error(msg);

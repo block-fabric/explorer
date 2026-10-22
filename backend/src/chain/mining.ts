@@ -1,30 +1,22 @@
 import drivechain, { DrivechainBlock } from './drivechain';
+import { BLOCK_SPACING, HALVING_INTERVAL, RETARGET_INTERVAL } from './networks';
 
 /**
- * Mining statistics of the Chains mainchain, over a window of blocks of the drivechain index (which reads every
- * coinbase): pools by coinbase tag (DATUM pools with their miners), hashrate and difficulty, the aserti3 schedule,
- * block times, halving epochs.
+ * Mining statistics of eCash, over a window of blocks of the drivechain index (which reads every coinbase): pools by
+ * coinbase tag (DATUM pools with their miners), hashrate and difficulty, the retarget, block times, halving epochs.
  *
- * Difficulty: aserti3 (chains/src/pow.cpp GetNextASERTWorkRequired), retargeting every block against an anchor:
- *   exponent = (time_diff - spacing * (height_diff + 1)) / half_life,  target = anchor_target * 2^exponent
- * with time_diff = time(tip) - time(anchor - 1), height_diff = height(tip) - height(anchor). A test network also
- * allows a block at the proof-of-work limit when it comes more than two spacings after its parent.
+ * Difficulty: Bitcoin's, retargeting every 2016 blocks to 10-minute blocks (at most 4x either way); the next
+ * difficulty is estimated from the current period's pace. eCash reset the difficulty once, at its fork height.
  */
 
-export interface AsertParams {
-  anchorHeight: number;
-  anchorDifficulty: number;
-  anchorParentTime: number;
-  spacing: number;
-  halfLife: number;
+export interface RetargetParams {
   minDifficultyBlocks: boolean;
 }
 
-const HALVING = 210000;
 const BUCKETS = 60;
 const TOP_POOLS = 7;
 const HASHES_PER_DIFFICULTY = 2 ** 32;
-const BLOCK_TIME_BINS = [15, 30, 60, 90, 120, 180, 300, 600];
+const BLOCK_TIME_BINS = [60, 120, 300, 600, 900, 1200, 1800, 3600];
 
 const median = (xs: number[]): number => {
   if (!xs.length) { return 0; }
@@ -33,31 +25,31 @@ const median = (xs: number[]): number => {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 };
 
-/** where the chain is on the aserti3 schedule after `tip`, and the difficulty of the next block */
-export function asertState(p: AsertParams, tip: { height: number; time: number }): any {
-  if (tip.height + 1 < p.anchorHeight) {
-    return { bootstrap: true, blocksToAnchor: p.anchorHeight - tip.height - 1 };
-  }
-  const timeDiff = tip.time - p.anchorParentTime;
-  const heightDiff = tip.height - p.anchorHeight;
-  const drift = timeDiff - p.spacing * (heightDiff + 1); // seconds behind the schedule (negative: ahead)
-  const nextDifficulty = p.anchorDifficulty / Math.pow(2, drift / p.halfLife);
+/**
+ * Where the chain is in its retarget period after `tip`, and the difficulty the next period would get at the pace so
+ * far. `periodStart` is the first block of the period (its height a multiple of 2016), when indexed.
+ */
+export function retargetState(p: RetargetParams, tip: { height: number; time: number; difficulty: number },
+  periodStart: { height: number; time: number } | null): any {
+  const start = tip.height - (tip.height % RETARGET_INTERVAL);
+  const next = start + RETARGET_INTERVAL;
+  const done = tip.height - start; // block intervals in the period so far
+  const pace = periodStart && done > 0 ? (tip.time - periodStart.time) / done : null;
+  const factor = pace ? Math.max(0.25, Math.min(4, BLOCK_SPACING / pace)) : null;
   return {
-    bootstrap: false,
-    drift,
-    blocksBehind: drift / p.spacing,
-    nextDifficulty,
-    // the difficulty the next block will have if it is found at the tip's time + t: aserti3 only looks at the tip,
-    // so it does not change while waiting, except for the test networks' min-difficulty rule
-    minDifficultyAfter: p.minDifficultyBlocks ? tip.time + 2 * p.spacing : null,
-    halfLife: p.halfLife,
-    anchorHeight: p.anchorHeight,
-    anchorDifficulty: p.anchorDifficulty,
-    // what it takes to bring the difficulty back to the anchor's: the drift, in blocks at the target spacing
+    periodStart: start,
+    nextRetarget: next,
+    blocksLeft: next - tip.height,
+    progress: done / RETARGET_INTERVAL,
+    avgBlockTime: pace,
+    nextDifficulty: factor ? tip.difficulty * factor : null,
+    change: factor ? factor - 1 : null,
+    eta: tip.time + (next - tip.height) * (pace ?? BLOCK_SPACING),
+    minDifficultyAfter: p.minDifficultyBlocks ? tip.time + 2 * BLOCK_SPACING : null,
   };
 }
 
-export function miningStats(window: number, asert: AsertParams | null): any {
+export function miningStats(window: number, retarget: RetargetParams): any {
   const tip = drivechain.tipHeight();
   const from = window > 0 ? Math.max(drivechain.firstHeight(), tip - window + 1) : drivechain.firstHeight();
   const blocks = drivechain.range(from, tip).filter(b => b.miner);
@@ -133,8 +125,8 @@ export function miningStats(window: number, asert: AsertParams | null): any {
   const difficulty = blocks.slice(-1500).map(b => [b.height, b.miner!.difficulty, b.miner!.minDifficulty ? 1 : 0]);
 
   // --- halving epochs
-  const epoch = Math.floor(tip / HALVING);
-  const nextHalving = (epoch + 1) * HALVING;
+  const epoch = Math.floor(tip / HALVING_INTERVAL);
+  const nextHalving = (epoch + 1) * HALVING_INTERVAL;
 
   return {
     window, from, to: tip, blocks: n,
@@ -144,20 +136,26 @@ export function miningStats(window: number, asert: AsertParams | null): any {
       datumMiners: new Set(blocks.filter(b => b.miner!.datum).map(b => b.miner!.minerTag || '(no tag)')).size,
       minDifficultyBlocks: minDiffBlocks, emptyBlocks, fees, reward,
       difficulty: last?.miner?.difficulty ?? null, minDifficultyTip: last?.miner?.minDifficulty ?? false,
-      // the last block at the aserti3 difficulty (not a test network's min-difficulty block)
-      regularDifficulty: [...blocks].reverse().find(b => !b.miner!.minDifficulty)?.miner?.difficulty ?? null,
+      // the last block at the regular difficulty (not a test network's min-difficulty block)
+      regularDifficulty: regular(blocks),
     },
     pools: poolList,
     topTags,
     series,
     histogram,
     difficulty,
-    asert: asert && last ? asertState(asert, { height: last.height, time: last.time }) : null,
+    retarget: last ? retargetState(retarget, { height: last.height, time: last.time, difficulty: regular(blocks) ?? last.miner!.difficulty },
+      drivechain.range(last.height - (last.height % RETARGET_INTERVAL), last.height - (last.height % RETARGET_INTERVAL))[0] ?? null) : null,
     halving: {
       epoch, subsidy: 50 / Math.pow(2, epoch), nextHalving, blocksLeft: nextHalving - tip,
-      progress: (tip - epoch * HALVING) / HALVING, eta: last ? last.time + (nextHalving - tip) * 60 : null,
+      progress: (tip - epoch * HALVING_INTERVAL) / HALVING_INTERVAL, eta: last ? last.time + (nextHalving - tip) * BLOCK_SPACING : null,
     },
   };
+}
+
+/** The difficulty of the newest block not mined at a test network's minimum */
+function regular(blocks: DrivechainBlock[]): number | null {
+  return [...blocks].reverse().find(b => !b.miner!.minDifficulty)?.miner?.difficulty ?? null;
 }
 
 export type { DrivechainBlock };

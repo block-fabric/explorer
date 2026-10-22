@@ -174,22 +174,20 @@ interface IConfig {
     API: string;
   },
   CHAIN: {
-    PROFILE: string; // the chain module (chain/modules/<id>): chains | thunder | bitnames | bitassets | zside | hivemind | fastblocks
-    NETWORK: string; // main | testnet | regtest
-    // Sidechain profiles: the Chains mainchain node, for the BMM view (which Chains block carried each block)
-    MAINCHAIN_RPC: {
-      HOST: string;
-      PORT: number;
-      USERNAME: string;
-      PASSWORD: string;
-      COOKIE: boolean;
-      COOKIE_PATH: string;
+    PROFILE: string; // the chain module (chain/modules/<id>): ecash
+    NETWORK: string; // the eCash network (chain/networks.ts): ecash | ecashbeta | ecashtest
+    // The BIP300/301 enforcer's ValidatorService over Connect-JSON (chain/enforcer.ts): a bip300301_enforcer next to
+    // the node, or backboned's own (-grpc)
+    ENFORCER: {
+      URL: string;
       TIMEOUT: number;
+      MAX_CONCURRENT: number;
     };
     // Public URLs of the other explorers, for cross links (profile id -> URL); empty = no link
     EXPLORER_URLS: { [profile: string]: string };
-    BACKFILL_BLOCKS: number; // newest mainchain blocks scanned at startup for the drivechain index
-    ADDRESS_INDEX: boolean; // address and scripthash lookups from our own index when MEMPOOL.BACKEND is none (chain/address-index.ts)
+    // address and scripthash lookups from our own index when MEMPOOL.BACKEND is none (chain/address-index.ts). Off
+    // by default: it reads every block from genesis into memory, which suits a small test chain, not eCash
+    ADDRESS_INDEX: boolean;
   }
 }
 
@@ -365,20 +363,15 @@ const defaults: IConfig = {
     'API': 'http://localhost:1234',
   },
   'CHAIN': {
-    'PROFILE': 'chains',
-    'NETWORK': 'testnet',
-    'MAINCHAIN_RPC': {
-      'HOST': '127.0.0.1',
-      'PORT': 19554,
-      'USERNAME': '',
-      'PASSWORD': '',
-      'COOKIE': false,
-      'COOKIE_PATH': '',
+    'PROFILE': 'ecash',
+    'NETWORK': 'ecashbeta',
+    'ENFORCER': {
+      'URL': 'http://127.0.0.1:8123',
       'TIMEOUT': 60000,
+      'MAX_CONCURRENT': 2,
     },
     'EXPLORER_URLS': {},
-    'BACKFILL_BLOCKS': 20000,
-    'ADDRESS_INDEX': true,
+    'ADDRESS_INDEX': false,
   }
 };
 

@@ -1,0 +1,168 @@
+{
+ "GetChainTip": {
+  "blockHeaderInfo": {
+   "blockHash": {
+    "hex": "000000000000000032228e575a74a717051f39b27c1a03784e0f61ca625998ae"
+   },
+   "prevBlockHash": {
+    "hex": "0000000000000000433cee33ef01c70517db717fbad5eed9cf05a709556e9017"
+   },
+   "height": 973919,
+   "work": {
+    "hex": "006f1d04b91e697c020000000000000000000000000000000000000000000000"
+   },
+   "timestamp": "1792668688"
+  }
+ },
+ "GetChainInfo": {
+  "network": "NETWORK_MAINNET",
+  "bip300Constants": {
+   "withdrawalBundleMaxAge": 26300,
+   "withdrawalBundleInclusionThreshold": 13150,
+   "usedSidechainSlotProposalMaxAge": 26300,
+   "usedSidechainSlotActivationThreshold": 13150,
+   "unusedSidechainSlotProposalMaxAge": 2016,
+   "unusedSidechainSlotActivationThreshold": 1008,
+   "activationHeight": 967680
+  }
+ },
+ "GetSidechains": {
+  "sidechains": [
+   {
+    "sidechainNumber": 2,
+    "description": {
+     "hex": "7500084269744e616d6573412076617269616e74206f66204e616d65636f696e2f426974444e5320746861742061696d7320746f207265706c616365204943414e4e2b4dfd7a97c94502ed88441e917b13533a30929a028568231eacccc6c25daf2367a981fe0f2ea78126e7ad94d4f233c5bfdc1575"
+    },
+    "voteCount": 1009,
+    "proposalHeight": 967989,
+    "activationHeight": 968998,
+    "declaration": {
+     "v0": {
+      "title": "BitNames",
+      "description": "A variant of Namecoin/BitDNS that aims to replace ICANN",
+      "hashId1": {
+       "hex": "2b4dfd7a97c94502ed88441e917b13533a30929a028568231eacccc6c25daf23"
+      },
+      "hashId2": {
+       "hex": "67a981fe0f2ea78126e7ad94d4f233c5bfdc1575"
+      }
+     }
+    }
+   },
+   {
+    "sidechainNumber": 9,
+    "description": {
+     "hex": "7c00075468756e646572412073696465636861696e20776974682061206c6172676520262067726f77696e6720626c6f636b73697a652c20706c75732066726175642070726f6f6673c46e3297057b396024798ccfe05c4d1488dbc9f14f47af5858f1a81479e3d7422559908bfe6e0542edb80078e9c2316c59a0ba30"
+    },
+    "voteCount": 1009,
+    "proposalHeight": 967989,
+    "activationHeight": 968998,
+    "declaration": {
+     "v0": {
+      "title": "Thunder",
+      "description": "A sidechain with a large & growing blocksize, plus fraud proofs",
+      "hashId1": {
+       "hex": "c46e3297057b396024798ccfe05c4d1488dbc9f14f47af5858f1a81479e3d742"
+      },
+      "hashId2": {
+       "hex": "2559908bfe6e0542edb80078e9c2316c59a0ba30"
+      }
+     }
+    }
+   }
+  ]
+ },
+ "GetWithdrawalBundleProposals:2": {},
+ "GetTwoWayPegData:2": {
+  "blocks": [
+   {
+    "blockHeaderInfo": {
+     "blockHash": {
+      "hex": "00000000000000000f1b84602cba5f7f7763b44c00dcca3143ec6566bcda840a"
+     },
+     "prevBlockHash": {
+      "hex": "00000000000000002aea84231c6470477e8003344473828263688db44d5c07ab"
+     },
+     "height": 973892,
+     "work": {
+      "hex": "006f1d04b91e697c020000000000000000000000000000000000000000000000"
+     },
+     "timestamp": "1792551105"
+    },
+    "blockInfo": {
+     "bmmCommitment": {
+      "hex": "0345d02d2f1f7083918c8eebee0e2162343643bc198acb87a0917107df4c1d3b"
+     },
+     "events": [
+      {
+       "deposit": {
+        "sequenceNumber": "12",
+        "outpoint": {
+         "txid": {
+          "hex": "cb033cd614af6356d6c0dc0910ba42f7d85d96aa75897dbccbf774641c0e72e2"
+         },
+         "vout": 0
+        },
+        "output": {
+         "address": {
+          "hex": "6263317134397a716c3963706c7875376e6e6675793771336d706672353236353675307035367a733438"
+         },
+         "valueSats": "90000"
+        }
+       }
+      }
+     ]
+    }
+   },
+   {
+    "blockHeaderInfo": {
+     "blockHash": {
+      "hex": "00000000000000000cbeb198105f4cf98e648cbe9042b2010c56fe0723f0f57c"
+     },
+     "prevBlockHash": {
+      "hex": "000000000000000012da58b55a67b62580849f706beb4fd02440c106e5adc057"
+     },
+     "height": 973820,
+     "work": {
+      "hex": "006f1d04b91e697c020000000000000000000000000000000000000000000000"
+     },
+     "timestamp": "1792278522"
+    },
+    "blockInfo": {
+     "bmmCommitment": {
+      "hex": "dfc097eb42d262021a7d9d3c0ce1b64d4f72ce26367ae172028661c195361c93"
+     }
+    }
+   }
+  ]
+ },
+ "GetCtip:9": {
+  "ctip": {
+   "txid": {
+    "hex": "bc9097778730c57216f66b54fc92bf0486a94943276e649926601dd46eef2cd5"
+   },
+   "value": "101206335589",
+   "sequenceNumber": "25"
+  }
+ },
+ "GetWithdrawalBundleProposals:9": {
+  "proposals": [
+   {
+    "m6id": {
+     "hex": "aa769fec72ddc7e59fb6dc480d62ba19236804598d053b6c50522cae30b0ced4"
+    },
+    "voteCount": 661,
+    "proposalHeight": 970438
+   }
+  ]
+ },
+ "GetCtip:24": {
+  "ctip": {
+   "txid": {
+    "hex": "9d0f1ecd310f7d90f357af832bef667af69908319ad5f84195c01bae98a35536"
+   },
+   "value": "100000"
+  }
+ },
+ "GetCtip:99": {}
+}
