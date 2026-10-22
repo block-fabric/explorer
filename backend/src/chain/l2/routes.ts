@@ -29,6 +29,17 @@ import { BlockSummary, L2Chain, L2FeatureContext } from './types';
 // `before` is exclusive; see index.ts for the paging of lists with several rows per height.
 
 const BUILDING = 'The index is still being built';
+
+/**
+ * An eCash BMM accept or request with `published`: whether its sidechain block is in this chain. Under BMM an eCash
+ * block can accept a commitment to a block its producer never broadcasts (or that loses to a sibling), so many accepts
+ * have no block anywhere: they are shown as "never published", not as missing data. `sideBlock` is in the eCash
+ * index's (reversed) order; the node's hashes are not reversed.
+ */
+function published<T extends { sideBlock?: string }>(e: T): T & { published: boolean } {
+  const hash = e.sideBlock ? Buffer.from(e.sideBlock, 'hex').reverse().toString('hex') : '';
+  return { ...e, published: !!hash && index.heightOf(hash) !== null };
+}
 const HASH = /^[0-9a-f]{64}$/;
 
 // Bounded: keys can come from request paths (ids), so the oldest entries go once there are CACHE_MAX of them
@@ -234,8 +245,9 @@ class L2Routes {
     }
   }
 
-  private l1Cockpit(window: number): Promise<any> {
-    return mainchain.get('drivechain/cockpit', { window, slot: PROFILE.slot as number }, 15000);
+  private async l1Cockpit(window: number): Promise<any> {
+    const c = await mainchain.get('drivechain/cockpit', { window, slot: PROFILE.slot as number }, 15000);
+    return { ...c, coverage: (c?.coverage ?? []).map((b: any) => ({ ...b, accepts: (b.accepts ?? []).map((a: any) => published(a)) })) };
   }
 
   /** a block summary with its BMM (null: none known, or no eCash index to read) */
@@ -255,7 +267,8 @@ class L2Routes {
     }
     const before = intParam(req.query.before, null, 0, 1e9);
     const limit = intParam(req.query.limit, 50, 1, 500) as number;
-    res.json(await mainchain.get('drivechain/events/' + kind, { slot: PROFILE.slot as number, before, limit }, 10000));
+    const events = await mainchain.get('drivechain/events/' + kind, { slot: PROFILE.slot as number, before, limit }, 10000);
+    res.json(kind === 'bmm' || kind === 'bmm-requests' ? (events ?? []).map((e: any) => published(e)) : events);
   };
 
   private $getBlocks = async (req: Request, res: Response): Promise<void> => {

@@ -194,3 +194,7 @@ Replies are cached (15 s cockpit, 10 s events; at most 1000 entries).
   explorer's `GET /api/v1/drivechain/events/:kind?slot=<this slot>`, kind `bmm` | `bmm-requests` | `deposits` |
   `withdrawals` | `votes` | `proposals` | `bundles`; each event `{ height, blockHash, time, slot, ... }` (eCash
   heights and hashes; `sideBlock` in Bitcoin display order, as the eCash explorer gives it).
+
+BMM accepts and requests from `l2/bmm/events/bmm`, `l2/bmm/events/bmm-requests` and the cockpit's `coverage[].accepts[]`
+carry `published: boolean`: whether the committed sidechain block exists in this chain. Under BMM an eCash block can
+accept a commitment to a block its producer never broadcasts, so `published: false` is normal ("never published").

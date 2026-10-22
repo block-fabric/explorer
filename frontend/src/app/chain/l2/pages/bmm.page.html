@@ -83,9 +83,14 @@
         <div class="cov-cells">
           @for (b of d.coverage; track b.height) {
             @if (accepted(b); as a) {
-              <a class="cov-cell on" [routerLink]="['/block', reverseHex(a.sideBlock)]"
-                [style.opacity]="0.45 + 0.55 * (stats?.bidMax ? (a.bid || 0) / stats.bidMax : 1)"
-                [title]="'eCash block ' + b.height + ' carried ' + profile.name + ' block ' + shortId(reverseHex(a.sideBlock)) + (a.bid !== null ? ' · bid ' + a.bid + ' sats' : '') + (b.requests > 1 ? ' · ' + b.requests + ' requests' : '')"></a>
+              @if (a.published !== false) {
+                <a class="cov-cell on" [routerLink]="['/block', reverseHex(a.sideBlock)]"
+                  [style.opacity]="0.45 + 0.55 * (stats?.bidMax ? (a.bid || 0) / stats.bidMax : 1)"
+                  [title]="'eCash block ' + b.height + ' carried ' + profile.name + ' block ' + shortId(reverseHex(a.sideBlock)) + (a.bid !== null ? ' · bid ' + a.bid + ' sats' : '') + (b.requests > 1 ? ' · ' + b.requests + ' requests' : '')"></a>
+              } @else {
+                <span class="cov-cell on unpublished"
+                  [title]="'eCash block ' + b.height + ' accepted ' + profile.name + ' block ' + shortId(reverseHex(a.sideBlock)) + ', which was never published' + (a.bid !== null ? ' · bid ' + a.bid + ' sats' : '')"></span>
+              }
             } @else {
               <span class="cov-cell" [class.req]="b.requests > 0" [title]="'eCash block ' + b.height + (b.miner ? ' (' + b.miner + ')' : '') + ': no ' + profile.name + ' block' + (b.requests ? ', ' + b.requests + ' request(s) not accepted' : '')"></span>
             }
@@ -230,11 +235,11 @@
                 <td class="ev-t"><app-time kind="since" [time]="e.time" [fastRender]="true"></app-time></td>
                 @switch (feed) {
                   @case ('bmm') {
-                    <td><a class="mono" [routerLink]="['/block', reverseHex(e.sideBlock)]" [title]="reverseHex(e.sideBlock)">{{ shortId(reverseHex(e.sideBlock)) }}</a></td>
+                    <td>@if (e.published !== false) {<a class="mono" [routerLink]="['/block', reverseHex(e.sideBlock)]" [title]="reverseHex(e.sideBlock)">{{ shortId(reverseHex(e.sideBlock)) }}</a>} @else {<span class="mono" [title]="reverseHex(e.sideBlock)">{{ shortId(reverseHex(e.sideBlock)) }}</span> <span class="status" title="The eCash block accepted this commitment, but its producer never broadcast the block">never published</span>}</td>
                     <td class="text-right">@if (e.bid !== undefined && e.bid !== null) { {{ e.bid | number }} sats} @else {no bid}</td>
                   }
                   @case ('bmm-requests') {
-                    <td>@if (e.accepted) {<a class="mono" [routerLink]="['/block', reverseHex(e.sideBlock)]" [title]="reverseHex(e.sideBlock)">{{ shortId(reverseHex(e.sideBlock)) }}</a>} @else {<span class="mono" [title]="reverseHex(e.sideBlock)">{{ shortId(reverseHex(e.sideBlock)) }}</span>}</td>
+                    <td>@if (e.accepted && e.published !== false) {<a class="mono" [routerLink]="['/block', reverseHex(e.sideBlock)]" [title]="reverseHex(e.sideBlock)">{{ shortId(reverseHex(e.sideBlock)) }}</a>} @else {<span class="mono" [title]="reverseHex(e.sideBlock)">{{ shortId(reverseHex(e.sideBlock)) }}</span>}</td>
                     <td class="text-right">{{ e.bid | number }} sats <span class="status" [class.ok]="e.accepted">{{ e.accepted ? 'accepted' : 'beaten' }}</span></td>
                   }
                   @case ('deposits') {

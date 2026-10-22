@@ -2,6 +2,7 @@
 .cov-name { width: 110px; }
 .cov-legend { padding-left: 118px; .lg.req { background: color-mix(in srgb, #ff6b6b 45%, transparent); } }
 .cov-cell.req { background: color-mix(in srgb, #ff6b6b 45%, transparent); }
+.cov-cell.unpublished { background: repeating-linear-gradient(45deg, var(--sc) 0 2px, transparent 2px 4px); opacity: 0.6; }
 .status.failed { background: color-mix(in srgb, #ff6b6b 30%, transparent); }
 .chart.skeleton-loader { height: 260px; }
 .b-head .mono { word-break: break-all; }
