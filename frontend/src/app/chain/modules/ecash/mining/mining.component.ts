@@ -61,6 +61,19 @@ export class ChainMiningComponent implements OnInit, OnDestroy {
     return i >= 0 ? PALETTE[i % PALETTE.length] : '#5b6b85';
   }
 
+  /** the pool's display name from the mining-pools list, else its tag without the slashes */
+  nameOf(tag: string): string {
+    return this.data?.pools?.find((p: any) => p.tag === tag)?.name || tag.replace(/^\/+|\/+$/g, '');
+  }
+
+  logoUrl(logo: string): string {
+    return `/resources/pool-logos/${logo}`;
+  }
+
+  hideLogo(event: Event): void {
+    (event.target as HTMLElement).style.display = 'none';
+  }
+
   hashrate(h: number): string {
     if (!h) { return '0 H/s'; }
     const u = ['H/s', 'kH/s', 'MH/s', 'GH/s', 'TH/s', 'PH/s', 'EH/s'];
@@ -103,18 +116,18 @@ export class ChainMiningComponent implements OnInit, OnDestroy {
     const d = this.data;
     const pools: any[] = d.pools;
     // the donut: pools inside; DATUM pools split into their miners outside
-    const inner = pools.map(p => ({ name: p.tag, value: p.blocks, itemStyle: { color: this.colorOf(p.tag) } }));
+    const inner = pools.map(p => ({ name: p.name || p.tag, value: p.blocks, itemStyle: { color: this.colorOf(p.tag) } }));
     const outer: any[] = [];
     for (const p of pools) {
       if (p.datum && p.miners.length) {
         const known = p.miners.reduce((a: number, m: any) => a + m.blocks, 0);
         p.miners.forEach((m: any, i: number) => outer.push({
-          name: `${m.tag} (${p.tag})`, value: m.blocks,
+          name: `${m.name || m.tag} (${p.name || p.tag})`, value: m.blocks,
           itemStyle: { color: this.colorOf(p.tag), opacity: 0.45 + 0.55 * (1 - i / Math.max(1, p.miners.length)) },
         }));
-        if (p.blocks > known) { outer.push({ name: `${p.tag}: no miner tag`, value: p.blocks - known, itemStyle: { color: '#ffffff18' } }); }
+        if (p.blocks > known) { outer.push({ name: `${p.name || p.tag}: no miner tag`, value: p.blocks - known, itemStyle: { color: '#ffffff18' } }); }
       } else {
-        outer.push({ name: p.tag, value: p.blocks, itemStyle: { color: this.colorOf(p.tag), opacity: 0.25 } });
+        outer.push({ name: p.name || p.tag, value: p.blocks, itemStyle: { color: this.colorOf(p.tag), opacity: 0.25 } });
       }
     }
     this.charts.donut = {
@@ -138,7 +151,7 @@ export class ChainMiningComponent implements OnInit, OnDestroy {
       animation: false, backgroundColor: 'transparent', grid: { left: 44, right: 12, top: 30, bottom: 28 },
       legend: { top: 0, textStyle: { color: '#ffffffcc', fontSize: 11 }, icon: 'roundRect', itemWidth: 10, itemHeight: 10 },
       tooltip: this.tooltip({ valueFormatter: (v: number) => (v ?? 0).toFixed(1) + '%' }), xAxis, yAxis: yv('%', { max: 100 }),
-      series: tags.map(t => ({ name: t, type: 'line', stack: 'dom', symbol: 'none', areaStyle: { opacity: 0.8, color: this.colorOf(t) }, lineStyle: { width: 0 }, itemStyle: { color: this.colorOf(t) },
+      series: tags.map(t => ({ name: this.nameOf(t), type: 'line', stack: 'dom', symbol: 'none', areaStyle: { opacity: 0.8, color: this.colorOf(t) }, lineStyle: { width: 0 }, itemStyle: { color: this.colorOf(t) },
         data: s.map(b => b.blocks ? 100 * (b.pools[t] ?? 0) / b.blocks : 0) })),
     };
 

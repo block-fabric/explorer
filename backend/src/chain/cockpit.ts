@@ -1,5 +1,6 @@
 import drivechain, { DrivechainBlock } from './drivechain';
 import { PROFILE, profileBySlot } from './profile';
+import { normalizeTag } from './pools';
 
 /**
  * The drivechain cockpit: statistics over the drivechain index for a window of eCash blocks, for every sidechain
@@ -45,6 +46,8 @@ export interface CockpitSlotStats {
 
 export interface CockpitMinerStats {
   tag: string;
+  name: string;                // the pool's display name, else the tag without its slashes
+  logo: string | null;         // the pool's logo file under /resources/pool-logos/
   blocks: number;
   share: number;
   accepts: number;             // BMM accepts in its blocks
@@ -203,7 +206,7 @@ function compute(tip: number, window: number, slotFilter: number | null, escrowN
       sb.fees += b.miner.fees;
       sb.subsidy += b.miner.subsidy;
       const tag = b.miner.tag ?? 'Unknown';
-      const m = miners.get(tag) ?? { tag, blocks: 0, share: 0, accepts: 0, acceptsPerBlock: 0, bids: 0, fees: 0, subsidy: 0, voteBlocks: 0, lastHeight: 0 };
+      const m = miners.get(tag) ?? { tag, name: b.miner.name ?? normalizeTag(tag) ?? 'Unknown', logo: b.miner.logo, blocks: 0, share: 0, accepts: 0, acceptsPerBlock: 0, bids: 0, fees: 0, subsidy: 0, voteBlocks: 0, lastHeight: 0 };
       m.blocks++;
       m.accepts += accepts.length;
       m.bids += accepts.reduce((a, x) => a + (x.bid ?? 0), 0);
@@ -266,7 +269,7 @@ function compute(tip: number, window: number, slotFilter: number | null, escrowN
     height: b.height,
     hash: b.hash,
     time: b.time,
-    miner: b.miner?.tag ?? null,
+    miner: b.miner?.name ?? b.miner?.tag ?? null,
     accepts: b.bmm.filter(own).map(a => ({ slot: a.slot, bid: a.bid ?? null, sideBlock: a.sideBlock })),
     requests: b.bmmRequests.filter(own).length,
     deposits: b.deposits.filter(own).length,

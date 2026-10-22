@@ -13,7 +13,8 @@
 .stack { display: flex; height: 10px; border-radius: 5px; overflow: hidden; gap: 2px; margin-bottom: 10px; }
 .seg { min-width: 3px; }
 .list .li { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; padding: 2px 0; }
-.li .nm { width: 86px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.li .nm { width: 106px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-flex; align-items: center; gap: 4px; }
+.li .nm .pool-logo { width: 12px; height: 12px; object-fit: contain; flex: none; }
 .li .bar { flex: 1; height: 6px; background: #ffffff10; border-radius: 3px; overflow: hidden; .fill { display: block; height: 100%; opacity: 0.8; } }
 .li .num { width: 60px; text-align: right; font-weight: 600; }
 .li .flow { width: 54px; text-align: right; font-size: 0.75rem; }

@@ -91,6 +91,7 @@ h5 { font-size: 0.95rem; margin-bottom: 8px; small { color: var(--transparent-fg
 .table-box { overflow-x: auto; }
 .cp-table { margin: 0; font-size: 0.84rem; th { color: var(--transparent-fg); font-weight: normal; font-size: 0.74rem; white-space: nowrap; } td { vertical-align: middle; white-space: nowrap; } }
 .miner { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.pool-logo { width: 18px; height: 18px; object-fit: contain; margin-right: 6px; vertical-align: middle; }
 
 .rules { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px;
   div { display: flex; flex-direction: column; } .wide { grid-column: span 2; }
@@ -101,9 +102,9 @@ h5 { font-size: 0.95rem; margin-bottom: 8px; small { color: var(--transparent-fg
 .cp-tabs { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid #ffffff18; }
 .cp-tab { background: none; border: none; color: var(--transparent-fg); padding: 6px 12px; font-size: 0.85rem; border-bottom: 2px solid transparent; cursor: pointer;
   &.on { color: var(--fg); border-bottom-color: var(--accent); } &:hover { color: var(--fg); } }
+.ev-box { overflow-x: auto; }
 .ev-h { width: 70px; } .ev-t { width: 120px; color: var(--transparent-fg); font-size: 0.78rem; }
 .dest { max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
 .ev-tx { text-align: right; }
 // a sidechain, by its name and colour
-.sc-label { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
-  &::before { content: ''; width: 8px; height: 8px; border-radius: 2px; background: var(--sc); } }
+.sc-label { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }

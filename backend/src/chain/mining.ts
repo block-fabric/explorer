@@ -1,5 +1,6 @@
 import drivechain, { DrivechainBlock } from './drivechain';
 import { BLOCK_SPACING, HALVING_INTERVAL, RETARGET_INTERVAL } from './networks';
+import { normalizeTag } from './pools';
 
 /**
  * Mining statistics of eCash, over a window of blocks of the drivechain index (which reads every coinbase): pools by
@@ -57,13 +58,13 @@ export function miningStats(window: number, retarget: RetargetParams): any {
   const last = blocks[n - 1];
 
   // --- pools
-  interface PoolAcc { tag: string; datum: boolean; blocks: number; fees: number; reward: number; empty: number; weight: number; bmm: number; work: number; lastHeight: number; miners: Map<string, number>; firstHeight: number }
+  interface PoolAcc { tag: string; name: string | null; logo: string | null; datum: boolean; blocks: number; fees: number; reward: number; empty: number; weight: number; bmm: number; work: number; lastHeight: number; miners: Map<string, number>; firstHeight: number }
   const pools = new Map<string, PoolAcc>();
   let work = 0, datumBlocks = 0, minDiffBlocks = 0, emptyBlocks = 0, fees = 0, reward = 0;
   for (const b of blocks) {
     const m = b.miner!;
     const tag = m.tag ?? 'Unknown';
-    const p = pools.get(tag) ?? { tag, datum: false, blocks: 0, fees: 0, reward: 0, empty: 0, weight: 0, bmm: 0, work: 0, lastHeight: 0, miners: new Map(), firstHeight: b.height };
+    const p = pools.get(tag) ?? { tag, name: m.name, logo: m.logo, datum: false, blocks: 0, fees: 0, reward: 0, empty: 0, weight: 0, bmm: 0, work: 0, lastHeight: 0, miners: new Map(), firstHeight: b.height };
     const w = (m.difficulty ?? 1) * HASHES_PER_DIFFICULTY;
     p.blocks++; p.fees += m.fees; p.reward += m.reward; p.weight += m.weight ?? 0; p.bmm += b.bmm.length; p.work += w; p.lastHeight = b.height;
     if (m.txCount <= 1) { p.empty++; emptyBlocks++; }
@@ -80,10 +81,11 @@ export function miningStats(window: number, retarget: RetargetParams): any {
   const span = n > 1 ? last.time - blocks[0].time : 0;
   const hashrate = span > 0 ? work / span : 0;
   const poolList = [...pools.values()].sort((a, b) => b.blocks - a.blocks).map(p => ({
-    tag: p.tag, datum: p.datum, blocks: p.blocks, share: n ? p.blocks / n : 0, workShare: work ? p.work / work : 0,
+    tag: p.tag, name: p.name ?? normalizeTag(p.tag) ?? 'Unknown', logo: p.logo,
+    datum: p.datum, blocks: p.blocks, share: n ? p.blocks / n : 0, workShare: work ? p.work / work : 0,
     hashrate: work ? hashrate * p.work / work : 0, fees: p.fees, reward: p.reward, empty: p.empty,
     avgWeight: p.blocks ? p.weight / p.blocks : 0, bmmPerBlock: p.blocks ? p.bmm / p.blocks : 0, lastHeight: p.lastHeight,
-    miners: [...p.miners].sort((a, b) => b[1] - a[1]).map(([tag, count]) => ({ tag, blocks: count, share: n ? count / n : 0 })),
+    miners: [...p.miners].sort((a, b) => b[1] - a[1]).map(([tag, count]) => ({ tag, name: normalizeTag(tag) ?? tag, blocks: count, share: n ? count / n : 0 })),
   }));
   const topTags = poolList.slice(0, TOP_POOLS).map(p => p.tag);
 

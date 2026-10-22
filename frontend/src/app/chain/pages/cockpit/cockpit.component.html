@@ -244,7 +244,7 @@
           <thead><tr><th>Miner</th><th class="text-right">Blocks</th><th class="text-right">Share</th><th class="text-right">BMM / block</th><th class="text-right">Bids earned</th><th class="text-right">Voted</th></tr></thead>
           <tbody>
             <tr *ngFor="let m of d.miners.slice(0, 12)">
-              <td class="miner" [title]="m.tag">{{ m.tag }}</td>
+              <td class="miner" [title]="(m.name || m.tag) + ' · coinbase tag ' + m.tag"><img *ngIf="m.logo" class="pool-logo" [src]="logoUrl(m.logo)" (error)="hideLogo($event)" alt="">{{ m.name || m.tag }}</td>
               <td class="text-right">{{ m.blocks | number }}</td>
               <td class="text-right">{{ pct(m.share) }}</td>
               <td class="text-right">{{ m.acceptsPerBlock | number:'1.1-1' }}</td>
@@ -289,49 +289,65 @@
 
     <!-- event feeds -->
     <h2 class="cp-h2">Event log</h2>
-    <div class="box">
+    <div class="box ev-box">
       <div class="cp-tabs">
         <button *ngFor="let f of feeds" class="cp-tab" [class.on]="feed === f.id" (click)="setFeed(f.id)">{{ f.label }}</button>
       </div>
       <div *ngIf="!feedItems" class="skeleton-loader"></div>
       <p *ngIf="feedItems && !feedItems.length" class="text-muted mt-2 mb-0">Nothing of this kind in the indexed blocks.</p>
       <table class="table table-borderless table-sm cp-table mt-2" *ngIf="feedItems?.length">
+        <thead>
+          <tr>
+            <th>Height</th>
+            <th>Age</th>
+            <th>Sidechain</th>
+            <ng-container [ngSwitch]="feed">
+              <ng-container *ngSwitchCase="'bmm'"><th>Side block</th><th class="text-right">Bid</th></ng-container>
+              <ng-container *ngSwitchCase="'bmm-requests'"><th>Side block</th><th class="text-right">Bid</th></ng-container>
+              <ng-container *ngSwitchCase="'deposits'"><th>Destination</th><th class="text-right">Amount</th></ng-container>
+              <ng-container *ngSwitchCase="'withdrawals'"><th>Bundle</th><th class="text-right">Amount</th></ng-container>
+              <ng-container *ngSwitchCase="'bundles'"><th>Bundle</th><th class="text-right">Status</th></ng-container>
+              <ng-container *ngSwitchCase="'proposals'"><th>Proposal</th><th class="text-right">Hash</th></ng-container>
+            </ng-container>
+            <th class="text-right">Transaction</th>
+          </tr>
+        </thead>
         <tbody>
           <tr *ngFor="let e of feedItems">
             <td class="ev-h">
               <a [routerLink]="['/block' | relativeUrl, e.blockHash]">{{ e.height | number }}</a>
             </td>
             <td class="ev-t"><app-time kind="since" [time]="e.time" [fastRender]="true"></app-time></td>
-            <td><span *ngIf="e.slot >= 0" class="sc-label" [style.--sc]="colorOf(e.slot)">{{ e.name || e.title || nameOf(e.slot) }}</span></td>
+            <td><span *ngIf="e.slot >= 0" class="sc-label"><span class="sc" [style.color]="colorOf(e.slot)"><app-svg-images name="chain-mark" [fill]="markId(e.slot, e.name || e.title || nameOf(e.slot))" width="11" height="11"></app-svg-images></span> {{ e.name || e.title || nameOf(e.slot) }}</span></td>
             <ng-container [ngSwitch]="feed">
               <ng-container *ngSwitchCase="'bmm'">
-                <td class="mono"><app-truncate [text]="e.sideBlock" [lastChars]="8"></app-truncate></td>
+                <td class="mono"><app-truncate [text]="e.sideBlock" [lastChars]="8" [maxWidth]="150"></app-truncate></td>
                 <td class="text-right">{{ e.bid !== undefined && e.bid !== null ? (e.bid | number) + ' sats' : 'no bid' }}</td>
               </ng-container>
               <ng-container *ngSwitchCase="'bmm-requests'">
-                <td class="mono"><app-truncate [text]="e.sideBlock" [lastChars]="8"></app-truncate></td>
+                <td class="mono"><app-truncate [text]="e.sideBlock" [lastChars]="8" [maxWidth]="150"></app-truncate></td>
                 <td class="text-right">{{ e.bid | number }} sats <span class="badge" [class.badge-success]="e.accepted" [class.badge-secondary]="!e.accepted">{{ e.accepted ? 'accepted' : 'not accepted' }}</span></td>
               </ng-container>
               <ng-container *ngSwitchCase="'deposits'">
-                <td class="mono dest" [title]="e.destination">{{ e.destination }}</td>
+                <td class="mono dest" [title]="e.destination"><app-truncate [text]="e.destination" [lastChars]="8" [maxWidth]="260"></app-truncate></td>
                 <td class="text-right pos"><app-amount [satoshis]="e.amount" digitsInfo="1.2-8" [noFiat]="true"></app-amount></td>
               </ng-container>
               <ng-container *ngSwitchCase="'withdrawals'">
-                <td class="mono"><app-truncate [text]="e.bundle" [lastChars]="8"></app-truncate> · {{ e.payouts?.length }} payouts</td>
+                <td class="mono"><app-truncate [text]="e.bundle" [lastChars]="8" [maxWidth]="150"></app-truncate> · {{ e.payouts?.length }} payouts</td>
                 <td class="text-right neg"><app-amount [satoshis]="e.amount" digitsInfo="1.2-8" [noFiat]="true"></app-amount></td>
               </ng-container>
               <ng-container *ngSwitchCase="'bundles'">
-                <td class="mono"><app-truncate [text]="e.hash" [lastChars]="8"></app-truncate></td>
+                <td class="mono"><app-truncate [text]="e.hash" [lastChars]="8" [maxWidth]="150"></app-truncate></td>
                 <td class="text-right"><span class="badge" [class.badge-success]="e.type === 'paid'" [class.badge-danger]="e.type === 'failed'" [class.badge-secondary]="e.type === 'proposed'">{{ e.type }}</span></td>
               </ng-container>
               <ng-container *ngSwitchCase="'proposals'">
                 <td>{{ e.type === 'M1' ? 'proposed' : 'ack' }} <b>{{ e.title || '' }}</b></td>
-                <td class="mono text-right"><app-truncate [text]="e.hash" [lastChars]="8"></app-truncate></td>
+                <td class="mono text-right"><app-truncate [text]="e.hash" [lastChars]="8" [maxWidth]="150"></app-truncate></td>
               </ng-container>
             </ng-container>
             <td class="mono ev-tx">
               <ng-container *ngIf="e.txid || e.requestTxid">
-                <a [routerLink]="['/tx' | relativeUrl, e.txid || e.requestTxid]"><app-truncate [text]="e.txid || e.requestTxid" [lastChars]="8"></app-truncate></a>
+                <a [routerLink]="['/tx' | relativeUrl, e.txid || e.requestTxid]"><app-truncate [text]="e.txid || e.requestTxid" [lastChars]="8" [maxWidth]="150"></app-truncate></a>
               </ng-container>
             </td>
           </tr>

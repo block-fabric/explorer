@@ -26,3 +26,4 @@ h5 { font-size: 0.95rem; margin-bottom: 8px; small { color: var(--transparent-fg
 .rules { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px;
   div { display: flex; flex-direction: column; } .wide { grid-column: span 2; }
   span { font-size: 0.7rem; color: var(--transparent-fg); text-transform: uppercase; letter-spacing: 0.04em; } b { font-size: 0.9rem; font-weight: 600; } }
+.pool-logo { width: 20px; height: 20px; object-fit: contain; margin-right: 7px; vertical-align: middle; }

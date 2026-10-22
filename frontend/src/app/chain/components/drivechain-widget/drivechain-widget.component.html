@@ -24,7 +24,7 @@
           </div>
           <div class="list">
             <div class="li" *ngFor="let s of byEscrow(d).slice(0, 6); trackBy: trackSlot">
-              <span class="sc" [style.color]="colorOf(s.slot)"><app-svg-images name="chain-mark" [fill]="markId(s.slot)" width="14" height="14"></app-svg-images></span>
+              <span class="sc" [style.color]="colorOf(s.slot)"><app-svg-images name="chain-mark" [fill]="markId(s.slot, s.title)" width="14" height="14"></app-svg-images></span>
               <a *ngIf="s.explorer; else plainName" [href]="s.explorer" class="nm">{{ s.title }}</a>
               <ng-template #plainName><span class="nm">{{ s.title }}</span></ng-template>
               <span class="bar"><span class="fill" [style.width.%]="d.live.escrowTotal ? 100 * s.escrow / d.live.escrowTotal : 0" [style.background]="colorOf(s.slot)"></span></span>
@@ -52,7 +52,7 @@
           </div>
           <div class="grid">
             <div class="g-row" *ngFor="let s of d.live.sidechains; trackBy: trackSlot">
-              <span class="g-name" [style.color]="colorOf(s.slot)">{{ s.title }}</span>
+              <span class="g-name" [style.color]="colorOf(s.slot)"><span class="sc"><app-svg-images name="chain-mark" [fill]="markId(s.slot, s.title)" width="11" height="11"></app-svg-images></span> {{ s.title }}</span>
               <span class="g-cells">
                 <ng-container *ngFor="let b of newest(d, 48)">
                   <a *ngIf="accepted(b, s.slot) as a; else off" class="cell on" [style.background]="colorOf(s.slot)"
@@ -72,7 +72,7 @@
           <p *ngIf="!d.live.bundles.length" class="empty">No withdrawal bundle is pending.</p>
           <div class="bundle" *ngFor="let b of d.live.bundles.slice(0, 5)">
             <div class="b-top">
-              <span class="sc" [style.color]="colorOf(b.slot)"><app-svg-images name="chain-mark" [fill]="markId(b.slot)" width="14" height="14"></app-svg-images></span>
+              <span class="sc" [style.color]="colorOf(b.slot)"><app-svg-images name="chain-mark" [fill]="markId(b.slot, b.name)" width="14" height="14"></app-svg-images></span>
               <b>{{ b.name }}</b>
               <span class="mono"><app-truncate [text]="b.hash" [lastChars]="8"></app-truncate></span>
               <span class="ms-auto" *ngIf="b.payable">payable</span>
@@ -99,7 +99,7 @@
         </div>
         <div class="list">
           <div class="li" *ngFor="let p of m.pools.slice(0, 5)">
-            <span class="nm" [title]="p.tag">{{ p.tag }}</span>
+            <span class="nm" [title]="(p.name || p.tag) + ' · coinbase tag ' + p.tag"><img *ngIf="p.logo" class="pool-logo" [src]="logoUrl(p.logo)" (error)="hideLogo($event)" alt="">{{ p.name || p.tag }}</span>
             <span class="bar"><span class="fill" [style.width.%]="100 * p.share" [style.background]="profile.color"></span></span>
             <span class="num">{{ pct(p.share, 0) }}</span>
             <span class="flow">{{ p.datum ? 'DATUM · ' + p.miners.length + (p.miners.length === 1 ? ' miner' : ' miners') : p.blocks + ' blocks' }}</span>
@@ -121,7 +121,7 @@
           <tbody>
             <tr *ngFor="let e of items">
               <td class="dir" [class.pos]="e.kind === 'deposit'" [class.neg]="e.kind === 'withdrawal'">{{ e.kind === 'deposit' ? '↓ in' : '↑ out' }}</td>
-              <td><span class="sc" [style.color]="colorOf(e.slot)"><app-svg-images name="chain-mark" [fill]="markId(e.slot)" width="13" height="13"></app-svg-images></span> {{ e.name }}</td>
+              <td><span class="sc" [style.color]="colorOf(e.slot)"><app-svg-images name="chain-mark" [fill]="markId(e.slot, e.name)" width="13" height="13"></app-svg-images></span> {{ e.name }}</td>
               <td class="text-right"><app-amount [satoshis]="e.amount" digitsInfo="1.2-4" [noFiat]="true"></app-amount></td>
               <td class="text-right when">
                 <a [routerLink]="['/tx' | relativeUrl, e.txid]"><app-time kind="since" [time]="e.time" [fastRender]="true"></app-time></a>

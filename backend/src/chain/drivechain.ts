@@ -6,6 +6,7 @@ import logger from '../logger';
 import bitcoinClient from '../api/bitcoin/bitcoin-client';
 import { PROFILE, profileBySlot } from './profile';
 import { HALVING_INTERVAL } from './networks';
+import { normalizeTag, poolFor } from './pools';
 import enforcer, { BundleEvent, ChainInfo, HeaderInfo, PegBlock, SidechainInfo } from './enforcer';
 import { Bip300Message, VOTE_ABSTAIN, VOTE_DOWNVOTE, VOTE_FORMS, isDrivechainScript, parseBip300Script } from './bip300';
 
@@ -87,6 +88,8 @@ export interface PendingBundle {
 /** Who mined a mainchain block and what it earned */
 export interface MinerInfo {
   tag: string | null;          // the pool or miner, from the coinbase text
+  name: string | null;         // the pool's display name from the mining-pools list, else the tag without slashes
+  logo: string | null;         // the pool's logo file under /resources/pool-logos/, if the list has one
   coinbaseText: string;        // the readable parts of the coinbase
   reward: number;              // sats: everything the coinbase pays
   fees: number;                // sats: the block's transaction fees (BMM bids included): reward - subsidy
@@ -133,7 +136,8 @@ export interface DrivechainBlockSummary {
   bundlesProposed: number;
   bundlesClosed: number;
   bids: number;
-  miner: string | null;
+  miner: string | null;        // the pool's display name (the coinbase tag without slashes when it is not in the list)
+  minerLogo: string | null;    // the pool's logo file under /resources/pool-logos/
   minerTag: string | null;
   datum: boolean;
   fees: number | null;
@@ -226,13 +230,15 @@ function minerInfo(block: bitcoinjs.Block, height: number): MinerInfo {
   if (!tag && runs.length) {
     tag = runs.reduce((a, r) => r.length > a.length ? r : a, '').slice(0, 32);
   }
+  const pool = poolFor(tag);
   const reward = cb.outs.reduce((a, o) => a + o.value, 0);
   const subsidy = subsidyAt(height);
   return {
-    tag, coinbaseText: text.slice(0, 120), reward, fees: Math.max(0, reward - subsidy), subsidy,
+    tag, name: pool?.name ?? normalizeTag(tag), logo: pool?.logo ?? null,
+    coinbaseText: text.slice(0, 120), reward, fees: Math.max(0, reward - subsidy), subsidy,
     txCount: block.transactions!.length, weight: block.weight(),
     difficulty: difficultyOf(block.bits), bits: block.bits.toString(16).padStart(8, '0'), minDifficulty: block.bits === POW_LIMIT_BITS,
-    datum: tags.datum, poolTag: tags.pool, minerTag: tags.miner,
+    datum: tags.datum, poolTag: tags.pool, minerTag: normalizeTag(tags.miner),
   };
 }
 
@@ -296,6 +302,13 @@ class Drivechain {
       }
       this.genesis = raw.genesis;
       for (const b of raw.blocks as DrivechainBlock[]) {
+        // the cache predates the mining-pools list: fill in the pool names and logos it lacks
+        if (b.miner) {
+          const pool = poolFor(b.miner.tag);
+          b.miner.name = b.miner.name ?? pool?.name ?? normalizeTag(b.miner.tag);
+          b.miner.logo = b.miner.logo === undefined ? (pool?.logo ?? null) : b.miner.logo;
+          b.miner.minerTag = normalizeTag(b.miner.minerTag);
+        }
         this.add(b);
       }
       logger.info(`Drivechain index: ${this.blocks.size} blocks from the cache`);
@@ -709,7 +722,8 @@ class Drivechain {
       bundlesProposed: b.bundlesProposed.length,
       bundlesClosed: b.bundlesClosed.length,
       bids: b.bmm.reduce((a, x) => a + (x.bid ?? 0), 0),
-      miner: b.miner?.tag ?? null,
+      miner: b.miner?.name ?? b.miner?.tag ?? null,
+      minerLogo: b.miner?.logo ?? null,
       minerTag: b.miner?.minerTag ?? null,
       datum: b.miner?.datum ?? false,
       fees: b.miner?.fees ?? null,

@@ -59,6 +59,10 @@ export interface PendingBundle {
 /** Who mined a block and what it earned (from its coinbase) */
 export interface MinerInfo {
   tag: string | null;
+  /** the pool's display name from the mining-pools list, else the tag without slashes */
+  name: string | null;
+  /** the pool's logo file under /resources/pool-logos/, if the list has one */
+  logo: string | null;
   coinbaseText: string;
   reward: number;
   fees: number;
@@ -107,6 +111,7 @@ export interface DrivechainBlockSummary {
   bundlesClosed: number;
   bids: number;
   miner: string | null;
+  minerLogo?: string | null;
   minerTag?: string | null;
   datum?: boolean;
   fees: number | null;

@@ -38,12 +38,20 @@ export class DrivechainWidgetComponent implements OnInit {
     }
   }
 
+  logoUrl(logo: string): string {
+    return `/resources/pool-logos/${logo}`;
+  }
+
+  hideLogo(event: Event): void {
+    (event.target as HTMLElement).style.display = 'none';
+  }
+
   colorOf(slot: number): string {
     return slotColor(slot);
   }
 
-  markId(slot: number): string {
-    return slotMarkId(slot);
+  markId(slot: number, name?: string | null): string {
+    return slotMarkId(slot, name);
   }
 
   pct(x: number, d = 1): string {

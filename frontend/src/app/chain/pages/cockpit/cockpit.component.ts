@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnIni
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subject, Subscription, catchError, of, switchMap, timer, merge } from 'rxjs';
 import { ChainApiService } from '@app/chain/chain-api.service';
-import { PROFILE, slotColor } from '@app/chain/profiles';
+import { PROFILE, slotColor, slotMarkId } from '@app/chain/profiles';
 import { escapeHtml } from '@app/chain/escape-html';
 import { SeoService } from '@app/services/seo.service';
 import { StateService } from '@app/services/state.service';
@@ -129,8 +129,20 @@ export class ChainCockpitComponent implements OnInit, OnDestroy {
 
   // --- helpers for the template ---------------------------------------------------------------------
 
+  logoUrl(logo: string): string {
+    return `/resources/pool-logos/${logo}`;
+  }
+
+  hideLogo(event: Event): void {
+    (event.target as HTMLElement).style.display = 'none';
+  }
+
   colorOf(slot: number): string {
     return slotColor(slot);
+  }
+
+  markId(slot: number, name?: string | null): string {
+    return slotMarkId(slot, name);
   }
 
   nameOf(slot: number): string {
@@ -280,7 +292,7 @@ export class ChainCockpitComponent implements OnInit, OnDestroy {
         type: 'pie', radius: ['48%', '78%'], center: ['50%', '52%'], avoidLabelOverlap: true,
         label: { color: '#ffffffcc', fontSize: 11, formatter: '{b}\n{d}%' }, labelLine: { lineStyle: { color: '#ffffff55' } },
         itemStyle: { borderColor: '#11131f', borderWidth: 2 },
-        data: miners.slice(0, 8).map((m, i) => ({ name: m.tag, value: m.blocks, itemStyle: { color: palette[i % palette.length] } })),
+        data: miners.slice(0, 8).map((m, i) => ({ name: m.name || m.tag, value: m.blocks, itemStyle: { color: palette[i % palette.length] } })),
       }],
     };
 

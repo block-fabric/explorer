@@ -20,13 +20,13 @@ import { PROFILE, slotColor, slotMarkId } from '@app/chain/profiles';
       </div>
 
       <!-- the miner alone (block and transaction pages) -->
-      <span *ngIf="mode === 'miner'" class="badge miner-badge" [title]="'From the coinbase of this block' + (s.datum ? ' (DATUM: pool tag and miner tag)' : '')">{{ s.miner || 'Unknown' }}{{ s.datum && s.minerTag ? ' · ' + s.minerTag : '' }}</span>
+      <span *ngIf="mode === 'miner'" class="badge miner-badge" [title]="'From the coinbase of this block' + (s.datum ? ' (DATUM: pool tag and miner tag)' : '')"><img *ngIf="s.minerLogo" class="pool-logo" [src]="logoUrl(s.minerLogo)" (error)="hideLogo($event)" alt="">{{ s.miner || 'Unknown' }}{{ s.datum && s.minerTag ? ' · ' + s.minerTag : '' }}</span>
 
       <div *ngIf="mode === 'below' || mode === 'inline'" class="marks" [class.inline]="mode === 'inline'">
-        <span *ngIf="mode === 'below'" class="miner" [title]="'Mined by ' + (s.miner || 'an unknown miner') + (s.datum ? ', DATUM miner ' + (s.minerTag || 'without a tag') : '')">{{ s.miner || 'Unknown' }}</span>
+        <span *ngIf="mode === 'below'" class="miner" [title]="'Mined by ' + (s.miner || 'an unknown miner') + (s.datum ? ', DATUM miner ' + (s.minerTag || 'without a tag') : '')"><img *ngIf="s.minerLogo" class="pool-logo" [src]="logoUrl(s.minerLogo)" (error)="hideLogo($event)" alt="">{{ s.miner || 'Unknown' }}</span>
         <span class="icons">
           <span *ngFor="let a of s.bmm" class="sc" [style.color]="colorOf(a.slot)" [title]="a.name + ' block carried' + (a.bid != null ? ', bid ' + a.bid + ' sats' : '')">
-            <app-svg-images name="chain-mark" [fill]="markId(a.slot)" [width]="px" [height]="px"></app-svg-images>
+            <app-svg-images name="chain-mark" [fill]="markId(a.slot, a.name)" [width]="px" [height]="px"></app-svg-images>
           </span>
           <span *ngIf="!s.bmm.length && mode === 'inline'" class="none">–</span>
           <span *ngIf="s.deposits" class="peg dep" [title]="s.deposits + ' deposit(s) into sidechains'">↓{{ s.deposits > 1 ? s.deposits : '' }}</span>
@@ -44,7 +44,8 @@ import { PROFILE, slotColor, slotMarkId } from '@app/chain/profiles';
     .band { flex: 1; }
     .marks { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11px; line-height: 1.1; }
     .marks.inline { flex-direction: row; justify-content: flex-start; }
-    .miner { color: var(--transparent-fg); max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+    .miner { color: var(--transparent-fg); max-width: 124px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 13px; display: inline-flex; align-items: center; gap: 4px; }
+    .pool-logo { width: 1.1em; height: 1.1em; object-fit: contain; flex: none; }
     .icons { display: inline-flex; align-items: center; gap: 2px; flex-wrap: wrap; justify-content: center; }
     .sc { display: inline-flex; }
     .peg { font-weight: 700; font-size: 11px; padding: 0 2px; }
@@ -85,8 +86,16 @@ export class ChainBlockMarksComponent implements OnChanges, OnDestroy {
     return slotColor(slot);
   }
 
-  markId(slot: number): string {
-    return slotMarkId(slot);
+  markId(slot: number, name?: string | null): string {
+    return slotMarkId(slot, name);
+  }
+
+  logoUrl(logo: string): string {
+    return `/resources/pool-logos/${logo}`;
+  }
+
+  hideLogo(event: Event): void {
+    (event.target as HTMLElement).style.display = 'none';
   }
 
   get profile() {
