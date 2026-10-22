@@ -9,6 +9,8 @@ import * as https from 'https';
 import { Common } from '../api/common';
 import { PoolConnection } from 'mysql2/promise';
 import BlocksRepository from '../repositories/BlocksRepository';
+import { PROFILE } from '../chain/profile';
+import { poolIds, poolsJson, poolsSha } from '../chain/pools';
 
 /**
  * Maintain the most recent version of pools-v2.json
@@ -78,6 +80,10 @@ class PoolsUpdater {
         return;
       }
 
+      if (PROFILE.mainchain) { // eCash explorer: its own pool list (chain/pools.ts), not mempool.space's Bitcoin one
+        return await this.$importChainPools();
+      }
+
       const network = config.SOCKS5PROXY.ENABLED ? 'tor' : 'clearnet';
       if (this.currentSha === null) {
         logger.info(`Downloading pools-v2.json for the first time from ${this.poolsUrl} over ${network}`, this.tag);
@@ -121,6 +127,53 @@ class PoolsUpdater {
       // fast-forward lastRun to 10 minutes before the next scheduled update
       this.lastRun = now - Math.max(config.MEMPOOL.POOLS_UPDATE_DELAY - 600, 600);
       logger.err(`PoolsUpdater failed. Will try again in 10 minutes. Exception: ${JSON.stringify(e)}`, this.tag);
+    }
+  }
+
+  /**
+   * eCash explorer: import chain/pools.ts's list when it differs from the one in the database. Pools from an earlier
+   * import of mempool.space's Bitcoin list are emptied (no tags, no addresses) so they can never match an eCash
+   * coinbase, and their blocks go back to "unknown" to be matched again.
+   * @asyncUnsafe
+   */
+  private async $importChainPools(): Promise<void> {
+    const sha = poolsSha();
+    if (this.currentSha === sha) {
+      return;
+    }
+    poolsParser.setMiningPools(poolsJson());
+    if (config.DATABASE.ENABLED === false) {
+      logger.info(`eCash mining pools (${sha}) loaded (no database)`, this.tag);
+      return;
+    }
+    const recheckFromHeight = (await BlocksRepository.$mostRecentBlockHeight()) - 10;
+    const connection = await (await DB.getPool()).getConnection();
+    try {
+      await connection.beginTransaction();
+      const ours = poolIds();
+      const unknown = await poolsParser.$insertUnknownPool().then(() => DB.query('SELECT id FROM pools WHERE name = "Unknown"', undefined, 'debug', connection));
+      const unknownId = (unknown[0] as any[])[0]?.id;
+      const [foreign]: any[] = await DB.query(
+        `SELECT id FROM pools WHERE name <> "Unknown" AND unique_id NOT IN (${ours.map(() => '?').join(',') || 'NULL'})`, ours, 'debug', connection);
+      const foreignIds = foreign.map((r: any) => r.id);
+      if (foreignIds.length) {
+        await DB.query(`UPDATE pools SET addresses = '[]', regexes = '[]' WHERE id IN (${foreignIds.map(() => '?').join(',')})`, foreignIds, 'debug', connection);
+        if (unknownId !== undefined) {
+          await DB.query(`UPDATE blocks SET pool_id = ? WHERE pool_id IN (${foreignIds.map(() => '?').join(',')})`, [unknownId, ...foreignIds], 'debug', connection);
+        }
+      }
+      await this.updateDBSha(sha, connection);
+      const clearCache = await poolsParser.migratePoolsJson(connection);
+      await connection.commit();
+      if (clearCache) {
+        this.recheck = { sha, fromHeight: recheckFromHeight };
+      }
+      logger.info(`eCash mining pools (${sha}) imported: ${ours.length} pools`, this.tag);
+    } catch (e) {
+      await connection.rollback();
+      throw e;
+    } finally {
+      connection.release();
     }
   }
 

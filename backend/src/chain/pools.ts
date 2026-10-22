@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { NETWORK, NetworkId } from './networks';
 
 /**
@@ -10,6 +11,7 @@ import { NETWORK, NetworkId } from './networks';
  */
 
 export interface PoolMeta {
+  id: number;                  // its unique id in mempool's pools table (from 100001: clear of mempool.space's ids)
   tag: string;                 // as the pool writes it, slashes included
   name: string;                // the display name
   logo: string | null;         // file under /resources/pool-logos/, null: no logo in the list
@@ -17,15 +19,15 @@ export interface PoolMeta {
 
 const POOLS: Record<NetworkId, PoolMeta[]> = {
   ecashbeta: [
-    { tag: '/bip300xyz/', name: 'bip300.xyz', logo: 'bip300xyz.svg' },
-    { tag: '/ecpool.tech/', name: 'eCPool.tech', logo: 'ecpool.png' },
-    { tag: 'ePool', name: 'ePool', logo: 'epool.png' },
-    { tag: '/powre/', name: 'Pow.re', logo: null },
-    { tag: '/avonpool/', name: 'avonpool', logo: 'avonpool.svg' },
-    { tag: '/ecxfreebank.com/', name: 'FreeBank', logo: 'freebank.svg' },
+    { id: 100001, tag: '/bip300xyz/', name: 'bip300.xyz', logo: 'bip300xyz.svg' },
+    { id: 100002, tag: '/ecpool.tech/', name: 'eCPool.tech', logo: 'ecpool.png' },
+    { id: 100003, tag: 'ePool', name: 'ePool', logo: 'epool.png' },
+    { id: 100004, tag: '/powre/', name: 'Pow.re', logo: null },
+    { id: 100005, tag: '/avonpool/', name: 'avonpool', logo: 'avonpool.svg' },
+    { id: 100006, tag: '/ecxfreebank.com/', name: 'FreeBank', logo: 'freebank.svg' },
   ],
   ecash: [
-    { tag: '/ecxfreebank.com/', name: 'FreeBank', logo: 'freebank.svg' },
+    { id: 100006, tag: '/ecxfreebank.com/', name: 'FreeBank', logo: 'freebank.svg' },
   ],
   ecashtest: [],
 };
@@ -63,4 +65,24 @@ export function poolName(tag: string | null | undefined): string | null {
 /** The logo file of a coinbase tag, if the list has one */
 export function poolLogo(tag: string | null | undefined): string | null {
   return poolFor(tag)?.logo ?? null;
+}
+
+/**
+ * This network's pools in mempool's pools-v2.json format, for upstream's block attribution (tasks/pools-updater.ts
+ * imports it instead of mempool.space's Bitcoin list): the coinbase tag, escaped, is the regex its blocks match.
+ */
+export function poolsJson(): { id: number; name: string; link: string; addresses: string[]; tags: string[] }[] {
+  return (POOLS[NETWORK.id] ?? []).map(p => ({
+    id: p.id, name: p.name, link: '', addresses: [], tags: [p.tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')],
+  }));
+}
+
+/** A version stamp of this network's pool list (stands in for the GitHub sha of pools-v2.json) */
+export function poolsSha(): string {
+  return createHash('sha256').update(JSON.stringify(poolsJson())).digest('hex').slice(0, 40);
+}
+
+/** The pools-table unique ids this network's list uses */
+export function poolIds(): number[] {
+  return (POOLS[NETWORK.id] ?? []).map(p => p.id);
 }
