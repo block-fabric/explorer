@@ -63,6 +63,12 @@ src/resources/assets-testnet.json
 src/resources/assets-testnet.minimal.json
 src/resources/pools.json
 src/resources/mining-pools/*
+# the eCash pools (backend/src/chain/pools.ts) are not in mempool's logo repository: kept here
+!src/resources/mining-pools/bip300xyz.svg
+!src/resources/mining-pools/ecpooltech.svg
+!src/resources/mining-pools/epool.svg
+!src/resources/mining-pools/avonpool.svg
+!src/resources/mining-pools/freebank.svg
 src/resources/**/*.mp4
 src/resources/**/*.vtt
 src/resources/customize.js
