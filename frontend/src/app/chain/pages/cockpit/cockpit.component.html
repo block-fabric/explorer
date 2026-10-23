@@ -91,7 +91,7 @@
         <tbody>
           <tr *ngFor="let s of currentBids(d); trackBy: trackSlot">
             <td><app-sidechain-label [slot]="s.slot" [name]="s.name"></app-sidechain-label></td>
-            <td class="text-right"><b>{{ s.lastBid | number }}</b> <small>sats</small></td>
+            <td class="text-right"><b>{{ s.lastBid | number }}</b><small class="ms-1">sats</small></td>
             <td class="text-right"><a [routerLink]="['/block' | relativeUrl, s.lastBidHeight]">{{ s.lastBidHeight | number }}</a>
               <span class="bid-age">{{ d.live.height - s.lastBidHeight === 0 ? 'tip' : (d.live.height - s.lastBidHeight) + ' ago' }}</span></td>
             <td class="text-right d-none d-sm-table-cell">{{ s.bidMedian | number }}</td>
