@@ -124,8 +124,8 @@ export class FlushCandlesComponent implements OnChanges {
         <div class="ya" [style.height.px]="height"><span>{{ fx.price(maxY) }}</span><span>{{ fx.price(maxY / 2) }}</span><span>0</span></div>
         <svg [attr.viewBox]="'0 0 ' + w + ' ' + height" preserveAspectRatio="none" [style.height.px]="height" role="img" [attr.aria-label]="'Bonding curve: ' + fx.pct(progress, 1) + ' of the way to graduation'">
           <line x1="0" [attr.y1]="height - 1" [attr.x2]="w" [attr.y2]="height - 1" stroke="#ffffff22" vector-effect="non-scaling-stroke"/>
-          <path [attr.d]="soldArea" fill="var(--chain-accent, #38bdf8)" fill-opacity="0.28"/>
-          <path [attr.d]="path" fill="none" stroke="var(--chain-accent, #38bdf8)" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
+          <path [attr.d]="soldArea" fill="var(--chain-accent, #7d94ab)" fill-opacity="0.28"/>
+          <path [attr.d]="path" fill="none" stroke="var(--chain-accent, #7d94ab)" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
           <line [attr.x1]="xNow" [attr.x2]="xNow" y1="0" [attr.y2]="height" stroke="var(--fg)" stroke-dasharray="4 4" stroke-width="1.2" vector-effect="non-scaling-stroke"/>
           <line [attr.x1]="0" [attr.x2]="w" [attr.y1]="yNow" [attr.y2]="yNow" stroke="var(--fg)" stroke-opacity="0.35" stroke-dasharray="2 4" stroke-width="1" vector-effect="non-scaling-stroke"/>
           @for (h of hits; track h.x) {<rect class="hit" [attr.x]="h.x" y="0" [attr.width]="h.w" [attr.height]="height"><title>{{ h.tip }}</title></rect>}
@@ -133,7 +133,7 @@ export class FlushCandlesComponent implements OnChanges {
       </div>
       <div class="xa"><span>0 tokens sold</span><span>{{ fx.compact(sale / 2) }}</span><span>{{ fx.compact(sale) }} sold: graduation</span></div>
       <div class="legend">
-        <span><i style="background: var(--chain-accent, #38bdf8)"></i>sold so far: <b>{{ fx.compact(sold) }}</b> tokens for <b>{{ fx.amount(raised, 2) }}</b> of {{ graduation | number }} ECX ({{ fx.pct(progress, 1) }})</span>
+        <span><i style="background: var(--chain-accent, #7d94ab)"></i>sold so far: <b>{{ fx.compact(sold) }}</b> tokens for <b>{{ fx.amount(raised, 2) }}</b> of {{ graduation | number }} ECX ({{ fx.pct(progress, 1) }})</span>
         <span>price now <b>{{ fx.price(priceNow) }}</b> ECX</span>
         <span>start <b>{{ fx.price(priceStart) }}</b> → at graduation <b>{{ fx.price(priceEnd) }}</b> ECX (×{{ (priceEnd / priceStart) | number:'1.0-1' }})</span>
         <span>market value of the supply at graduation <b>{{ fx.compact(priceEnd * supply) }}</b> ECX</span>
@@ -229,13 +229,13 @@ export class FlushCurveComponent implements OnChanges {
         <svg [attr.viewBox]="'0 0 ' + w + ' ' + height" preserveAspectRatio="none" [style.height.px]="height">
           <line x1="0" [attr.y1]="height - 1" [attr.x2]="w" [attr.y2]="height - 1" stroke="#ffffff22" vector-effect="non-scaling-stroke"/>
           @for (b of bars; track b.x) {
-            <rect [attr.x]="b.x" [attr.y]="b.y" [attr.width]="b.bw" [attr.height]="b.h" [attr.fill]="b.active ? 'var(--chain-accent, #38bdf8)' : '#7f8ba0'" [attr.fill-opacity]="b.active ? 0.85 : 0.55"><title>{{ b.tip }}</title></rect>
+            <rect [attr.x]="b.x" [attr.y]="b.y" [attr.width]="b.bw" [attr.height]="b.h" [attr.fill]="b.active ? 'var(--chain-accent, #7d94ab)' : '#7f8ba0'" [attr.fill-opacity]="b.active ? 0.85 : 0.55"><title>{{ b.tip }}</title></rect>
           }
           <line [attr.x1]="xNow" [attr.x2]="xNow" y1="0" [attr.y2]="height" stroke="var(--fg)" stroke-dasharray="4 4" stroke-width="1.2" vector-effect="non-scaling-stroke"><title>{{ nowTip }}</title></line>
         </svg>
       </div>
       <div class="xa"><span>{{ fx.price(pLeft) }}</span><span>{{ fx.price(pRight) }}</span></div>
-      <div class="legend"><span><i style="background: var(--chain-accent, #38bdf8)"></i>in range now</span><span>price now <b>{{ fx.price(pNow) }}</b> {{ unit }} (tick {{ tickNow }})</span><span>tick spacing {{ spacing }}</span><span>liquidity in range {{ fx.compact(lNow) }}</span></div>
+      <div class="legend"><span><i style="background: var(--chain-accent, #7d94ab)"></i>in range now</span><span>price now <b>{{ fx.price(pNow) }}</b> {{ unit }} (tick {{ tickNow }})</span><span>tick spacing {{ spacing }}</span><span>liquidity in range {{ fx.compact(lNow) }}</span></div>
     } @else {
       <p class="empty">No position provides liquidity in this pool.</p>
     }`,

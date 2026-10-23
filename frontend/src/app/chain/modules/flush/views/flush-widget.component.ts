@@ -24,7 +24,7 @@ const REFRESH = 30000;
   styles: [`
     .kv { width: 100%; font-size: 0.85rem; margin: 0; td { padding: 3px 4px; vertical-align: middle; } td:first-child { color: var(--transparent-fg); } }
     .big-row { flex-wrap: wrap; }
-    .bar { height: 6px; border-radius: 3px; background: #ffffff10; overflow: hidden; min-width: 60px; .fill { height: 100%; background: var(--chain-accent, #38bdf8); } }
+    .bar { height: 6px; border-radius: 3px; background: #ffffff10; overflow: hidden; min-width: 60px; .fill { height: 100%; background: var(--chain-accent, #7d94ab); } }
     .rows { width: 100%; font-size: 0.85rem; td { padding: 3px 4px; vertical-align: middle; } }
     .muted { color: var(--transparent-fg); } .mono { font-family: monospace; } .pos { color: #3bd16f; } .neg { color: #ff6b6b; }
     .pill { display: inline-block; font-size: 0.7rem; padding: 0 7px; border-radius: 10px; background: #ffffff14; }

@@ -424,6 +424,6 @@ export class FlushTreasuryPage implements OnInit {
   series(t: FlushTreasury): ChartSeries[] {
     const by = (k: 'from_swaps' | 'from_launches', name: string, color: string): ChartSeries =>
       ({ name, color, points: t.inflows.map(i => [i.height, i[k]] as [number, number]) });
-    return [by('from_launches', 'from launches', 'var(--chain-accent, #38bdf8)'), by('from_swaps', 'from swaps', '#f5b83d')];
+    return [by('from_launches', 'from launches', 'var(--chain-accent, #7d94ab)'), by('from_swaps', 'from swaps', '#f5b83d')];
   }
 }

@@ -20,7 +20,7 @@ const peg = () => import('./pages/peg.pages');
 const flush: ChainFrontendModule = {
   profile: {
     id: 'flush', kind: 'flush', name: 'Flush', tagline: 'Flush, tokens, assets and a DEX on a fast sidechain of eCash',
-    unit: 'ECX', subunit: 'sats', slot: 99, mainchain: false, color: '#38bdf8',
+    unit: 'ECX', subunit: 'sats', slot: 99, mainchain: false, color: '#7d94ab', // Flush's brand blue-grey (chain.json brand.color)
     ...SIDECHAIN_MARKS.flush,
     blockWeightUnits: 4000000,
   },

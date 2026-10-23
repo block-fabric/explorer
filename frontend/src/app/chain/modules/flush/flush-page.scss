@@ -7,7 +7,7 @@
   label { color: var(--transparent-fg); display: inline-flex; align-items: center; gap: 6px; margin: 0; } }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .chip { font-size: 0.78rem; padding: 2px 10px; border-radius: 12px; background: #ffffff10; color: var(--transparent-fg); border: none; cursor: pointer;
-  &.on { background: color-mix(in srgb, var(--chain-accent, #38bdf8) 35%, transparent); color: var(--fg); } }
+  &.on { background: color-mix(in srgb, var(--chain-accent, #7d94ab) 35%, transparent); color: var(--fg); } }
 .pill { white-space: nowrap; }
 .pill.ok { background: color-mix(in srgb, #3bd16f 30%, transparent); }
 .pill.warn { background: color-mix(in srgb, #f5b83d 30%, transparent); }

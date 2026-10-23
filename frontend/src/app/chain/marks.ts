@@ -38,11 +38,9 @@ export const SIDECHAIN_MARKS: Record<string, Pick<ChainProfile, 'mark' | 'markRe
   ] },
   freebank: { mark: ['M4 12 16 5l12 7', 'M6 12h20', 'M6 27h20', 'M9 14v9M14 14v9M18 14v9M23 14v9'] },
   // Flush: water, three waves (a placeholder until Flush has a mark of its own)
-  flush: { mark: [
-    'M4 10.5c2-2.2 4-2.2 6 0s4 2.2 6 0 4-2.2 6 0 4 2.2 6 0',
-    'M4 16c2-2.2 4-2.2 6 0s4 2.2 6 0 4-2.2 6 0 4 2.2 6 0',
-    'M4 21.5c2-2.2 4-2.2 6 0s4 2.2 6 0 4-2.2 6 0 4 2.2 6 0',
-  ] },
+  // Flush's own mark, the "tornado" (backbone-flush src/webui/app/src/chain/chain.json brand.mark;
+  // ~/skydoge/media/flush/mark/variants.json)
+  flush: { mark: ['M4 6h24', 'M8 12.5h17', 'M12 19h10', 'M15 25.5h4'] },
   coinshift: { mark: [
     'M7 16a9 9 0 0 1 15-6.7', 'M22 5v5h-5',
     'M25 16a9 9 0 0 1-15 6.7', 'M10 27v-5h5',

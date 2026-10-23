@@ -30,7 +30,7 @@ export function keyColor(k: string): string {
     .strip .s.past { opacity: 0.35; } .strip .s.now { outline: 2px solid var(--fg); }
     .strip .s.banned { background: repeating-linear-gradient(45deg, #ff6b6b55, #ff6b6b55 3px, transparent 3px, transparent 6px); }
     .strip .s.none { background: #ffffff14; }
-    .share { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: #ffffff10; margin: 6px 0; .b { background: #f5b83d; } .v { background: var(--chain-accent, #38bdf8); } }
+    .share { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: #ffffff10; margin: 6px 0; .b { background: #f5b83d; } .v { background: var(--chain-accent, #7d94ab); } }
   `],
   template: `
   <div class="container-xl mp">

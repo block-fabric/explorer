@@ -14,7 +14,7 @@ CHAINS = {
     'bitassets': ('BitAssets', '#f5b83d', 'An asset sidechain of eCash', ['M6 9c0-2.2 4.5-4 10-4s10 1.8 10 4-4.5 4-10 4S6 11.2 6 9z', 'M6 9v14c0 2.2 4.5 4 10 4s10-1.8 10-4V9', 'M6 16c0 2.2 4.5 4 10 4s10-1.8 10-4'], []),
     'truthcoin': ('Truthcoin', '#7bd88f', 'A prediction market sidechain of eCash', ['M28 16a12 12 0 1 1-24 0 12 12 0 1 1 24 0', 'M10.5 16.5l3.5 3.5 7-7.5'], []),
     'zside': ('zSide', '#f26b9c', 'A shielded sidechain of eCash', ['M16 4l10 4v7c0 6-4 10.5-10 13-6-2.5-10-7-10-13V8z', 'M16 12a3 3 0 0 0-1 5.8V21h2v-3.2A3 3 0 0 0 16 12z'], []),
-    'flush': ('Flush', '#38bdf8', 'A sidechain of eCash: its DEX, assets and token launches', ['M4 10.5c2-2.2 4-2.2 6 0s4 2.2 6 0 4-2.2 6 0 4 2.2 6 0', 'M4 16c2-2.2 4-2.2 6 0s4 2.2 6 0 4-2.2 6 0 4 2.2 6 0', 'M4 21.5c2-2.2 4-2.2 6 0s4 2.2 6 0 4-2.2 6 0 4 2.2 6 0'], []),
+    'flush': ('Flush', '#7d94ab', 'A sidechain of eCash: its DEX, assets and token launches', ['M4 6h24', 'M8 12.5h17', 'M12 19h10', 'M15 25.5h4'], []),
     'coinshift': ('Coinshift', '#ff8a3d', 'A swap sidechain of eCash', ['M7 16a9 9 0 0 1 15-6.7', 'M22 5v5h-5', 'M25 16a9 9 0 0 1-15 6.7', 'M10 27v-5h5'], []),
 }
 
