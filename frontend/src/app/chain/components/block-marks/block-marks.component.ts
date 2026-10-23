@@ -67,8 +67,10 @@ import { L2ApiService } from '@app/chain/l2/l2-api.service';
         <span class="icons">
           <span class="fk" [class.fk-tie]="fKind !== 'PoS'">{{ fKind }}</span>
           <ng-container *ngIf="fMain"><app-svg-images name="chain-mark" fill="ecash" width="11" height="11" class="fe"></app-svg-images><span class="fmain">{{ fMain | number }}</span></ng-container>
-          <span class="fdot" [style.background]="fColor"></span>
         </span>
+        <!-- finality: soft (a block of stake alone), anchored (an eCash anchor covers it, n of them so far), final (enough
+             anchors: it cannot be reorganised) -->
+        <span class="ffin" [ngClass]="'ffin-' + (fMark.finality?.status || 'none')">{{ fFinality }}</span>
       </div>
     </ng-container>
 
@@ -113,6 +115,11 @@ import { L2ApiService } from '@app/chain/l2/l2-api.service';
     .fk { font-weight: 700; font-size: 11px; color: var(--transparent-fg); }
     .fk-tie { color: var(--fg); background: color-mix(in srgb, var(--chain-accent) 30%, transparent); padding: 0 4px; border-radius: 3px; }
     .fe { margin-left: 4px; vertical-align: -1px; }
+    .ffin { display: block; font-size: 10.5px; line-height: 1.3; color: var(--transparent-fg); }
+    .marks.inline .ffin { display: inline; margin-left: 6px; }
+    .ffin-final { color: #3bd16f; font-weight: 600; }
+    .ffin-anchored { color: var(--chain-accent); }
+    .ffin-none { color: #ff6b6b; }
     .fmain { font-size: 11px; color: var(--fg); margin-left: 2px; }
     .fdot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-left: 4px; }
     .mono { font-family: monospace; }
@@ -141,6 +148,7 @@ export class ChainBlockMarksComponent implements OnChanges, OnDestroy {
   fKind = 'PoS';
   fMain: number | null = null;
   fAnchored: FlushAnchor | null = null;
+  fFinality = '';
   fTitle = '';
   fColor = 'transparent';
   l2Mark: L2Mark | null | undefined;
@@ -167,6 +175,9 @@ export class ChainBlockMarksComponent implements OnChanges, OnDestroy {
           : anchored ? ['Anchored', anchored.mainheight]
           : ['PoS', null];
         const st = m?.finality?.status;
+        const n = m?.finality?.anchors ?? 0;
+        this.fFinality = st === 'final' ? '✓ final' : st === 'anchored' ? `anchored · ${n} anchor${n === 1 ? '' : 's'}`
+          : st === 'soft' ? 'soft' : m ? 'not on the active chain' : '';
         this.fColor = st === 'final' ? '#3bd16f' : st === 'anchored' ? (PROFILE.color) : 'transparent';
         this.fTitle = m ? (m.kind === 'pos' ? `Block of stake, slot ${m.slot}` + (m.proposer ? `, signed by ${m.proposer}` : '')
           : 'BMM block' + (m.mainheight ? `, committed to by eCash block ${m.mainheight}` : ''))
