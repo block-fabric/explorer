@@ -33,6 +33,12 @@ export function profileBySlot(slot: number): ChainProfile | undefined {
 export const isMainchain = (): boolean => PROFILE.mainchain;
 
 /**
+ * A sidechain whose own node speaks Bitcoin Core's RPC (Flush, FreeBank): upstream mempool runs on it directly, without
+ * the eCash drivechain index, and the module serves its own routes
+ */
+export const nodeSidechain = (): boolean => PROFILE.kind === 'flush' || PROFILE.kind === 'freebank';
+
+/**
  * What this backend runs for a sidechain (CHAIN.L2_ROLE): 'index' = the sidechain index, its routes and the Core
  * JSON-RPC view (chain/l2/); 'full' = upstream mempool's backend reading that view as its node. Null: the mainchain.
  */

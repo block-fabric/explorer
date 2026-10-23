@@ -18,6 +18,29 @@ const stake = () => import('./pages/stake.pages');
 const peg = () => import('./pages/peg.pages');
 
 const flush: ChainFrontendModule = {
+  /**
+   * Flush's addresses on each eCash network (backbone-flush src/kernel/chainparams.cpp, CEcashSidechainParams): its own
+   * bech32 prefix per network (flx, bflx, tflx); base58 as the chain's base network (main: versions 28 'C' and 88 'c';
+   * eCash testnet: Bitcoin testnet's 111 and 196)
+   */
+  addresses: {
+    ecash: { bech32: 'flx', p2pkh: 28, p2sh: 88, base58: { pubkey: ['C'], script: ['c'] } },
+    ecashbeta: { bech32: 'bflx', p2pkh: 28, p2sh: 88, base58: { pubkey: ['C'], script: ['c'] } },
+    ecashtest: { bech32: 'tflx', p2pkh: 111, p2sh: 196, base58: { pubkey: ['m', 'n'], script: ['2'] } },
+  },
+  /** its views on upstream's pages (app-l2-view) */
+  views: {
+    block: () => import('./views/flush-block-panel.component').then(m => m.FlushBlockPanelComponent),
+    tx: () => import('./views/flush-tx-panel.component').then(m => m.FlushTxPanelComponent),
+    address: () => import('./views/flush-address-panel.component').then(m => m.FlushAddressPanelComponent),
+    widget: () => import('./views/flush-widget.component').then(m => m.FlushWidgetComponent),
+  },
+  /** its dashboard widgets (views/flush-widget.component.ts) */
+  dashboard: {
+    chain: { kind: 'flush-chain' }, treasury: { kind: 'flush-dex', title: 'DEX' }, bmm: { kind: 'flush-launches', title: 'Launches' },
+    bundles: { kind: 'flush-stake', title: 'Stake' }, peg: { kind: 'flush-peg', title: 'Drivechain' },
+    deposits: { kind: 'flush-peg', title: 'Drivechain' }, withdrawals: { kind: 'flush-trades', title: 'Recent trades' },
+  },
   profile: {
     id: 'flush', kind: 'flush', name: 'Flush', tagline: 'Flush, tokens, assets and a DEX on a fast sidechain of eCash',
     unit: 'ECX', subunit: 'sats', slot: 99, mainchain: false, color: '#7d94ab', // Flush's brand blue-grey (chain.json brand.color)

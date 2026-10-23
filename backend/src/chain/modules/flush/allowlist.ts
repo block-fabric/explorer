@@ -121,7 +121,12 @@ function checkValue(v: unknown, depth: number): void {
  * Throws ArgsError when the method is not on the allowlist or the arguments are not acceptable.
  */
 export function parseRpcArgs(method: string, text: unknown): unknown[] {
-  const spec = Object.prototype.hasOwnProperty.call(RPC_METHODS, method) ? RPC_METHODS[method] : undefined;
+  return parseArgsFor(RPC_METHODS, method, text);
+}
+
+/** parseRpcArgs for another node's allowlist (FreeBank's: chain/modules/freebank/allowlist.ts) */
+export function parseArgsFor(methods: Record<string, { args: number }>, method: string, text: unknown): unknown[] {
+  const spec = Object.prototype.hasOwnProperty.call(methods, method) ? methods[method] : undefined;
   if (!spec) {
     throw new ArgsError('method not allowed');
   }

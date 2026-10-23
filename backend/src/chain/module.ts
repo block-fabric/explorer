@@ -14,9 +14,10 @@ export interface ChainProfile {
   /**
    * l1: the eCash mainchain explorer (a node, upstream mempool); l2: a sidechain explorer (chain/l2/); flush: a
    * sidechain whose node speaks Bitcoin Core's RPC itself (Flush): upstream mempool on it, without the eCash
-   * drivechain index, plus the module's own routes (chain/modules/flush/)
+   * drivechain index, plus the module's own routes (chain/modules/flush/); freebank: the same for FreeBank's freebankd
+   * (a Core 0.16 base, chain/modules/freebank/)
    */
-  kind: 'l1' | 'l2' | 'flush';
+  kind: 'l1' | 'l2' | 'flush' | 'freebank';
   name: string;
   unit: string;
   /** BIP300 slot on the eCash mainchain; null for the mainchain itself */

@@ -14,7 +14,7 @@ import { seoDescriptionNetwork } from '@app/shared/common.utils';
 import { AddressInformation } from '@interfaces/node-api.interface';
 import { AddressTypeInfo } from '@app/shared/address-utils';
 import { extractTapLeaves, fillTapTree, convertTextToBuffer, PsbtKeyValue } from '@app/shared/transaction.utils';
-import { PROFILE } from '@app/chain/profiles';
+import { NO_ADDRESS_INDEX, PROFILE } from '@app/chain/profiles';
 
 class AddressStats implements ChainStats {
   address: string;
@@ -108,6 +108,9 @@ export class AddressComponent implements OnInit, OnDestroy {
   address: Address;
   addressString: string;
   isLoadingAddress = true;
+  /** eCash Explorer: this chain's backend has no address index (FreeBank): the page says so instead of asking */
+  noAddressIndex = NO_ADDRESS_INDEX;
+  chainName = PROFILE.name;
   transactions: Transaction[];
   utxos: Utxo[];
   isLoadingTransactions = true;
@@ -207,6 +210,11 @@ export class AddressComponent implements OnInit, OnDestroy {
           this.seoService.setDescription($localize`:@@meta.description.bitcoin.address:See mempool transactions, confirmed transactions, balance, and more for ${this.stateService.network==='liquid'||this.stateService.network==='liquidtestnet'?'Liquid':'Bitcoin'}${seoDescriptionNetwork(this.stateService.network)} address ${this.addressString}:INTERPOLATION:.`);
 
           this.addressTypeInfo = new AddressTypeInfo(this.stateService.network || 'mainnet', this.addressString);
+          if (this.noAddressIndex) {
+            this.isLoadingAddress = false;
+            this.isLoadingTransactions = false;
+            return of(null);
+          }
 
           return merge(
             of(true),

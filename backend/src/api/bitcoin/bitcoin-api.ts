@@ -29,11 +29,12 @@ class BitcoinApi implements AbstractBitcoinApi {
       height: block.height,
       version: block.version,
       timestamp: block.time,
-      bits: parseInt(block.bits, 16),
-      nonce: block.nonce,
-      difficulty: block.difficulty,
+      // Chains Explorer: a FreeBank block (BMM'd, a Core 0.16 base) has no bits, nonce or difficulty: neutral values
+      bits: block.bits !== undefined ? parseInt(block.bits, 16) : 0x1d00ffff,
+      nonce: block.nonce ?? 0,
+      difficulty: block.difficulty ?? 1,
       merkle_root: block.merkleroot,
-      tx_count: block.nTx,
+      tx_count: block.nTx ?? (Array.isArray(block.tx) ? block.tx.length : 0),
       size: block.size,
       weight: block.weight,
       previousblockhash: block.previousblockhash,
@@ -313,7 +314,14 @@ class BitcoinApi implements AbstractBitcoinApi {
 
     const outSpends: IEsploraApi.Outspend[] = [];
     for (let i = 0; i < tx.vout.length; i++) {
-      if (tx.status && tx.status.block_height === 0) {
+      // Chains Explorer: an output that can never be spent (OP_RETURN, or a script over 10,000 bytes: Core's
+      // IsUnspendable) is not in the UTXO set, so gettxout answers null for it as for a spent one: it is unspent
+      const script = tx.vout[i]?.scriptpubkey ?? '';
+      if (script.startsWith('6a') || script.length > 20000) {
+        outSpends.push({
+          spent: false
+        });
+      } else if (tx.status && tx.status.block_height === 0) {
         outSpends.push({
           spent: false
         });

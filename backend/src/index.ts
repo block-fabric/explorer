@@ -53,9 +53,10 @@ import stratumApi from './api/services/stratum';
 import drivechain from './chain/drivechain';
 import addressIndex from './chain/address-index';
 import drivechainRoutes, { moduleNewBlock } from './chain/drivechain.routes';
-import { PROFILE, l2Role } from './chain/profile';
+import { PROFILE, l2Role, nodeSidechain } from './chain/profile';
 import l2Routes from './chain/l2/routes';
 import flushRoutes from './chain/modules/flush/routes';
+import freebankRoutes from './chain/modules/freebank/routes';
 import l2Index from './chain/l2/index';
 import { CoreFacade } from './chain/l2/facade';
 import { MAX_SUBMIT_BYTES } from './chain/l2/submit';
@@ -236,7 +237,7 @@ class Server {
 
     this.setUpHttpApiRoutes();
     addressIndex.start(); // Chains Explorer: address lookups without electrs
-    if (role === 'full' || PROFILE.kind === 'flush') {
+    if (role === 'full' || nodeSidechain()) {
       // a sidechain: the drivechain index and the chain module are the eCash explorer's (the BMM views and the
       // sidechain's features are the index backend's, /api/v1/l2/*, or Flush's own routes below)
       blocks.setNewBlockCallback(() => addressIndex.onNewBlock());
@@ -473,6 +474,8 @@ class Server {
     }
     if (PROFILE.kind === 'flush') {
       flushRoutes.initRoutes(this.app); // Chains Explorer: Flush's /api/v1/chain and /api/v1/flush/* (chains/FLUSH-API.md)
+    } else if (PROFILE.kind === 'freebank') {
+      freebankRoutes.initRoutes(this.app); // Chains Explorer: FreeBank's /api/v1/chain and /api/v1/freebank/* (chains/FREEBANK-API.md)
     } else if (l2Role() !== 'full') { // a sidechain's /api/v1/chain and /api/v1/l2/* are its index backend's
       drivechainRoutes.initRoutes(this.app); // Chains Explorer: /api/v1/chain, /api/v1/drivechain/*, /api/v1/chain/*
     }

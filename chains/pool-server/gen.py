@@ -22,7 +22,9 @@ websocket, statistics, block indexing, address index) with that view as its node
 The Flush explorer (kind flush, chains/FLUSH-API.md) is one backend, api-betanet-flush: upstream mempool's (MariaDB
 explorer_betanet_flush, mempool, websocket, statistics, block indexing, address index) on the Flush node's own Core
 RPC (secrets/betanet-flush.rpc), plus /api/v1/flush/*: the node's read RPCs on an allowlist and the reads of the
-node's public DEX API (markets, launches). nginx rate-limits /api/v1/flush/ per IP. An explorer whose 'enabled' is
+node's public DEX API (markets, launches). nginx rate-limits /api/v1/flush/ per IP. The FreeBank explorer (kind
+freebank, chains/FREEBANK-API.md) is the same on FreeBank's node (secrets/betanet-freebank.rpc), with
+/api/v1/freebank/* (the node's read RPCs on an allowlist) and no address index. An explorer whose 'enabled' is
 False is left out (no container, config, database, nginx location or link): for a network whose node is not reachable.
   python3 gen.py [--out stage] [--tag local] [--enable betanet-flush]
 """
@@ -66,6 +68,16 @@ EXPLORERS = [
         # 15-second blocks: a week of them indexed into MariaDB
         'indexing_blocks': 40320, 'weight': 4000000, 'mem': '512m', 'heap_mb': 384,
     },
+    # FreeBank (kind freebank, slot 130): upstream mempool on the FreeBank node's Core RPC (freebankd, a Core 0.16 base,
+    # -txindex). freebankd has no rpcwhitelist: on the lab node a method filter in front of it (port 38130, firewalled to
+    # this server) passes the reads chains/FREEBANK-API.md lists and what upstream calls, for the rpcauth user
+    # "explorer" ("user:password" in secrets/betanet-freebank.rpc). Its blocks are big (thousands of txs): a week of
+    # them indexed into MariaDB; no address index.
+    {
+        'id': 'betanet-freebank', 'path': 'betanet/freebank', 'kind': 'freebank', 'profile': 'freebank', 'network': 'ecashbeta',
+        'enabled': True, 'api_port': 18958, 'rpc_host': SIDECHAIN_HOST, 'rpc_port': 38130, 'secret': 'betanet-freebank',
+        'indexing_blocks': 1008, 'weight': 4000000, 'mem': '768m', 'heap_mb': 512,
+    },
 ]
 # An explorer with 'enabled': False (e.g. a Flush explorer of a network whose node's RPC is not reachable from here) is
 # left out of everything gen.py writes, unless named with --enable <id>
@@ -81,8 +93,9 @@ RENAMED = {'betanet/hivemind': 'betanet/truthcoin'}
 # TX_BODY (a sidechain tx: chain/l2/submit.ts takes 64 KB; an eCash tx up to 100 kB, 200 kB as hex)
 TX_RATE, TX_BURST = '6r/m', 6
 TX_BODY = {'l1': '256k', 'l2': '64k'}
-TX_BODY['flush'] = TX_BODY['l1']
-# The Flush explorer's reads of its node (/api/v1/flush/: allowlisted RPCs, quotes, the public DEX API) per client IP;
+TX_BODY['flush'] = TX_BODY['freebank'] = TX_BODY['l1']
+# The Flush and FreeBank explorers' reads of their node (/api/v1/flush/, /api/v1/freebank/: allowlisted RPCs, quotes,
+# Flush's public DEX API) per client IP;
 # the public API counts this whole server as one client (-publicapirate, -publicapiburst): the backend's cache and
 # this keep us under its budget
 FLUSH_RATE, FLUSH_BURST = '5r/s', 20
@@ -119,7 +132,7 @@ def flush_chain(network, extra=None):
 def backend_config(e, urls):
     if e['kind'] == 'l2':
         return l2_config(e, urls)
-    if e['kind'] == 'flush':
+    if e['kind'] in ('flush', 'freebank'):
         return flush_config(e, urls)
     user, password = rpc_auth(e['network'])
     return {
@@ -152,8 +165,10 @@ def backend_config(e, urls):
 
 def flush_config(e, urls):
     """The Flush explorer: upstream mempool on the Flush node's RPC (no enforcer, no drivechain index), its address
-    index, and /api/v1/flush/* (the node's read RPCs, its public DEX API)"""
+    index, and /api/v1/flush/* (the node's read RPCs, its public DEX API). The FreeBank explorer the same on FreeBank's
+    node, without an address index or a public API (/api/v1/freebank/*: the node's read RPCs)"""
     user, password = rpc_auth(e['secret'])
+    flush = e['kind'] == 'flush'
     return {
         'MEMPOOL': {
             'NETWORK': 'mainnet', 'BACKEND': 'none', 'HTTP_PORT': e['api_port'], 'CACHE_DIR': '/backend/cache',
@@ -176,10 +191,10 @@ def flush_config(e, urls):
             'PROFILE': e['profile'], 'NETWORK': e['network'],
             'MAINCHAIN_EXPLORER': urls.get(e['network'], ''),
             'EXPLORER_URLS': urls,
-            'ADDRESS_INDEX': True,
+            'ADDRESS_INDEX': flush,
             'FLUSH': flush_chain(e['network'], {
                 'PUBLIC_API': e['public_api'], 'PUBLIC_API_HOST': e['public_api_host'], 'PUBLIC_API_TIMEOUT': 10000,
-            }),
+            } if flush else None),
         },
     }
 
@@ -296,7 +311,7 @@ def main():
          f'    entrypoint: ["sh", "-c", "mysql -h 127.0.0.1 -P {DB_PORT} -uroot -padmin < /initdb/databases.sql"]']
 
     def api(name, e, mem, cpus, heap, config, data, depends):
-        oom = OOM_SCORE_FULL if name.endswith('-full') or e['kind'] == 'flush' else OOM_SCORE
+        oom = OOM_SCORE_FULL if name.endswith('-full') or e['kind'] in ('flush', 'freebank') else OOM_SCORE
         r = [f'  api-{name}:', f'    image: ecash-explorer/backend:{a.tag}', f'    container_name: ecash-explorer-api-{name}',
              '    restart: unless-stopped', '    network_mode: host', '    user: "1000:1000"', f"    mem_limit: {mem}", f"    cpus: {cpus}",
              f'    oom_score_adj: {oom}']
@@ -310,7 +325,7 @@ def main():
         p = e['id']
         if e['kind'] == 'l1':
             L += api(p, e, e['mem'], 1.0, e['heap_mb'], p, p, [('db-setup', 'service_completed_successfully')])
-        elif e['kind'] == 'flush':
+        elif e['kind'] in ('flush', 'freebank'):
             L += api(p, e, e['mem'], 0.5, e['heap_mb'], p, p, [('db-setup', 'service_completed_successfully')])
         else:
             L += api(p, e, e['mem'], 0.5, e['heap_mb'], p, p, [])
@@ -329,10 +344,11 @@ def main():
         post = f"limit_req zone=explorer_tx burst={TX_BURST} nodelay; client_max_body_size {TX_BODY[e['kind']]};"
         posts = ''.join(f"    location = /{p}/api/{v}{r} {{ {post} proxy_pass http://127.0.0.1:{prt}/api/v1/{r}; }}\n"
                         for r in ('tx', 'txs/test', 'txs/package') for v in ('', 'v1/'))
-        if e['kind'] == 'flush':
-            # Flush's own reads (node RPCs, quotes, the public DEX API): rate limited per IP
-            posts += (f"    location ^~ /{p}/api/v1/flush/ {{ limit_except GET {{ deny all; }} limit_req zone=explorer_tx burst={TX_BURST} nodelay; "
-                      f"limit_req zone=explorer_flush burst={FLUSH_BURST} nodelay; proxy_pass http://127.0.0.1:{prt}/api/v1/flush/; }}\n")
+        if e['kind'] in ('flush', 'freebank'):
+            # Flush's and FreeBank's own reads (node RPCs, quotes, Flush's public DEX API): rate limited per IP
+            k = e['kind']
+            posts += (f"    location ^~ /{p}/api/v1/{k}/ {{ limit_except GET {{ deny all; }} limit_req zone=explorer_tx burst={TX_BURST} nodelay; "
+                      f"limit_req zone=explorer_flush burst={FLUSH_BURST} nodelay; proxy_pass http://127.0.0.1:{prt}/api/v1/{k}/; }}\n")
         if e['kind'] == 'l2':
             posts += f"    location = /{p}/api/v1/l2/tx {{ {post} proxy_pass http://127.0.0.1:{e['api_port']}/api/v1/l2/tx; }}\n"
         idx = '' if e['kind'] != 'l2' else f'''    location = /{p}/api/v1/chain {{ proxy_pass http://127.0.0.1:{e['api_port']}/api/v1/chain; }}
@@ -369,7 +385,7 @@ map "$request_method:$uri" $explorer_tx_key {{
     default                                               "";
 }}
 limit_req_zone $explorer_tx_key zone=explorer_tx:10m rate={TX_RATE};
-# The Flush explorer's reads of Flush's public DEX API, per client IP
+# The Flush and FreeBank explorers' reads of their node and of Flush's public DEX API, per client IP
 limit_req_zone $binary_remote_addr zone=explorer_flush:10m rate={FLUSH_RATE};
 
 server {{
@@ -414,9 +430,10 @@ server {{
     with open(os.path.join(out, 'explorers.json'), 'w') as f:
         json.dump(EXPLORERS, f, indent=2)
     for e in EXPLORERS:
-        if e['kind'] == 'flush':
+        if e['kind'] in ('flush', 'freebank'):
+            pub = f"  public api {e['public_api']} (Host {e['public_api_host']})" if e.get('public_api') else ''
             print(f"{e['id']:18} https://{DOMAIN}/{e['path']}/  {e['profile']} on {e['network']}  api 127.0.0.1:{e['api_port']}"
-                  f"  rpc {e['rpc_host']}:{e['rpc_port']} ({db_name(e)})  public api {e['public_api']} (Host {e['public_api_host']})")
+                  f"  rpc {e['rpc_host']}:{e['rpc_port']} ({db_name(e)}){pub}")
             continue
         src = f"rpc 127.0.0.1:{e['rpc_port']}" if e['kind'] == 'l1' else \
             f"sidechain {e['sidechain_rpc']}  core view 127.0.0.1:{e['l2_rpc_port']}  full api 127.0.0.1:{e['full_port']} ({db_name(e)})"

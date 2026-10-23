@@ -30,3 +30,6 @@ td .mono, .kv .mono { word-break: break-all; }
 .kv td.mono, td.mono.wrap { word-break: break-all !important; }
 .kpi .v { white-space: normal; overflow-wrap: anywhere; line-height: 1.25; }
 .card-box { overflow-x: auto; }
+// the fee split: the BMM bidder's part, then the validators', as one bar
+.share { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: #ffffff10; margin: 4px 0 10px;
+  .b { background: #5aa6ff; } .v { background: var(--chain-accent, var(--title-fg)); } }

@@ -199,6 +199,27 @@
       <g fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3.5l10.5 4v8c0 6.5-4.3 11-10.5 13.5C9.8 26.5 5.5 22 5.5 15.5v-8z"/><path d="M11 16l3.5 3.5L21.5 12.5"/></g>
     </svg>
   </ng-container>
+  <!-- eCash Explorer: FreeBank's nav icons (chain/modules/freebank): a house (a bank's front), a bill, a ledger, gold bars -->
+  <ng-container *ngSwitchCase="'nav-house'">
+    <svg [class]="class" [style]="style" [attr.width]="width" [attr.height]="height" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <g fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12 16 5l12 7"/><path d="M6 12h20"/><path d="M6 27h20"/><path d="M9 14v9M14 14v9M18 14v9M23 14v9"/></g>
+    </svg>
+  </ng-container>
+  <ng-container *ngSwitchCase="'nav-bill'">
+    <svg [class]="class" [style]="style" [attr.width]="width" [attr.height]="height" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <g fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h11l5 5v19H8z"/><path d="M19 4v5h5"/><path d="M12 15h8"/><path d="M12 19.5h8"/><path d="M12 24h5"/></g>
+    </svg>
+  </ng-container>
+  <ng-container *ngSwitchCase="'nav-loanbook'">
+    <svg [class]="class" [style]="style" [attr.width]="width" [attr.height]="height" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <g fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 5h16a2 2 0 0 1 2 2v20H9a2 2 0 0 1-2-2z"/><path d="M7 23a2 2 0 0 1 2-2h16"/><path d="M12 10h8"/><path d="M12 14h6"/></g>
+    </svg>
+  </ng-container>
+  <ng-container *ngSwitchCase="'nav-gold'">
+    <svg [class]="class" [style]="style" [attr.width]="width" [attr.height]="height" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <g fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 26l3-7h8l3 7z"/><path d="M14 26l3-7h8l3 7z"/><path d="M9 19l3-7h8l3 7z"/></g>
+    </svg>
+  </ng-container>
   <ng-container *ngSwitchCase="'nav-drivechain'">
     <svg [class]="class" [style]="style" [attr.width]="width" [attr.height]="height" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
       <g fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">

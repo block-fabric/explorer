@@ -84,7 +84,7 @@ const ADDRESS_PREFIXES = {
 if (CHAIN_NETWORK === 'ecashtest') {
   (ADDRESS_PREFIXES as any).mainnet = ADDRESS_PREFIXES.testnet;
 }
-// ... and Flush (chain/profiles.ts FLUSH_ADDRESSES) its own prefixes
+// ... and a node sidechain (Flush, FreeBank: its module's `addresses`) its own prefixes
 const CHAIN_ADDR = chainAddressParams();
 if (CHAIN_ADDR) {
   (ADDRESS_PREFIXES as any).mainnet = { base58: { pubkey: CHAIN_ADDR.base58.pubkey, script: CHAIN_ADDR.base58.script }, bech32: CHAIN_ADDR.bech32 + '1' };

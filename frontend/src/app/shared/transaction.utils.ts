@@ -2018,7 +2018,7 @@ export function addressToScriptPubKey(address: string, network: string): { scrip
   return { scriptPubKey: null, type };
 }
 
-// eCash Explorer: Flush's addresses have prefixes of their own (chain/profiles.ts FLUSH_ADDRESSES)
+// eCash Explorer: a node sidechain's addresses have prefixes of their own (its module's `addresses`: Flush, FreeBank)
 const CHAIN_ADDR = chainAddressParams();
 function hrpOf(network: string): string {
   return CHAIN_ADDR ? CHAIN_ADDR.bech32 : ['testnet', 'testnet4', 'signet'].includes(network) ? 'tb' : 'bc';

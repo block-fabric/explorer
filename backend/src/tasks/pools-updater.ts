@@ -9,7 +9,7 @@ import * as https from 'https';
 import { Common } from '../api/common';
 import { PoolConnection } from 'mysql2/promise';
 import BlocksRepository from '../repositories/BlocksRepository';
-import { PROFILE } from '../chain/profile';
+import { PROFILE, nodeSidechain } from '../chain/profile';
 import { poolIds, poolsJson, poolsSha } from '../chain/pools';
 
 /**
@@ -60,8 +60,8 @@ class PoolsUpdater {
         this.currentSha = await this.getShaFromDb();
       }
 
-      // eCash explorer: its own pool list (chain/pools.ts); Flush: none (blocks of stake), every block "Unknown"
-      if (PROFILE.mainchain || PROFILE.kind === 'flush') { // not mempool.space's Bitcoin list
+      // eCash explorer: its own pool list (chain/pools.ts); FreeBank: its producers; Flush: none (blocks of stake)
+      if (PROFILE.mainchain || nodeSidechain()) { // not mempool.space's Bitcoin list
         return await this.$importChainPools();
       }
 

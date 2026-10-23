@@ -18,17 +18,17 @@
       <!-- eCash Explorer: a sidechain (chain/l2/full): its tip, its eCash carrier block, counts -->
       <div class="col card-wrapper" *ngIf="l2">
         <div class="main-title">{{ profile.name }}</div>
-        <app-drivechain-widget [kind]="flush ? 'flush-chain' : 'chain'"></app-drivechain-widget>
+        <app-drivechain-widget [kind]="wk('chain')"></app-drivechain-widget>
       </div>
     </ng-container>
     <!-- eCash Explorer: drivechain widgets (a sidechain's: its escrow on eCash against its wealth, its BMM on eCash) -->
     <div class="col card-wrapper">
-      <div class="main-title">{{ flush ? 'DEX' : l2 ? 'Escrow and wealth' : 'Sidechain treasury' }}</div>
-      <app-drivechain-widget [kind]="flush ? 'flush-dex' : 'treasury'"></app-drivechain-widget>
+      <div class="main-title">{{ wt('treasury', l2 ? 'Escrow and wealth' : 'Sidechain treasury') }}</div>
+      <app-drivechain-widget [kind]="wk('treasury')"></app-drivechain-widget>
     </div>
     <div class="col card-wrapper">
-      <div class="main-title">{{ flush ? 'Launches' : 'Blind merged mining' }}</div>
-      <app-drivechain-widget [kind]="flush ? 'flush-launches' : 'bmm'"></app-drivechain-widget>
+      <div class="main-title">{{ wt('bmm', 'Blind merged mining') }}</div>
+      <app-drivechain-widget [kind]="wk('bmm')"></app-drivechain-widget>
     </div>
     <div class="col">
       <div class="card graph-card">
@@ -161,24 +161,24 @@
       </div>
     </div>
     <div class="col card-wrapper">
-      <div class="main-title">{{ flush ? 'Stake' : l2 ? 'Pending withdrawal bundle' : 'Withdrawal bundles' }}</div>
-      <app-drivechain-widget [kind]="flush ? 'flush-stake' : 'bundles'"></app-drivechain-widget>
+      <div class="main-title">{{ wt('bundles', l2 ? 'Pending withdrawal bundle' : 'Withdrawal bundles') }}</div>
+      <app-drivechain-widget [kind]="wk('bundles')"></app-drivechain-widget>
     </div>
     <!-- (a sidechain without fee estimates: deposits and withdrawals apart, to keep the grid even) -->
     <ng-container *ngIf="!l2 || mempoolInfoData.fees; else splitPeg">
       <div class="col card-wrapper">
-        <div class="main-title">{{ flush ? 'Drivechain' : 'Peg activity' }}</div>
-        <app-drivechain-widget [kind]="flush ? 'flush-peg' : 'peg'"></app-drivechain-widget>
+        <div class="main-title">{{ wt('peg', 'Peg activity') }}</div>
+        <app-drivechain-widget [kind]="wk('peg')"></app-drivechain-widget>
       </div>
     </ng-container>
     <ng-template #splitPeg>
       <div class="col card-wrapper">
-        <div class="main-title">{{ flush ? 'Drivechain' : 'Deposits' }}</div>
-        <app-drivechain-widget [kind]="flush ? 'flush-peg' : 'deposits'"></app-drivechain-widget>
+        <div class="main-title">{{ wt('deposits', 'Deposits') }}</div>
+        <app-drivechain-widget [kind]="wk('deposits')"></app-drivechain-widget>
       </div>
       <div class="col card-wrapper">
-        <div class="main-title">{{ flush ? 'Recent trades' : 'Withdrawals' }}</div>
-        <app-drivechain-widget [kind]="flush ? 'flush-trades' : 'withdrawals'"></app-drivechain-widget>
+        <div class="main-title">{{ wt('withdrawals', 'Withdrawals') }}</div>
+        <app-drivechain-widget [kind]="wk('withdrawals')"></app-drivechain-widget>
       </div>
     </ng-template>
   </div>

@@ -9,7 +9,8 @@ import { WebsocketService } from '@app/services/websocket.service';
 import { SeoService } from '@app/services/seo.service';
 import { ActiveFilter, FilterMode, GradientMode, toFlags } from '@app/shared/filters.utils';
 import { detectWebGL } from '@app/shared/graphs.utils';
-import { PROFILE } from '@app/chain/profiles';
+import { MODULE, PROFILE } from '@app/chain/profiles';
+import { DashboardSlot } from '@app/chain/chain-module';
 
 interface MempoolBlocksData {
   blocks: number;
@@ -39,8 +40,10 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
   network$: Observable<string>;
   /** eCash Explorer: a sidechain explorer (chain/l2/full): its sidechain widgets in place of the drivechain and mining ones */
   l2 = PROFILE.kind !== 'l1';
-  /** Flush (chain/modules/flush): its own widgets in those places (stake and finality, the DEX, launches, the peg) */
+  /** Flush (chain/modules/flush): its blocks' kind in the latest blocks */
   flush = PROFILE.kind === 'flush';
+  /** a node sidechain (Flush, FreeBank): its module's widgets in the drivechain widgets' places (MODULE.dashboard) */
+  private dash = MODULE.dashboard ?? {};
   profile = PROFILE;
   /** a sidechain backend may give no fee estimates (all zero): then the fees card stays out */
   hasFees$: Observable<boolean>;
@@ -118,6 +121,16 @@ export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
     this.websocketService.stopTrackRbfSummary();
     this.destroy$.next(1);
     this.destroy$.complete();
+  }
+
+  /** the widget kind in a dashboard place: the module's, else the place's own */
+  wk(slot: DashboardSlot): string {
+    return this.dash[slot]?.kind ?? slot;
+  }
+
+  /** the title of a dashboard place: the module's, else the given one */
+  wt(slot: DashboardSlot, fallback: string): string {
+    return this.dash[slot]?.title ?? fallback;
   }
 
   ngOnInit(): void {

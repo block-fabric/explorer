@@ -59,7 +59,7 @@ export function keyColor(k: string): string {
                   @for (x of vd.validators; track x.pubkey) {
                     <tr>
                       <td><span class="me-1" [style.color]="color(x.pubkey)">●</span><a [routerLink]="['/validator', x.pubkey]" class="mono" [title]="x.pubkey">{{ fx.shortId(x.pubkey, 10) }}</a></td>
-                      <td class="r">{{ fx.amount(x.stake) }}</td>
+                      <td class="r nowrap">{{ fx.amount(x.stake / 1e8) }} <span class="muted">ECX</span></td>
                       <td class="progress-cell"><div class="bar"><div class="fill" [style.width.%]="100 * x.stake / (vd.totalstake || 1)"></div></div><div class="t">{{ fx.pct(100 * x.stake / (vd.totalstake || 1), 1) }}</div></td>
                       <td class="r">{{ fx.pct(100 * poolShare(p, x.pubkey), 2) }}</td>
                       <td class="r">{{ x.slots | number }}</td>
@@ -192,7 +192,7 @@ export class FlushStakePage implements OnInit {
       @if (v.data; as x) {
         <div class="kpis">
           <div class="kpi"><div class="l">In the set</div><div class="v">{{ x.inset ? 'yes' : 'no' }}</div><div class="s">@if (x.index !== undefined) {position {{ x.index }} in the current epoch's set} @else {not in the current epoch's set}</div></div>
-          <div class="kpi"><div class="l">Stake</div><div class="v">{{ fx.amount(x.stake ?? 0) }}</div><div class="s">its weight in leader selection</div></div>
+          <div class="kpi"><div class="l">Stake</div><div class="v">{{ fx.amount((x.stake ?? 0) / 1e8) }} <span class="muted">ECX</span></div><div class="s">its weight in leader selection</div></div>
           <div class="kpi"><div class="l">Slots</div><div class="v">{{ (x.slots ?? 0) | number }}</div><div class="s">led this epoch · next @if (x.nextslot) {slot {{ x.nextslot | number }}} @else {none within two epochs}</div></div>
           <div class="kpi"><div class="l">Offences</div><div class="v" [class.neg]="x.offences > 0">{{ x.offences | number }}</div><div class="s">proofs of a double signature known</div></div>
         </div>

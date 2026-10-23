@@ -5,11 +5,11 @@
  * backend/src/chain/profile.ts.
  */
 
-import { ChainFrontendModule, ChainProfile } from '@app/chain/chain-module';
+import { ChainAddressParams, ChainFrontendModule, ChainProfile } from '@app/chain/chain-module';
 import { MODULES } from '@app/chain/modules';
 import { SIDECHAIN_MARKS, ECASH_GOLD, ECASH_MARK_PATHS, ECASH_MARK_VIEWBOX } from '@app/chain/marks';
 
-export type { ChainProfile, NavItem } from '@app/chain/chain-module';
+export type { ChainAddressParams, ChainProfile, NavItem } from '@app/chain/chain-module';
 export type ProfileId = string;
 // the marks of the sidechains (chain/marks.ts, which the sidechain modules use too)
 export { SIDECHAIN_MARK, SIDECHAIN_MARKS } from '@app/chain/marks';
@@ -73,6 +73,15 @@ export const L2_FULL = PROFILE.kind === 'l2' && CHAIN_UI === 'full';
 export const L2_LEAN = PROFILE.kind === 'l2' && CHAIN_UI === 'lean';
 /** Flush (kind 'flush'): upstream's full UI on the Flush node, and the Flush module's pages (chain/modules/flush/) */
 export const FLUSH = PROFILE.kind === 'flush';
+/** FreeBank (kind 'freebank'): upstream's full UI on the FreeBank node, and the FreeBank module's pages (chain/modules/freebank/) */
+export const FREEBANK = PROFILE.kind === 'freebank';
+/**
+ * a node sidechain (Flush, FreeBank): a sidechain with a Core node of its own, on upstream's full UI over that node, with
+ * its module's nav, pages, views (MODULE.views) and dashboard widgets (MODULE.dashboard), and its peg page at /peg
+ */
+export const NODE_SIDECHAIN = PROFILE.kind === 'flush' || PROFILE.kind === 'freebank';
+/** the backend has no address index (MODULE.addressIndex false): the address page says so instead of asking */
+export const NO_ADDRESS_INDEX = MODULE.addressIndex === false;
 /** a sidechain's explorer of either kind: its own panels on upstream's pages, no proof of work, no eCash cockpit */
 export const SIDECHAIN_EXPLORER = PROFILE.kind !== 'l1';
 
@@ -111,24 +120,15 @@ export function explorerUrl(id: ProfileId, path = ''): string | null {
 }
 
 export function bech32Prefix(): string {
-  return FLUSH ? FLUSH_ADDRESSES[CHAIN_NETWORK].bech32 : NETWORKS[CHAIN_NETWORK].bech32;
+  return chainAddressParams()?.bech32 ?? NETWORKS[CHAIN_NETWORK].bech32;
 }
 
 /**
- * Flush's addresses on each eCash network (backbone-flush src/kernel/chainparams.cpp, CEcashSidechainParams): its own
- * bech32 prefix per network (flx, bflx, tflx); base58 as the chain's base network (main: versions 28 'C' and 88 'c';
- * eCash testnet: Bitcoin testnet's 111 and 196)
+ * The address formats of this explorer's chain when they are not Bitcoin's (a module's `addresses` for the network:
+ * Flush's flx/bflx/tflx, FreeBank's fbk and base58 'X'/'s'), else null
  */
-export interface ChainAddressParams { bech32: string; p2pkh: number; p2sh: number; base58: { pubkey: string[]; script: string[] } }
-export const FLUSH_ADDRESSES: Record<NetworkId, ChainAddressParams> = {
-  ecash: { bech32: 'flx', p2pkh: 28, p2sh: 88, base58: { pubkey: ['C'], script: ['c'] } },
-  ecashbeta: { bech32: 'bflx', p2pkh: 28, p2sh: 88, base58: { pubkey: ['C'], script: ['c'] } },
-  ecashtest: { bech32: 'tflx', p2pkh: 111, p2sh: 196, base58: { pubkey: ['m', 'n'], script: ['2'] } },
-};
-
-/** The address formats of this explorer's chain when they are not Bitcoin's (Flush's), else null */
 export function chainAddressParams(): ChainAddressParams | null {
-  return FLUSH ? FLUSH_ADDRESSES[CHAIN_NETWORK] : null;
+  return MODULE.addresses?.[CHAIN_NETWORK] ?? null;
 }
 
 /** #rrggbb scaled towards black by f (0..1) */
@@ -206,6 +206,7 @@ export function applyProfileToDocument(): void {
   const desc = PROFILE.kind === 'l2'
     ? `Explore ${PROFILE.name}, a drivechain sidechain of eCash: blocks, transactions, addresses, deposits and withdrawals.`
     : FLUSH ? `Explore ${PROFILE.name}, a sidechain of eCash: blocks of stake, assets, the DEX, launches, validators and the peg.`
+    : FREEBANK ? `Explore ${PROFILE.name}, a sidechain of eCash: blocks, transactions, discount houses, bills of exchange, the loan book and the peg.`
     : `Explore ${PROFILE.name}: ${PROFILE.tagline}. Blocks, transactions and mempool in real time.`;
   for (const sel of ['meta[name="description"]', 'meta[property="og:description"]', 'meta[name="twitter:description"]']) {
     document.querySelector(sel)?.setAttribute('content', desc);

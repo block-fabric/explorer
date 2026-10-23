@@ -2,7 +2,6 @@ import { ChangeDetectionStrategy, Component, Input, OnInit } from '@angular/core
 import { Observable, catchError, of, switchMap, timer } from 'rxjs';
 import { ChainApiService } from '@app/chain/chain-api.service';
 import { DrivechainLiveService } from '@app/chain/drivechain-live.service';
-import { FlushWidgetKind } from '@app/chain/modules/flush/flush-widget-kinds';
 import { PROFILE, slotColor, slotMarkId } from '@app/chain/profiles';
 
 /**
@@ -21,11 +20,12 @@ import { PROFILE, slotColor, slotMarkId } from '@app/chain/profiles';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DrivechainWidgetComponent implements OnInit {
-  /** (a sidechain explorer's widgets, chain/l2/full/l2-widget.component.ts: chain, treasury, bmm, bundles, peg, deposits, withdrawals) */
-  @Input() kind: 'treasury' | 'bmm' | 'bundles' | 'peg' | 'mining' | 'chain' | 'deposits' | 'withdrawals' | FlushWidgetKind = 'treasury';
+  /** (a sidechain explorer's widgets, chain/l2/full/l2-widget.component.ts: chain, treasury, bmm, bundles, peg, deposits,
+   * withdrawals; a node sidechain's, MODULE.dashboard: its module's own kinds) */
+  @Input() kind: 'treasury' | 'bmm' | 'bundles' | 'peg' | 'mining' | 'chain' | 'deposits' | 'withdrawals' | string = 'treasury';
 
   profile = PROFILE;
-  l2 = PROFILE.kind !== 'l1'; // (Flush too: chain/modules/flush/views)
+  l2 = PROFILE.kind !== 'l1'; // (a node sidechain too: its module's views)
   cockpitPath = '/drivechain';
   data$: Observable<any>;
   peg$: Observable<any[]>;

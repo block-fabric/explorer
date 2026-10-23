@@ -11,7 +11,8 @@ import { WebsocketService } from '@app/services/websocket.service';
 import { EnterpriseService } from '@app/services/enterprise.service';
 import { SERVICES_POPUP_ACTION } from '@app/shared/services-popup-action.token';
 
-import { CHAIN_NETWORK, MODULE, NETWORK_NAME, PROFILE } from '@app/chain/profiles';
+import { CHAIN_NETWORK, MODULE, NETWORK_NAME, NODE_SIDECHAIN, PROFILE } from '@app/chain/profiles';
+import { moduleNav$ } from '@app/chain/module-nav';
 import { ChainApiService } from '@app/chain/chain-api.service';
 import { NavItem } from '@app/chain/chain-module';
 import { ChainLink, chainLinks } from '@app/chain/chain-links';
@@ -35,9 +36,11 @@ export class GlobalFooterComponent implements OnInit, OnDestroy, OnChanges {
   moduleNav = MODULE.nav ?? [];
   /** a sidechain explorer (chain/l2/): its pages, and the other chains' explorers */
   l2 = PROFILE.kind === 'l2';
-  /** Flush (chain/modules/flush): its pages, and the other chains' explorers */
-  flush = PROFILE.kind === 'flush';
-  flushNav: NavItem[] = PROFILE.kind === 'flush' ? [...(MODULE.nav ?? []), ...(MODULE.footerNav ?? [])] : [];
+  /** a node sidechain (Flush, FreeBank: chain/modules/<id>): its pages, and the other chains' explorers */
+  flush = NODE_SIDECHAIN;
+  flushNav$: Observable<NavItem[]> = of([]);
+  /** (FreeBank's backend cannot broadcast: MODULE.broadcast false) */
+  broadcast = MODULE.broadcast !== false;
   l2Nav$: Observable<NavItem[]>;
   chainLinks$: Observable<ChainLink[]>;
   /** the other eCash networks' explorers (GET /api/v1/chain) */
@@ -81,6 +84,7 @@ export class GlobalFooterComponent implements OnInit, OnDestroy, OnChanges {
 
     if (this.flush) {
       this.chainLinks$ = this.chainApi.chain$().pipe(map(chainLinks));
+      this.flushNav$ = moduleNav$(this.chainApi, [...(MODULE.nav ?? []), ...(MODULE.footerNav ?? [])]);
     }
     if (this.l2) {
       this.l2Nav$ = this.l2Api.features$.pipe(map(f => l2FeatureNav(f)));

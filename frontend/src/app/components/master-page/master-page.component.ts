@@ -9,7 +9,8 @@ import { MenuComponent } from '@components/menu/menu.component';
 import { StorageService } from '@app/services/storage.service';
 import { AuthServiceMempool } from '@app/services/auth.service';
 
-import { CHAIN_NETWORK, MODULE, NETWORK_NAME, PROFILE, NavItem } from '@app/chain/profiles';
+import { CHAIN_NETWORK, MODULE, NETWORK_NAME, NODE_SIDECHAIN, PROFILE, NavItem } from '@app/chain/profiles';
+import { moduleNav$ } from '@app/chain/module-nav';
 import { ChainApiService } from '@app/chain/chain-api.service';
 import { L2ApiService } from '@app/chain/l2/l2-api.service';
 import { L2_NAV, l2FeatureNav } from '@app/chain/l2/l2-nav';
@@ -24,7 +25,7 @@ export class MasterPageComponent implements OnInit, OnDestroy {
   profile = PROFILE;
   chainNetwork = CHAIN_NETWORK;
   networkName = NETWORK_NAME;
-  chainNav: NavItem[] = PROFILE.kind === 'flush' ? (MODULE.nav ?? []) : [
+  chainNav: NavItem[] = NODE_SIDECHAIN ? (MODULE.nav ?? []) : [
     { path: '/drivechain', title: 'Drivechain: sidechains, BMM, deposits, withdrawals, votes', icon: 'nav-drivechain' },
     ...(MODULE.nav ?? []),
   ];
@@ -72,7 +73,7 @@ export class MasterPageComponent implements OnInit, OnDestroy {
   ) { }
 
   ngOnInit(): void {
-    this.chainNav$ = PROFILE.kind !== 'l2' ? of(this.chainNav) : combineLatest([
+    this.chainNav$ = NODE_SIDECHAIN ? moduleNav$(this.chainApi, this.chainNav) : PROFILE.kind !== 'l2' ? of(this.chainNav) : combineLatest([
       this.l2Api.features$, this.chainApi.chain$().pipe(startWith(null)),
     ]).pipe(
       // upstream's own Blocks entry stays; the BMM page only where the backend reads the eCash drivechain index

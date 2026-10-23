@@ -205,6 +205,11 @@ export class Common {
    * For now, just pull out individual rules into versioned functions where necessary.
    */
   static isNonStandard(tx: TransactionExtended, height?: number): boolean {
+    // Chains Explorer: FreeBank's policy is its own (versions 1 to 17; credit transactions with custody outputs that
+    // its consensus validates, which Bitcoin's standardness rules do not describe): no transaction is flagged there
+    if (config.CHAIN?.PROFILE === 'freebank') {
+      return false;
+    }
     // version
     if (this.isNonStandardVersion(tx, height)) {
       return true;

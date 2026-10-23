@@ -11,7 +11,7 @@ import { ApiService } from '@app/services/api.service';
 import { SearchResultsComponent } from '@components/search-form/search-results/search-results.component';
 import { Network, findOtherNetworks, getRegex, getTargetUrl, needBaseModuleChange } from '@app/shared/regex.utils';
 
-import { PROFILE } from '@app/chain/profiles';
+import { MODULE, PROFILE } from '@app/chain/profiles';
 @Component({
   selector: 'app-search-form',
   templateUrl: './search-form.component.html',
@@ -266,6 +266,16 @@ export class SearchFormComponent implements OnInit {
     const searchText = result || this.searchForm.value.searchText.trim();
     if (searchText) {
       this.isSearching = true;
+
+      // eCash Explorer: the chain's own ids (FreeBank: "house 3", "bill 12"), MODULE.searchRoute
+      const own = MODULE.searchRoute?.(searchText);
+      if (own) {
+        this.searchForm.setValue({ searchText: '' });
+        this.isSearching = false;
+        this.router.navigate(own);
+        this.searchTriggered.emit();
+        return;
+      }
 
       if (!this.regexTransaction.test(searchText) && this.regexAddress.test(searchText)) {
         this.navigate('/address/', searchText);

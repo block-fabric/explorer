@@ -6,8 +6,9 @@ import { L2AddressRegExp } from '@app/chain/l2/l2-address';
 // base58, no version byte, no checksum) and none of Bitcoin's; and its block hashes have no proof-of-work zeros, so a
 // 64-hex string can be a block as well as a transaction (the search form asks the backend)
 const L2 = PROFILE.kind === 'l2';
-// Flush (PROFILE.kind 'flush') has Bitcoin's address kinds under its own prefixes (flx/bflx/tflx, base58 versions of its
-// own: chain/profiles.ts FLUSH_ADDRESSES), and blocks of stake: no proof-of-work zeros in its block hashes either
+// A node sidechain has Bitcoin's address kinds under its own prefixes (its module's `addresses`, chain/profiles.ts
+// chainAddressParams: Flush's flx/bflx/tflx, FreeBank's fbk and base58 'X'/'s'), and no proof-of-work zeros in its block
+// hashes either (Flush's blocks of stake, FreeBank's merged-mined blocks)
 const NO_POW = PROFILE.kind !== 'l1';
 
 // all base58 characters
@@ -168,7 +169,7 @@ const ADDRESS_CHARS: {
 if (CHAIN_NETWORK === 'ecashtest') {
   ADDRESS_CHARS.mainnet = ADDRESS_CHARS.testnet;
 }
-// ... and Flush's own prefixes take it on a Flush explorer
+// ... and a node sidechain's own prefixes take it on its explorer (Flush, FreeBank)
 const FLUSH_ADDR = chainAddressParams();
 if (FLUSH_ADDR) {
   const hrp = FLUSH_ADDR.bech32;

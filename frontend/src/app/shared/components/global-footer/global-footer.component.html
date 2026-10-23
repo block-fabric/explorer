@@ -80,14 +80,14 @@
             </div>
           </ng-container>
         } @else if (flush) {
-          <!-- Flush (chain/modules/flush): upstream's pages, its own, and the eCash and sidechain explorers -->
+          <!-- a node sidechain (Flush, FreeBank: chain/modules/<id>): upstream's pages, its own, and the eCash and sidechain explorers -->
           <div class="links">
             <p class="category">Explore {{ profile.name }}</p>
             <p><a [routerLink]="['/']">Dashboard</a></p>
             <p><a [routerLink]="['/blocks']">Blocks</a></p>
             <p><a [routerLink]="['/txs']">Recent Transactions</a></p>
-            <p *ngFor="let item of flushNav"><a [routerLink]="[item.path]">{{ item.title }}</a></p>
-            <p><a [routerLink]="['/tx/push']">Broadcast Transaction</a></p>
+            <p *ngFor="let item of flushNav$ | async"><a [routerLink]="[item.path]">{{ item.title }}</a></p>
+            <p *ngIf="broadcast"><a [routerLink]="['/tx/push']">Broadcast Transaction</a></p>
           </div>
           <ng-container *ngIf="chainLinks$ | async as chains">
             <div class="links" *ngIf="chains.length > 1">

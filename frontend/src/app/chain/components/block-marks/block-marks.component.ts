@@ -1,10 +1,12 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Injector, Input, OnChanges, OnDestroy } from '@angular/core';
 import { Observable, Subscription, combineLatest } from 'rxjs';
 import { BlockMark, DrivechainLiveService } from '@app/chain/drivechain-live.service';
-import { PROFILE, PROFILES, slotColor, slotMarkId } from '@app/chain/profiles';
+import { FREEBANK, PROFILE, PROFILES, slotColor, slotMarkId } from '@app/chain/profiles';
 import { L2LiveService, L2Mark } from '@app/chain/l2/full/l2-live.service';
 import { FlushAnchor, FlushBlockMark, FlushLiveService } from '@app/chain/modules/flush/flush-live.service';
 import { L2ApiService } from '@app/chain/l2/l2-api.service';
+import { FreebankLiveService } from '@app/chain/modules/freebank/freebank-live.service';
+import { FreebankApiService } from '@app/chain/modules/freebank/freebank-api.service';
 
 /**
  * A block's drivechain marks, wherever blocks are shown:
@@ -26,16 +28,16 @@ import { L2ApiService } from '@app/chain/l2/l2-api.service';
         <ng-container *ngIf="mode !== 'stripe'">
           <ng-container *ngIf="l2Mark?.mainBlock as mb; else notCarried">
             <span *ngIf="mode === 'miner'" class="badge miner-badge" [title]="l2Title">BMM · <app-sidechain-label chain="ecash" name="eCash"></app-sidechain-label> block
-              <a *ngIf="mainBase$ | async as base; else plainMiner" [href]="base + '/block/' + mb.hash">{{ mb.height | number }}</a>
-              <ng-template #plainMiner>{{ mb.height | number }}</ng-template>
+              <a *ngIf="mainBase$ | async as base; else plainMiner" [href]="base + '/block/' + mb.hash">{{ mb.height !== null && mb.height !== undefined ? (mb.height | number) : (mb.hash | slice:0:8) + '…' }}</a>
+              <ng-template #plainMiner>{{ mb.height !== null && mb.height !== undefined ? (mb.height | number) : (mb.hash | slice:0:8) + '…' }}</ng-template>
               <span *ngIf="l2Mark?.bmm?.bid !== null && l2Mark?.bmm?.bid !== undefined"> · bid {{ l2Mark.bmm.bid | number }} sats</span>
             </span>
             <div *ngIf="mode === 'below' || mode === 'inline'" class="marks" [class.inline]="mode === 'inline'">
               <span class="icons">
                 <a *ngIf="mainBase$ | async as base; else plainCarrier" class="carrier" [href]="base + '/block/' + mb.hash" [title]="l2Title">
-                  <app-svg-images name="chain-mark" fill="ecash" [width]="px" [height]="px" [style.color]="ecashColor"></app-svg-images> {{ mb.height | number }}
+                  <app-svg-images name="chain-mark" fill="ecash" [width]="px" [height]="px" [style.color]="ecashColor"></app-svg-images> {{ mb.height !== null && mb.height !== undefined ? (mb.height | number) : (mb.hash | slice:0:8) + '…' }}
                 </a>
-                <ng-template #plainCarrier><span class="carrier" [title]="l2Title"><app-svg-images name="chain-mark" fill="ecash" [width]="px" [height]="px" [style.color]="ecashColor"></app-svg-images> {{ mb.height | number }}</span></ng-template>
+                <ng-template #plainCarrier><span class="carrier" [title]="l2Title"><app-svg-images name="chain-mark" fill="ecash" [width]="px" [height]="px" [style.color]="ecashColor"></app-svg-images> {{ mb.height !== null && mb.height !== undefined ? (mb.height | number) : (mb.hash | slice:0:8) + '…' }}</span></ng-template>
                 <span *ngIf="l2Mark?.bmm?.contested" class="peg wd" title="Contested: other BMM requests for this slot in that eCash block">⚔</span>
                 <span *ngIf="l2Mark?.deposits" class="peg dep" [title]="l2Mark.deposits + ' deposit(s) from eCash credited'">↓{{ l2Mark.deposits > 1 ? l2Mark.deposits : '' }}</span>
               </span>
@@ -139,8 +141,8 @@ export class ChainBlockMarksComponent implements OnChanges, OnDestroy {
   stripeTitle = '';
   private sub: Subscription;
 
-  /** a sidechain explorer: the block's BMM mark (undefined: not known yet, null: none) */
-  l2 = PROFILE.kind === 'l2';
+  /** a sidechain explorer: the block's BMM mark (undefined: not known yet, null: none); FreeBank's too (its header's) */
+  l2 = PROFILE.kind === 'l2' || FREEBANK;
   /** Flush: the block's kind and finality */
   flush = PROFILE.kind === 'flush';
   fMark: FlushBlockMark | null = null;
@@ -184,6 +186,23 @@ export class ChainBlockMarksComponent implements OnChanges, OnDestroy {
           + (m.ack ? ` · the anchor of eCash block ${m.ack.mainheight}'s ticket` : '')
           + (anchored ? ` · anchored by eCash block ${anchored.mainheight} (${anchored.kind === 'bmm' ? 'BMM block' : 'ticket'}, acked by block ${anchored.byHeight})` : '')
           + (st ? ` · ${st}` + (m.finality?.anchors ? ` (${m.finality.anchors} anchors)` : '') : '') : '';
+        this.cd.markForCheck();
+      });
+      return;
+    }
+    if (FREEBANK) {
+      // FreeBank: the eCash block its header names (BMM), its height and bid when the eCash explorer's BMM events have it
+      this.l2Mark = undefined;
+      if (!this.hash) {
+        return;
+      }
+      this.mainBase$ = this.injector.get(FreebankApiService).mainchain$;
+      this.sub = this.injector.get(FreebankLiveService).bmm$(this.hash).subscribe(({ mark, mainHeight, bid }) => {
+        const mb = mark?.mainblock ? { hash: mark.mainblock, height: mainHeight as number } : null; // (height null: not among the recent BMM events)
+        this.l2Mark = mark ? { height: mark.height, hash: mark.hash, mainBlock: mb, bmm: bid !== null ? { bid } as any : null, deposits: 0 } : null;
+        this.l2Title = mb
+          ? `Mined in eCash block ${mainHeight ?? mb.hash} (blind merged mining)` + (bid !== null ? `, bid ${bid} sats paid to its miner` : '')
+          : (mark ? 'No eCash block named in this block\'s header' : '');
         this.cd.markForCheck();
       });
       return;

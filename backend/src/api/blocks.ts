@@ -1,5 +1,5 @@
 import config from '../config';
-import { PROFILE } from '../chain/profile';
+import { nodeSidechain } from '../chain/profile';
 import bitcoinApi, { bitcoinCoreApi } from './bitcoin/bitcoin-api-factory';
 import logger from '../logger';
 import memPool from './mempool';
@@ -326,8 +326,9 @@ class Blocks {
 
     const header = await bitcoinClient.getBlockHeader(block.id, false);
     // Chains Explorer: a Flush block of stake has an extended header (80 bytes, then hashSections and the proposer's
-    // signature: 176 bytes) that the blocks table's header column (160 hex digits) cannot hold: its first 80 bytes
-    extras.header = PROFILE.kind === 'flush' ? header.slice(0, 160) : header;
+    // signature: 176 bytes) that the blocks table's header column (160 hex digits) cannot hold: its first 80 bytes; a
+    // FreeBank block's header has 136 bytes (its BMM fields, no bits or nonce): the same
+    extras.header = nodeSidechain() ? header.slice(0, 160) : header;
 
     const coinStatsIndex = indexer.isCoreIndexReady('coinstatsindex');
     if (coinStatsIndex !== null && coinStatsIndex.best_block_height >= block.height) {

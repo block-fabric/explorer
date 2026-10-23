@@ -36,7 +36,11 @@ export const SIDECHAIN_MARKS: Record<string, Pick<ChainProfile, 'mark' | 'markRe
     'M16 11a5 5 0 1 0 0 10 5 5 0 1 0 0-10',
     'M16 3v4M16 25v4M3 16h4M25 16h4M7 7l2.5 2.5M22.5 22.5L25 25M25 7l-2.5 2.5M9.5 22.5L7 25',
   ] },
-  freebank: { mark: ['M4 12 16 5l12 7', 'M6 12h20', 'M6 27h20', 'M9 14v9M14 14v9M18 14v9M23 14v9'] },
+  // FreeBank's own mark, the sun ☉ (U+2609, the gold unit of account: freebank-explorer
+  // frontend/src/resources/freebank/freebank-sun.svg: a ring of r 17 and a disc of r 5.5 in 64x64), scaled to fill this
+  // grid as the other marks do: the ring of r 11 as a stroke, the disc as two small stroked circles (r 2.3 and 1.2: a
+  // filled disc of r 3.5, the sun's proportion, in a stroke-only mark)
+  freebank: { mark: ['M16 5a11 11 0 1 1 0 22 11 11 0 1 1 0-22z', 'M16 13.7a2.3 2.3 0 1 1 0 4.6 2.3 2.3 0 1 1 0-4.6z', 'M16 14.8a1.2 1.2 0 1 1 0 2.4 1.2 1.2 0 1 1 0-2.4z'] },
   // Flush: water, three waves (a placeholder until Flush has a mark of its own)
   // Flush's own mark, the "tornado" (backbone-flush src/webui/app/src/chain/chain.json brand.mark;
   // ~/skydoge/media/flush/mark/variants.json)

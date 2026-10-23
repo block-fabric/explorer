@@ -16,7 +16,16 @@
 
   <div class="clearfix"></div>
 
-  <ng-template [ngIf]="!isLoadingAddress && !error">
+  <!-- eCash Explorer: a chain without an address index (FreeBank): no balance or history to show -->
+  <ng-template [ngIf]="noAddressIndex">
+    <div class="box no-index">
+      <p class="mb-1"><b>Address history is not available on this explorer.</b></p>
+      <p class="mb-0 text-muted small">The {{ chainName }} explorer keeps no address index (the chain carries thousands of transactions a
+        block), so it cannot list an address's balance or transactions. Its blocks and transactions are all here: search a txid or a block.</p>
+    </div>
+  </ng-template>
+
+  <ng-template [ngIf]="!isLoadingAddress && !error && !noAddressIndex">
     <div class="box">
 
       <div class="row">

@@ -26,7 +26,7 @@ export class SvgImagesComponent {
   ecashViewBox = ECASH_MARK_VIEWBOX;
   ecashGold = ECASH_GOLD;
   /** a sidechain explorer's logo: eCash's mark, then the sidechain's, then its name (the logo widens by one mark) */
-  sidechainLogo = PROFILE.kind === 'l2' || PROFILE.kind === 'flush';
+  sidechainLogo = PROFILE.kind !== 'l1';
   logoViewBox = this.sidechainLogo ? '0 0 612 126' : '0 0 500 126';
 
   isEcash(id: string | undefined): boolean {

@@ -68,9 +68,20 @@ export function poolLogo(tag: string | null | undefined): string | null {
   return poolFor(tag)?.logo ?? null;
 }
 
-/** The pools of this explorer's chain: eCash's on its network; none for Flush (blocks of stake, every one "Unknown") */
+/**
+ * FreeBank's block producers (its blocks are BMM'd: the producer stamps its tag, without slashes, in the coinbase), from
+ * the FreeBank explorer's list (mbdrivechains/freebank-explorer backend/src/tasks/freebank-pools.json)
+ */
+const FREEBANK_PRODUCERS: PoolMeta[] = [
+  { id: 100006, tag: 'ecxfreebank.com', name: 'FreeBank', logo: 'freebank.svg' },
+];
+
+/**
+ * The pools of this explorer's chain: eCash's on its network; FreeBank's producers; none for Flush (blocks of stake,
+ * every one "Unknown")
+ */
 function chainPools(): PoolMeta[] {
-  return PROFILE.kind === 'flush' ? [] : POOLS[NETWORK.id] ?? [];
+  return PROFILE.kind === 'flush' ? [] : PROFILE.kind === 'freebank' ? FREEBANK_PRODUCERS : POOLS[NETWORK.id] ?? [];
 }
 
 /**

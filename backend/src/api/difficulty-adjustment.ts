@@ -1,5 +1,5 @@
 import config from '../config';
-import { PROFILE, l2Role } from '../chain/profile';
+import { l2Role, nodeSidechain } from '../chain/profile';
 import { IDifficultyAdjustment } from '../mempool.interfaces';
 import blocks from './blocks';
 
@@ -180,7 +180,7 @@ class DifficultyAdjustmentApi {
     );
     // Chains Explorer: a sidechain has no difficulty (its blocks come with its BMM on eCash; the Core view gives
     // difficulty 1 throughout; Flush's are blocks of stake): the epoch's timing stays, no difficulty change is foreseen
-    return l2Role() === 'full' || PROFILE.kind === 'flush' ? { ...da, difficultyChange: 0, previousRetarget: 0 } : da;
+    return l2Role() === 'full' || nodeSidechain() ? { ...da, difficultyChange: 0, previousRetarget: 0 } : da;
   }
 }
 

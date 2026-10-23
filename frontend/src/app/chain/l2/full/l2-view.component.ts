@@ -1,13 +1,15 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, OnChanges, SimpleChanges, Type } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { PROFILE } from '@app/chain/profiles';
+import { MODULE, NODE_SIDECHAIN, PROFILE } from '@app/chain/profiles';
+import { ChainViewName } from '@app/chain/chain-module';
 
 /**
  * The sidechain views of upstream's pages (CHAIN_UI 'full'), loaded on demand: the block page's BMM panel, the
  * transaction page's content panel, the address page's holdings, the dashboard's widgets. Upstream's templates (and
  * the chain/ components SharedModule declares) place them through this host, which imports nothing of chain/l2 up
  * front: the views import SharedModule themselves, and stay out of the eCash explorer's bundles. On the eCash explorer
- * (PROFILE.kind 'l1') it shows nothing; on Flush's (kind 'flush') it shows Flush's views (chain/modules/flush/views).
+ * (PROFILE.kind 'l1') it shows nothing; on a node sidechain's (Flush, FreeBank: profiles.ts NODE_SIDECHAIN) its module's
+ * views (MODULE.views: chain/modules/<id>/views).
  */
 const VIEWS: Record<string, () => Promise<Type<any>>> = {
   block: () => import('@app/chain/l2/full/l2-block-panel.component').then(m => m.L2BlockPanelComponent),
@@ -16,15 +18,7 @@ const VIEWS: Record<string, () => Promise<Type<any>>> = {
   widget: () => import('@app/chain/l2/full/l2-widget.component').then(m => m.L2WidgetComponent),
 };
 
-/** Flush's views (kind 'flush', chain/modules/flush/views): the same places on upstream's pages */
-const FLUSH_VIEWS: Record<string, () => Promise<Type<any>>> = {
-  block: () => import('@app/chain/modules/flush/views/flush-block-panel.component').then(m => m.FlushBlockPanelComponent),
-  tx: () => import('@app/chain/modules/flush/views/flush-tx-panel.component').then(m => m.FlushTxPanelComponent),
-  address: () => import('@app/chain/modules/flush/views/flush-address-panel.component').then(m => m.FlushAddressPanelComponent),
-  widget: () => import('@app/chain/modules/flush/views/flush-widget.component').then(m => m.FlushWidgetComponent),
-};
-
-export type L2ViewName = 'block' | 'tx' | 'address' | 'widget';
+export type L2ViewName = ChainViewName;
 
 @Component({
   selector: 'app-l2-view',
@@ -42,7 +36,7 @@ export class L2ViewComponent implements OnChanges {
   constructor(private cd: ChangeDetectorRef) {}
 
   ngOnChanges(changes: SimpleChanges): void {
-    const views = PROFILE.kind === 'flush' ? FLUSH_VIEWS : VIEWS;
+    const views: Partial<Record<string, () => Promise<Type<any>>>> = NODE_SIDECHAIN ? (MODULE.views ?? {}) : VIEWS;
     if (PROFILE.kind === 'l1' || !changes.view || this.loaded === this.view || !views[this.view]) {
       return;
     }

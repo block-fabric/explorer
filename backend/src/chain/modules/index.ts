@@ -7,6 +7,7 @@ import truthcoin from './truthcoin';
 import zside from './zside';
 import coinshift from './coinshift';
 import flush from './flush';
+import freebank from './freebank';
 
 /**
  * The chain modules this backend knows; CHAIN.PROFILE picks one. Each has its folder here and its counterpart on the
@@ -21,6 +22,7 @@ export const MODULES: ChainModule[] = [
   truthcoin,
   zside,
   coinshift,
-  // a sidechain read through its public DEX API (kind flush, chain/modules/flush/)
+  // sidechains whose own node speaks Core's RPC: upstream mempool on it, plus the module's routes
   flush,
+  freebank,
 ];
