@@ -60,6 +60,10 @@ class PoolsUpdater {
         this.currentSha = await this.getShaFromDb();
       }
 
+      if (PROFILE.mainchain) { // eCash explorer: its own pool list (chain/pools.ts), not mempool.space's Bitcoin one
+        return await this.$importChainPools();
+      }
+
       const githubSha = await this.fetchPoolsSha(); // Fetch pools-v2.json sha from github
       if (githubSha === null) {
         return;
@@ -78,10 +82,6 @@ class PoolsUpdater {
         logger.warn(`Updated mining pools data is available (${githubSha}) but AUTOMATIC_POOLS_UPDATE is disabled`, this.tag);
         logger.info(`You can update your mining pools using the --update-pools command flag. You may want to clear your nginx cache as well if applicable`, this.tag);
         return;
-      }
-
-      if (PROFILE.mainchain) { // eCash explorer: its own pool list (chain/pools.ts), not mempool.space's Bitcoin one
-        return await this.$importChainPools();
       }
 
       const network = config.SOCKS5PROXY.ENABLED ? 'tor' : 'clearnet';
