@@ -227,6 +227,22 @@ describe('Truthcoin: what the node says of a market tx (get_utxos, get_stxos)', 
     await expect((index as any).stateOfTx(tx, new Set())).rejects.toThrow('ECONNREFUSED');
   });
 
+  test('a retry that fails leaves the state unknown, and the retries take turns', async () => {
+    const index = new L2Index(chain);
+    const unknownTx = (n: number): any => ({ txid: h(String(n)), inputs: [], outputs: [], data: trade(10000, T, 8013), signers: [P],
+      market: { applied: false, payouts: [], unknown: true } });
+    const txs = Array.from({ length: 7 }, (_, i) => unknownTx(i + 1));
+    (index as any).stored = [{ txs }];
+    const asked: string[] = [];
+    jest.spyOn(rpc, 'callLimited').mockImplementation(async () => { throw new Error('connect ECONNREFUSED'); });
+    jest.spyOn(index as any, 'stateOfTx').mockImplementation(async (tx: any) => { asked.push(tx.txid); throw new Error('connect ECONNREFUSED'); });
+    await (index as any).retryUnknown();
+    await (index as any).retryUnknown();
+    expect(txs.every(t => t.market?.unknown === true)).toBe(true); // nothing lost to the failures
+    expect(asked.slice(0, 5)).toEqual(txs.slice(0, 5).map(t => t.txid));
+    expect(asked.slice(5, 7)).toEqual([txs[5].txid, txs[6].txid]); // the second round starts where the first stopped
+  });
+
   test('another chain\'s txs ask nothing', async () => {
     const spy = jest.spyOn(rpc, 'callLimited');
     const index = new L2Index(thunder.l2 as L2Chain);

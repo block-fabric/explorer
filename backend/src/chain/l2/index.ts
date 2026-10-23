@@ -181,6 +181,8 @@ export class L2Index {
   constructor(readonly chain: L2Chain = MODULE.l2 as L2Chain) {}
 
   private stored: StoredBlock[] = [];
+  /** where retryUnknown starts among the market txs of unknown state */
+  private retryCursor = 0;
   private fills = new Map<string, any>();    // outpoint key -> the node's filled content
   private stateOutputs = new Map<string, { outpoint: any; output: RawOutput; height: number }>(); // stateUtxos: made by the state
   private stateSpent = new Map<string, number>();                                                 // consumed by the state, at height
@@ -324,23 +326,43 @@ export class L2Index {
     this.ready = true;
   }
 
-  /** Market txs whose state could not be read (stateOfTx): try a few again each sync */
+  /**
+   * Market txs whose state could not be read (stateOfTx): read a few again each sync, taking turns (a cursor moves over
+   * them, so txs that keep failing do not starve the others). Each is read on a copy, and its stored state replaced only
+   * when the read succeeds: a node that fails meanwhile leaves it unknown.
+   */
   private async retryUnknown(): Promise<void> {
-    let changed = false;
-    let tries = 0;
+    const unknown: { tx: StoredTx; earlier: Set<string> }[] = [];
     for (const b of this.stored) {
       const earlier = new Set<string>();
       for (const t of b.txs) {
-        if (t.market?.unknown && tries < RETRY_UNKNOWN_PER_SYNC) {
-          tries++;
-          delete t.market;
-          await this.stateOfTx(t, earlier);
-          const state = t.market as StoredTx['market'];
-          changed = changed || !state?.unknown;
+        if (t.market?.unknown) {
+          unknown.push({ tx: t, earlier: new Set(earlier) });
         }
         earlier.add(t.txid);
       }
     }
+    if (!unknown.length) {
+      return;
+    }
+    let changed = false;
+    const n = Math.min(RETRY_UNKNOWN_PER_SYNC, unknown.length);
+    for (let i = 0; i < n; i++) {
+      const { tx, earlier } = unknown[(this.retryCursor + i) % unknown.length];
+      const copy: StoredTx = { ...tx, market: undefined, prevouts: tx.prevouts ? [...tx.prevouts] : undefined };
+      try {
+        await this.stateOfTx(copy, earlier);
+      } catch (e) {
+        logger.warn(`L2 index: tx ${tx.txid} still unknown: ${e instanceof Error ? e.message : e}`);
+        continue;
+      }
+      if (copy.market && !copy.market.unknown) {
+        tx.market = copy.market;
+        tx.prevouts = copy.prevouts;
+        changed = true;
+      }
+    }
+    this.retryCursor = (this.retryCursor + n) % unknown.length;
     if (changed) {
       this.rebuild();
       this.saveCache(true);
