@@ -24,8 +24,9 @@
           <div class="stack">
             <span *ngFor="let s of byEscrow(d); trackBy: trackSlot" class="seg" [style.flex]="s.escrow" [style.background]="colorOf(s.slot)" [title]="s.title + ': ' + (s.escrow / 1e8 | number:'1.0-2') + ' ' + profile.unit"></span>
           </div>
-          <div class="list">
-            <!-- every sidechain, in the order of the BMM panel beside it (d.live.sidechains), empty treasuries too -->
+          <div class="list rows">
+            <!-- every sidechain, in the order of the BMM panel beside it (d.live.sidechains), empty treasuries too; its
+                 rows are as tall as the BMM grid's (.list.rows) -->
             <div class="li" *ngFor="let s of d.live.sidechains; trackBy: trackSlot">
               <a *ngIf="s.explorer; else plainName" [href]="s.explorer" class="nm"><app-sidechain-label [slot]="s.slot" [name]="s.title"></app-sidechain-label></a>
               <ng-template #plainName><span class="nm"><app-sidechain-label [slot]="s.slot" [name]="s.title"></app-sidechain-label></span></ng-template>
@@ -52,6 +53,7 @@
               <div class="big-label">{{ profile.unit }} bids · {{ pct(d.totals.bidShareOfFees, 0) }} of fees</div>
             </div>
           </div>
+          <div class="stack spacer" aria-hidden="true"></div>
           <div class="grid">
             <div class="g-row" *ngFor="let s of d.live.sidechains; trackBy: trackSlot">
               <span class="g-name" [style.color]="colorOf(s.slot)"><app-sidechain-label [slot]="s.slot" [name]="s.title"></app-sidechain-label></span>
