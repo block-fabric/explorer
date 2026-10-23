@@ -1,9 +1,9 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Injector, Input, OnChanges, OnDestroy } from '@angular/core';
-import { Observable, Subscription } from 'rxjs';
+import { Observable, Subscription, combineLatest } from 'rxjs';
 import { BlockMark, DrivechainLiveService } from '@app/chain/drivechain-live.service';
 import { PROFILE, PROFILES, slotColor, slotMarkId } from '@app/chain/profiles';
 import { L2LiveService, L2Mark } from '@app/chain/l2/full/l2-live.service';
-import { FlushBlockMark, FlushLiveService } from '@app/chain/modules/flush/flush-live.service';
+import { FlushAnchor, FlushBlockMark, FlushLiveService } from '@app/chain/modules/flush/flush-live.service';
 import { L2ApiService } from '@app/chain/l2/l2-api.service';
 
 /**
@@ -57,10 +57,18 @@ import { L2ApiService } from '@app/chain/l2/l2-api.service';
       <span *ngIf="mode === 'miner'" class="badge miner-badge" [title]="fTitle">
         <ng-container *ngIf="fMark.kind === 'pos'">Block of stake · slot {{ fMark.slot | number }}<ng-container *ngIf="fMark.proposer"> · <a [routerLink]="['/validator', fMark.proposer]" class="mono">{{ fMark.proposer | slice:0:8 }}…</a></ng-container></ng-container>
         <ng-container *ngIf="fMark.kind === 'bmm'">BMM block<ng-container *ngIf="fMark.mainheight"> · <app-sidechain-label chain="ecash" name="eCash"></app-sidechain-label> {{ fMark.mainheight | number }}</ng-container></ng-container>
+        <ng-container *ngIf="fMark.ack"> · anchor of <app-sidechain-label chain="ecash" name="eCash"></app-sidechain-label> {{ fMark.ack.mainheight | number }}</ng-container>
+        <ng-container *ngIf="fAnchored"> · anchored by <app-sidechain-label chain="ecash" name="eCash"></app-sidechain-label> {{ fAnchored.mainheight | number }}</ng-container>
         · {{ fMark.finality?.status || 'not on the active chain' }}
       </span>
+      <!-- the ribbon: what the block is, and the eCash block that ties it to eCash (a BMM block's carrier, the ticket an
+           anchor acknowledges, the anchor that anchored it) -->
       <div *ngIf="mode === 'below' || mode === 'inline'" class="marks" [class.inline]="mode === 'inline'" [title]="fTitle">
-        <span class="icons"><span class="fk">{{ fMark.kind === 'pos' ? 'PoS' : 'BMM' }}</span><span class="fdot" [style.background]="fColor"></span></span>
+        <span class="icons">
+          <span class="fk" [class.fk-tie]="fKind !== 'PoS'">{{ fKind }}</span>
+          <ng-container *ngIf="fMain"><app-svg-images name="chain-mark" fill="ecash" width="11" height="11" class="fe"></app-svg-images><span class="fmain">{{ fMain | number }}</span></ng-container>
+          <span class="fdot" [style.background]="fColor"></span>
+        </span>
       </div>
     </ng-container>
 
@@ -103,6 +111,9 @@ import { L2ApiService } from '@app/chain/l2/l2-api.service';
     .dep { color: #3bd16f; } .wd { color: #ff6b6b; } .bn { color: #ffd166; } .pr { color: #5aa6ff; }
     .none { color: var(--transparent-fg); }
     .fk { font-weight: 700; font-size: 11px; color: var(--transparent-fg); }
+    .fk-tie { color: var(--fg); background: color-mix(in srgb, var(--chain-accent) 30%, transparent); padding: 0 4px; border-radius: 3px; }
+    .fe { margin-left: 4px; vertical-align: -1px; }
+    .fmain { font-size: 11px; color: var(--fg); margin-left: 2px; }
     .fdot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-left: 4px; }
     .mono { font-family: monospace; }
     .carrier { display: inline-flex; align-items: center; gap: 3px; color: var(--fg); font-weight: 600; text-decoration: none; }
@@ -126,6 +137,10 @@ export class ChainBlockMarksComponent implements OnChanges, OnDestroy {
   /** Flush: the block's kind and finality */
   flush = PROFILE.kind === 'flush';
   fMark: FlushBlockMark | null = null;
+  /** the ribbon's word for the block (BMM, ⚓ Anchor, Anchored, PoS) and the eCash block that ties it to eCash */
+  fKind = 'PoS';
+  fMain: number | null = null;
+  fAnchored: FlushAnchor | null = null;
   fTitle = '';
   fColor = 'transparent';
   l2Mark: L2Mark | null | undefined;
@@ -142,12 +157,21 @@ export class ChainBlockMarksComponent implements OnChanges, OnDestroy {
       if (!this.hash) {
         return;
       }
-      this.sub = this.injector.get(FlushLiveService).mark$(this.hash).subscribe((m) => {
+      const live = this.injector.get(FlushLiveService);
+      this.sub = combineLatest([live.mark$(this.hash), live.anchored$(this.hash)]).subscribe(([m, anchored]) => {
         this.fMark = m;
+        this.fAnchored = anchored;
+        // a BMM block, else a block acking an eCash ticket (an anchor), else one an anchor anchored, else a block of stake
+        [this.fKind, this.fMain] = m?.kind === 'bmm' ? ['BMM', m.mainheight ?? null]
+          : m?.ack ? ['⚓ Anchor', m.ack.mainheight ?? null]
+          : anchored ? ['Anchored', anchored.mainheight]
+          : ['PoS', null];
         const st = m?.finality?.status;
         this.fColor = st === 'final' ? '#3bd16f' : st === 'anchored' ? (PROFILE.color) : 'transparent';
         this.fTitle = m ? (m.kind === 'pos' ? `Block of stake, slot ${m.slot}` + (m.proposer ? `, signed by ${m.proposer}` : '')
           : 'BMM block' + (m.mainheight ? `, committed to by eCash block ${m.mainheight}` : ''))
+          + (m.ack ? ` · the anchor of eCash block ${m.ack.mainheight}'s ticket` : '')
+          + (anchored ? ` · anchored by eCash block ${anchored.mainheight} (${anchored.kind === 'bmm' ? 'BMM block' : 'ticket'}, acked by block ${anchored.byHeight})` : '')
           + (st ? ` · ${st}` + (m.finality?.anchors ? ` (${m.finality.anchors} anchors)` : '') : '') : '';
         this.cd.markForCheck();
       });
