@@ -301,7 +301,7 @@ export function humanize(k: string): string {
   styles: [`
     .pill { display: inline-block; font-size: 0.7rem; padding: 0 7px; border-radius: 10px; background: #ffffff14; margin-right: 4px; white-space: nowrap; }
     .pill.w { background: color-mix(in srgb, #f5b83d 30%, transparent); }
-    .pill.a { background: color-mix(in srgb, var(--chain-accent, #2ec4b6) 30%, transparent); }
+    .pill.a { background: color-mix(in srgb, var(--chain-accent, #E6A849) 30%, transparent); }
     .muted { color: var(--transparent-fg); font-size: 0.85em; }
     .mono { font-family: monospace; font-size: 0.8rem; word-break: break-all; }
   `],

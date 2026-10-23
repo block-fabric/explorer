@@ -37,7 +37,7 @@ interface PegEvent {
     .cell.on { background: var(--ec); }
     .cell.contested { background: #ff6b6b; }
     .kv { width: 100%; font-size: 0.85rem; margin: 0; td { padding: 3px 4px; vertical-align: middle; } td:first-child { color: var(--transparent-fg); } }
-    .share { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: #ffffff10; margin: 4px 0 10px; .fill { background: var(--chain-accent, #2ec4b6); } }
+    .share { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: #ffffff10; margin: 4px 0 10px; .fill { background: var(--chain-accent, #E6A849); } }
     .g-cells { flex-wrap: nowrap; }
     .cell { max-width: none; }
     .big-row { flex-wrap: wrap; }
@@ -165,7 +165,7 @@ export class L2WidgetComponent implements OnChanges {
   @Input() kind: Kind = 'chain';
 
   profile = PROFILE;
-  ecashColor = PROFILES['ecash']?.color ?? '#2ec4b6';
+  ecashColor = PROFILES['ecash']?.color ?? '#E6A849';
   data$: Observable<{ s: L2Summary | null; blocks: L2BlockSummary[] }>;
   peg$: Observable<PegEvent[]>;
   shortId = shortId;

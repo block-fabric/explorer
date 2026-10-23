@@ -74,7 +74,7 @@ import { L2ApiService } from '@app/chain/l2/l2-api.service';
   `,
   styles: [`
     :host { display: block; }
-    .miner-badge { background: color-mix(in srgb, var(--chain-accent, #2ec4b6) 25%, transparent); color: var(--fg); font-size: 0.85em; }
+    .miner-badge { background: color-mix(in srgb, var(--chain-accent, #E6A849) 25%, transparent); color: var(--fg); font-size: 0.85em; }
     .stripe { display: flex; gap: 1px; height: 4px; margin: 4px 8px 0; border-radius: 2px; overflow: hidden; }
     .band { flex: 1; }
     .marks { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11px; line-height: 1.1; }
@@ -106,7 +106,7 @@ export class ChainBlockMarksComponent implements OnChanges, OnDestroy {
   l2 = PROFILE.kind === 'l2';
   l2Mark: L2Mark | null | undefined;
   l2Title = '';
-  ecashColor = PROFILES['ecash']?.color ?? '#2ec4b6';
+  ecashColor = PROFILES['ecash']?.color ?? '#E6A849';
   mainBase$: Observable<string | null>;
 
   constructor(private injector: Injector, private cd: ChangeDetectorRef) {}

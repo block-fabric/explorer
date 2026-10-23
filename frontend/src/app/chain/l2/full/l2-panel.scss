@@ -15,6 +15,6 @@
 .pill { display: inline-block; font-size: 0.72rem; padding: 0 7px; border-radius: 10px; background: #ffffff14; white-space: nowrap; }
 .pill.ok { background: color-mix(in srgb, #3bd16f 30%, transparent); }
 .pill.warn { background: color-mix(in srgb, #ff6b6b 30%, transparent); }
-.pill.accent { background: color-mix(in srgb, var(--chain-accent, #2ec4b6) 30%, transparent); }
+.pill.accent { background: color-mix(in srgb, var(--chain-accent, #E6A849) 30%, transparent); }
 .pos { color: #3bd16f; } .neg { color: #ff6b6b; }
 section + section { margin-top: 14px; border-top: 1px solid var(--secondary); padding-top: 10px; }

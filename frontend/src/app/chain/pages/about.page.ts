@@ -21,9 +21,9 @@ import { l2FeatureNav } from '@app/chain/l2/l2-nav';
     p, ul { max-width: 820px; }
     .nets { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
     .net { display: block; padding: 12px 14px; border-radius: 8px; background: var(--box-bg); color: var(--fg); text-decoration: none;
-      border: 1px solid color-mix(in srgb, var(--chain-accent, #2ec4b6) 35%, transparent); }
-    a.net:hover { border-color: var(--chain-accent, #2ec4b6); text-decoration: none; }
-    .net.here { border-color: var(--chain-accent, #2ec4b6); }
+      border: 1px solid color-mix(in srgb, var(--chain-accent, #E6A849) 35%, transparent); }
+    a.net:hover { border-color: var(--chain-accent, #E6A849); text-decoration: none; }
+    .net.here { border-color: var(--chain-accent, #E6A849); }
     .net b { display: block; } .net small { color: var(--transparent-fg); }
   `],
   template: `

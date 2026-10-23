@@ -8,7 +8,7 @@ Marks and colours as in frontend/src/app/chain/modules/<id>/index.ts and chain/m
 import os, subprocess, tempfile, glob
 
 CHAINS = {
-    'ecash': ('eCash', '#2ec4b6', 'eCash (ECX) with BIP300/301 drivechains', ['M16 3.5l10.8 6.25v12.5L16 28.5 5.2 22.25V9.75z', 'M11 16h10'], []),
+    'ecash': ('eCash', '#E6A849', 'eCash (ECX) with BIP300/301 drivechains', ['M16 3.5l10.8 6.25v12.5L16 28.5 5.2 22.25V9.75z', 'M11 16h10'], []),
     'thunder': ('Thunder', '#a585ff', 'A payments sidechain of eCash', ['M18.5 3.5 9 18h6.5L13.5 28.5 23 14h-6.5z'], []),
     'bitnames': ('BitNames', '#5aa6ff', 'A naming sidechain of eCash', ['M9 5h15a2 2 0 0 1 2 2v18a2 2 0 0 1-2 2H9a4 4 0 0 1-4-4V9a4 4 0 0 1 4-4z', 'M9 5v22', 'M13 12h8', 'M13 17h6'], []),
     'bitassets': ('BitAssets', '#f5b83d', 'An asset sidechain of eCash', ['M6 9c0-2.2 4.5-4 10-4s10 1.8 10 4-4.5 4-10 4S6 11.2 6 9z', 'M6 9v14c0 2.2 4.5 4 10 4s10-1.8 10-4V9', 'M6 16c0 2.2 4.5 4 10 4s10-1.8 10-4'], []),

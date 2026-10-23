@@ -9,7 +9,7 @@ import { ChainFrontendModule } from '@app/chain/chain-module';
 const ecash: ChainFrontendModule = {
   profile: {
     id: 'ecash', kind: 'l1', name: 'eCash', tagline: 'eCash (ECX) with BIP300/301 drivechains', unit: 'ECX', subunit: 'sats',
-    slot: null, mainchain: true, color: '#2ec4b6',
+    slot: null, mainchain: true, color: '#E6A849', // eCash's brand gold, as its mark (chain/marks.ts)
     // a hexagon crossed by a bar
     mark: ['M16 3.5l10.8 6.25v12.5L16 28.5 5.2 22.25V9.75z', 'M11 16h10'],
     blockWeightUnits: 4000000,

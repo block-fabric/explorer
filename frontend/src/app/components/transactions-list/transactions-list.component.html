@@ -135,7 +135,7 @@
                         </div>
                         <!-- eCash Explorer: a sidechain input that spends a deposit from eCash -->
                         @if (l2 && l2Deposit(tx, vindex); as dep) {
-                          <div class="chain-label small-label" style="--cl: var(--chain-accent, #2ec4b6)" [ngbTooltip]="'Credited by eCash transaction ' + dep + ':' + vin.vout" placement="bottom">
+                          <div class="chain-label small-label" style="--cl: var(--chain-accent, #E6A849)" [ngbTooltip]="'Credited by eCash transaction ' + dep + ':' + vin.vout" placement="bottom">
                             <span class="cl-tag">deposit</span>
                             from <app-sidechain-label chain="ecash" name="eCash"></app-sidechain-label>
                             @if (l2MainBase) {<a [href]="l2MainBase + '/tx/' + dep" class="mono">{{ dep | slice:0:8 }}…{{ dep | slice:-8 }}</a>} @else {<span class="mono">{{ dep | slice:0:8 }}…{{ dep | slice:-8 }}</span>}

@@ -351,5 +351,5 @@ main {
   text-transform: uppercase;
   color: #ffd166;
   border: 1px solid color-mix(in srgb, #ffd166 55%, transparent);
-  &.mainnet { color: var(--chain-accent, #2ec4b6); border-color: color-mix(in srgb, var(--chain-accent, #2ec4b6) 55%, transparent); }
+  &.mainnet { color: var(--chain-accent, #E6A849); border-color: color-mix(in srgb, var(--chain-accent, #E6A849) 55%, transparent); }
 }
