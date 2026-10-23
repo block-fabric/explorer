@@ -10,6 +10,7 @@ import { BoundedCache } from '../flush/cache';
 import { FlushError as RouteError, rpcFailure } from '../flush/routes';
 import { RPC_METHODS, parseRpcArgs } from './allowlist';
 import { describeTx } from './tx';
+import activity, { ActivityFamily } from './activity';
 
 // The FreeBank explorer's own routes (chains/FREEBANK-API.md), next to upstream's API on the same FreeBank node
 // (CORE_RPC). Read-only; every node method on an allowlist (allowlist.ts); the node's error text stays in the log;
@@ -21,6 +22,7 @@ import { describeTx } from './tx';
 //   GET freebank/tx/:txid         what a transaction does on FreeBank: its credit operation, asset genesis, peg outputs
 //   GET freebank/block/:hash      a block's BMM fields: the eCash block it was merged-mined in, its withdrawal bundle
 //   GET freebank/blocks?hashes=   the same for up to 30 blocks at once (block strips, lists)
+//   GET freebank/activity?family=&house=&bill=&limit=&before=   the credit history, newest first (activity.ts)
 
 const HEX64 = /^[0-9a-f]{64}$/;
 const ZERO = '0'.repeat(64);
@@ -28,6 +30,9 @@ const ZERO = '0'.repeat(64);
 const MAX_BLOCKS = 30;
 /** Requests upstream at once (cache misses); more answer 503 */
 const SLOTS = 6;
+const ACTIVITY_FAMILIES: ActivityFamily[] = ['bill', 'house', 'note', 'deposit', 'pool', 'settle', 'oracle', 'asset'];
+const ACTIVITY_LIMIT = 50;
+const ACTIVITY_MAX = 200;
 
 interface Answer { type: string; body: string; length: number }
 
@@ -43,7 +48,8 @@ class FreebankRoutes {
       .get(prefix + 'freebank/rpc/:method', this.wrap(this.$getRpc))
       .get(prefix + 'freebank/tx/:txid', this.wrap(this.$getTx))
       .get(prefix + 'freebank/block/:hash', this.wrap(this.$getBlock))
-      .get(prefix + 'freebank/blocks', this.wrap(this.$getBlocks));
+      .get(prefix + 'freebank/blocks', this.wrap(this.$getBlocks))
+      .get(prefix + 'freebank/activity', this.wrap(this.$getActivity));
   }
 
   private wrap(fn: (req: Request, res: Response) => Promise<unknown>): (req: Request, res: Response) => Promise<void> {
@@ -188,6 +194,37 @@ class FreebankRoutes {
     }
     res.setHeader('Cache-Control', 'public, max-age=5');
     res.json(out);
+  };
+
+  /** GET freebank/activity: credit operations and asset geneses, newest first, from the in-memory index */
+  /** @asyncUnsafe: wrap() answers its errors */
+  private $getActivity = async (req: Request, res: Response): Promise<void> => {
+    const int = (v: unknown): number | undefined => {
+      if (v === undefined || v === '') {
+        return undefined;
+      }
+      if (!/^\d{1,9}$/.test(String(v))) {
+        throw new RouteError(400, 'Invalid request');
+      }
+      return Number(v);
+    };
+    const family = req.query.family ? String(req.query.family) as ActivityFamily : undefined;
+    if (family && !ACTIVITY_FAMILIES.includes(family)) {
+      throw new RouteError(400, 'Unknown family');
+    }
+    const before = req.query.before ? /^(\d{1,9}):(\d{1,6})$/.exec(String(req.query.before)) : null;
+    if (req.query.before && !before) {
+      throw new RouteError(400, 'Invalid request');
+    }
+    const page = activity.query({
+      family,
+      house: int(req.query.house),
+      bill: int(req.query.bill),
+      limit: Math.min(ACTIVITY_MAX, Math.max(1, int(req.query.limit) ?? ACTIVITY_LIMIT)),
+      before: before ? { height: Number(before[1]), index: Number(before[2]) } : undefined,
+    });
+    res.setHeader('Cache-Control', 'public, max-age=10');
+    res.json({ ...page, index: activity.status() });
   };
 
   /**

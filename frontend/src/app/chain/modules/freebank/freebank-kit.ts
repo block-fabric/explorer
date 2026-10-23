@@ -47,6 +47,7 @@ export interface FbTab { path: string; title: string }
 
 export const CREDIT_TABS: FbTab[] = [
   { path: '/houses', title: 'Discount houses' }, { path: '/bills', title: 'Bills' }, { path: '/loanbook', title: 'Loan book' },
+  { path: '/activity', title: 'Activity' },
 ];
 export const MARKET_TABS: FbTab[] = [
   { path: '/gold', title: 'Gold fix and oracles' }, { path: '/pools', title: 'Note pools' }, { path: '/assets', title: 'Assets' },

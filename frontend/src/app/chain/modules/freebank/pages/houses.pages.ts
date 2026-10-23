@@ -6,6 +6,7 @@ import { PROFILE } from '@app/chain/profiles';
 import { FreebankApiService, FbLoaded, fbLoaded } from '../freebank-api.service';
 import { FreebankLiveService } from '../freebank-live.service';
 import { CREDIT_TABS, FB_PAGE_IMPORTS } from '../freebank-kit';
+import { FbActivityComponent } from './activity.pages';
 import { House, HouseMember, LoanBook, TokenClaims } from '../freebank.interfaces';
 import * as F from '../freebank-format';
 
@@ -102,7 +103,7 @@ export class FreebankHousesPage implements OnInit {
 @Component({
   selector: 'app-freebank-house-page',
   standalone: true,
-  imports: [...FB_PAGE_IMPORTS],
+  imports: [...FB_PAGE_IMPORTS, FbActivityComponent],
   styleUrls: STYLES,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -219,6 +220,9 @@ export class FreebankHousesPage implements OnInit {
             }
           }
         </div>
+
+        <h2>History <span class="hint">its credit operations, newest first</span></h2>
+        <app-fb-activity [house]="h.id" [limit]="25" empty="No operation of this house found yet."></app-fb-activity>
       }
     }
   </div>`,

@@ -250,6 +250,39 @@ export function parseTx(hex: string): ParsedTx {
   return tx;
 }
 
+/** FreeBank's block header: Core's 80 bytes, then hashWithdrawalBundle and hashMainBlock (primitives/block.h) */
+export const BLOCK_HEADER_BYTES = 136;
+
+export interface ParsedBlock {
+  /** the previous block's hash, as Core prints it */
+  prev: string;
+  time: number;
+  txs: ParsedTx[];
+}
+
+/** A whole FreeBank block from getblock's raw hex (verbosity 0). Throws FreebankParseError. */
+export function parseBlock(hex: string): ParsedBlock {
+  if (hex.length % 2 !== 0 || !/^[0-9a-fA-F]*$/.test(hex)) {
+    throw new FreebankParseError('not a hex string');
+  }
+  const buf = Buffer.from(hex, 'hex');
+  const r = new ByteReader(buf);
+  r.skip(4); // nVersion
+  const prev = r.hash256();
+  r.skip(32); // merkle root
+  const time = r.u32();
+  r.skip(BLOCK_HEADER_BYTES - r.pos);
+  const count = r.compactSize();
+  const txs: ParsedTx[] = [];
+  for (let i = 0; i < count; i++) {
+    txs.push(readTx(r, buf).tx);
+  }
+  if (r.remaining !== 0) {
+    throw new FreebankParseError(`${r.remaining} trailing byte(s) after the block's transactions`);
+  }
+  return { prev, time, txs };
+}
+
 /** One transaction at the reader's position (also one inside a peg record), and where its parts lie */
 function readTx(r: ByteReader, buf: Buffer): { tx: ParsedTx; span: TxSpan } {
   const start = r.pos;

@@ -57,6 +57,7 @@ import { PROFILE, l2Role, nodeSidechain } from './chain/profile';
 import l2Routes from './chain/l2/routes';
 import flushRoutes from './chain/modules/flush/routes';
 import freebankRoutes from './chain/modules/freebank/routes';
+import freebankActivity from './chain/modules/freebank/activity';
 import l2Index from './chain/l2/index';
 import { CoreFacade } from './chain/l2/facade';
 import { MAX_SUBMIT_BYTES } from './chain/l2/submit';
@@ -240,7 +241,15 @@ class Server {
     if (role === 'full' || nodeSidechain()) {
       // a sidechain: the drivechain index and the chain module are the eCash explorer's (the BMM views and the
       // sidechain's features are the index backend's, /api/v1/l2/*, or Flush's own routes below)
-      blocks.setNewBlockCallback(() => addressIndex.onNewBlock());
+      blocks.setNewBlockCallback(() => {
+        addressIndex.onNewBlock();
+        if (PROFILE.kind === 'freebank') {
+          freebankActivity.onNewBlock();
+        }
+      });
+      if (PROFILE.kind === 'freebank') {
+        freebankActivity.start(); // FreeBank's credit history, /api/v1/freebank/activity
+      }
     } else {
       // Chains Explorer: the drivechain index (BIP300/301 on the mainchain) and the chain module
       drivechain.start();

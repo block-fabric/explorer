@@ -6,6 +6,7 @@ import { PROFILE } from '@app/chain/profiles';
 import { FreebankApiService, FbLoaded, fbLoaded } from '../freebank-api.service';
 import { FreebankLiveService } from '../freebank-live.service';
 import { CREDIT_TABS, FB_PAGE_IMPORTS } from '../freebank-kit';
+import { FbActivityComponent } from './activity.pages';
 import { Bill, House, LoanBook } from '../freebank.interfaces';
 import * as F from '../freebank-format';
 
@@ -82,7 +83,7 @@ export class FreebankBillsPage implements OnInit {
 @Component({
   selector: 'app-freebank-bill-page',
   standalone: true,
-  imports: [...FB_PAGE_IMPORTS],
+  imports: [...FB_PAGE_IMPORTS, FbActivityComponent],
   styleUrls: STYLES,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -132,6 +133,8 @@ export class FreebankBillsPage implements OnInit {
             } @empty {<tr><td colspan="5" class="empty">Not endorsed: the holder is the one it was issued to.</td></tr>}
           </tbody></table>
         </div>
+        <h2>History <span class="hint">what happened to it after its issue, newest first</span></h2>
+        <app-fb-activity [bill]="b.id" [limit]="25" empty="Nothing since its issue."></app-fb-activity>
       }
     }
   </div>`,

@@ -104,6 +104,22 @@ items, with the full count beside them.
 the 136-byte header (version, prev, merkle root, time, hashWithdrawalBundle, hashMainBlock). The batch answers
 `{ <hash>: fields | null }`.
 
+## Credit history: GET /api/v1/freebank/activity?family=&house=&bill=&limit=&before=
+Every credit operation (v11-v17) and asset genesis (v10) on the chain, newest first, from an in-memory index
+(`backend/src/chain/modules/freebank/activity.ts`, after FreeBank's own explorer's credit-activity.ts, AGPL-3.0): one
+`getblock <hash> 0` a block read by the parser (no per-tx or per-input calls: the node is far), new blocks first, then the
+history back to the genesis block in steps of 25 blocks; reorgs by each block's parent hash; no fees. Saved to
+`<CACHE_DIR>/chain/freebank-activity-<network>.json`.
+- `family`: bill, house, note, deposit, pool, settle, oracle, asset; `house`: the ops naming that house (house_id, a
+  settlement's house_a_id/house_b_id or house_ids); `bill`: a bill's ops after its issue (bill_id); `limit` 1-200
+  (default 50); `before`: the page's `next`.
+```
+{ "items": [ { "txid", "height", "time", "index" (in its block), "family", "op" (null: asset), "opName",
+               "fields" (as freebank/tx's credit.fields; an asset: ticker, headline, decimals, supply), "error" } ],
+  "next": "<height>:<index>" | null,
+  "index": { "low", "high", "tip", "complete" } }   // the indexed range; complete: it reaches the genesis block
+```
+
 ## BMM and the peg
 From the eCash explorer's drivechain API for slot 130 (cockpit, events), read by the frontend from the mainchain
 explorer's own /api/v1/drivechain/* (same site), as Flush's.

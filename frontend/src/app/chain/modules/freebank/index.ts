@@ -17,6 +17,7 @@ const houses = () => import('./pages/houses.pages');
 const bills = () => import('./pages/bills.pages');
 const peg = () => import('./pages/peg.pages');
 const gold = () => import('./pages/gold.pages');
+const activity = () => import('./pages/activity.pages');
 
 type Get = <T>(path: string) => Observable<T>;
 /** a list read of the node that is not empty */
@@ -45,6 +46,7 @@ const freebank: ChainFrontendModule = {
     { path: '/houses', title: 'Discount houses', icon: 'nav-house' },
     { path: '/bills', title: 'Bills of exchange', icon: 'nav-bill' },
     { path: '/loanbook', title: 'Loan book', icon: 'nav-loanbook' },
+    { path: '/activity', title: 'Credit activity', icon: 'nav-activity' },
     { path: '/peg', title: 'Drivechain: the peg and BMM on eCash', icon: 'nav-drivechain' },
     { path: '/gold', title: 'Gold fix and oracles', icon: 'nav-gold' },
     { path: '/pools', title: 'Note pools', icon: 'nav-dex' },
@@ -66,6 +68,7 @@ const freebank: ChainFrontendModule = {
     { path: 'bills', loadComponent: page(bills, 'FreebankBillsPage') },
     { path: 'bill/:id', loadComponent: page(bills, 'FreebankBillPage') },
     { path: 'loanbook', loadComponent: page(bills, 'FreebankLoanbookPage') },
+    { path: 'activity', loadComponent: page(activity, 'FreebankActivityPage') },
     { path: 'peg', loadComponent: page(peg, 'FreebankPegPage') },
     { path: 'bmm', loadComponent: page(peg, 'FreebankBmmPage') },
     { path: 'gold', loadComponent: page(gold, 'FreebankGoldPage') },
