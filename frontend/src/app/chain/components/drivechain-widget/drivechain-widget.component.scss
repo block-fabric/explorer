@@ -10,17 +10,21 @@
 .big-value { font-size: 1.35rem; font-weight: 600; white-space: nowrap; small { font-size: 0.8rem; opacity: 0.6; } }
 .big-label { font-size: 0.72rem; color: var(--transparent-fg); }
 
-.stack { display: flex; height: 10px; border-radius: 5px; overflow: hidden; gap: 2px; margin-bottom: 10px; }
+// The treasury's list and the BMM grid sit side by side on the dashboard and list the same sidechains in the same
+// order: one row height for both ($row), and the grid starts below a gap as tall as the treasury's stacked bar ($stack)
+$row: 22px;
+$stack: 20px;
+.stack { display: flex; height: 10px; border-radius: 5px; overflow: hidden; gap: 2px; margin-bottom: $stack - 10px; }
 .seg { min-width: 3px; }
-.list .li { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; padding: 2px 0; }
+.list .li { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; height: $row; }
 .li .nm { width: 106px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-flex; align-items: center; gap: 4px; }
 .li .nm .pool-logo { width: 12px; height: 12px; object-fit: contain; flex: none; }
 .li .bar { flex: 1; height: 6px; background: #ffffff10; border-radius: 3px; overflow: hidden; .fill { display: block; height: 100%; opacity: 0.8; } }
 .li .num { width: 60px; text-align: right; font-weight: 600; }
 .li .flow { width: 54px; text-align: right; font-size: 0.75rem; }
 
-.grid { display: flex; flex-direction: column; gap: 3px; }
-.g-row { display: flex; align-items: center; gap: 6px; }
+.grid { display: flex; flex-direction: column; margin-top: $stack; }
+.g-row { display: flex; align-items: center; gap: 6px; height: $row; }
 .g-name { width: 72px; font-size: 0.72rem; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .g-cells { display: flex; gap: 2px; flex: 1; }
 .cell { display: block; flex: 1; height: 12px; border-radius: 2px; background: #ffffff0f; max-width: 9px; }
