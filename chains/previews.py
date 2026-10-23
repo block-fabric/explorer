@@ -15,7 +15,7 @@ CHAINS = {
     'truthcoin': ('Truthcoin', '#7bd88f', 'A prediction market sidechain of eCash', ['M28 16a12 12 0 1 1-24 0 12 12 0 1 1 24 0', 'M10.5 16.5l3.5 3.5 7-7.5'], []),
     'zside': ('zSide', '#f26b9c', 'A shielded sidechain of eCash', ['M16 4l10 4v7c0 6-4 10.5-10 13-6-2.5-10-7-10-13V8z', 'M16 12a3 3 0 0 0-1 5.8V21h2v-3.2A3 3 0 0 0 16 12z'], []),
     'flush': ('Flush', '#7d94ab', 'A sidechain of eCash: its DEX, assets and token launches', ['M4 6h24', 'M8 12.5h17', 'M12 19h10', 'M15 25.5h4'], []),
-    'freebank': ('FreeBank', '#c9a227', 'Discount houses, notes and bills of exchange on a sidechain of eCash', ['M16 5a11 11 0 1 1 0 22 11 11 0 1 1 0-22z', 'M16 13.7a2.3 2.3 0 1 1 0 4.6 2.3 2.3 0 1 1 0-4.6z', 'M16 14.8a1.2 1.2 0 1 1 0 2.4 1.2 1.2 0 1 1 0-2.4z'], []),
+    'freebank': ('FreeBank', '#c9a227', 'Discount houses, notes and bills of exchange on a sidechain of eCash', ['M16 4 27 10H5z', 'M9 13.5v9', 'M14 13.5v9', 'M18 13.5v9', 'M23 13.5v9', 'M6 25.5h20', 'M4 28.5h24'], []),
     'coinshift': ('Coinshift', '#ff8a3d', 'A swap sidechain of eCash', ['M7 16a9 9 0 0 1 15-6.7', 'M22 5v5h-5', 'M25 16a9 9 0 0 1-15 6.7', 'M10 27v-5h5'], []),
 }
 

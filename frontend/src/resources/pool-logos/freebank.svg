@@ -10,7 +10,10 @@
     </linearGradient>
   </defs>
   <rect width="64" height="64" rx="12" fill="url(#bg)"/>
-  <!-- ☉ (U+2609): the FreeBank sun — gold unit of account -->
-  <circle cx="32" cy="32" r="17" fill="none" stroke="url(#gold)" stroke-width="4.5"/>
-  <circle cx="32" cy="32" r="5.5" fill="url(#gold)"/>
+  <!-- FreeBank: a bank (🏦), a pediment over four columns on a stepped base -->
+  <g fill="none" stroke="url(#gold)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M32 11 51 21H13z"/>
+    <path d="M19 27v15M28 27v15M36 27v15M45 27v15"/>
+    <path d="M15 47h34M11 53h42"/>
+  </g>
 </svg>

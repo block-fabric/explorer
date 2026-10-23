@@ -29,7 +29,7 @@ const SEARCH: [RegExp, string][] = [[/^(?:house|h)\s*#?\s*(\d{1,9})$/i, '/house'
 const freebank: ChainFrontendModule = {
   profile: {
     id: 'freebank', kind: 'freebank', name: 'FreeBank', tagline: 'Discount houses, notes and bills of exchange on a sidechain of eCash',
-    unit: 'ECX', subunit: 'sats', slot: 130, mainchain: false, color: '#c9a227', // FreeBank's gold (the sun of its mark)
+    unit: 'ECX', subunit: 'sats', slot: 130, mainchain: false, color: '#c9a227', // FreeBank's gold
     ...SIDECHAIN_MARKS.freebank,
     blockWeightUnits: 4000000,
   },

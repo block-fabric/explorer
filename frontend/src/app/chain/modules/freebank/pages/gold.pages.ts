@@ -49,7 +49,7 @@ const ASSETS_PAGE = 100;
               <tr><td>{{ x.id }}</td><td class="mono" [title]="x.pubkey">{{ fx.shortId(x.pubkey, 8) }}</td>
                 <td><a [routerLink]="['/tx', x.bondtxid]" [fragment]="'vout=' + x.bondvout" class="mono">{{ fx.shortId(x.bondtxid, 6) }}:{{ x.bondvout }}</a></td>
                 <td><a [routerLink]="['/block', x.bondheight]">{{ x.bondheight | number }}</a></td>
-                <td>@if (x.lastsubmitheight) {<a [routerLink]="['/block', x.lastsubmitheight]">{{ x.lastsubmitheight | number }}</a> <span class="hint">{{ x.blockssincesubmit | number }} blocks ago</span>} @else {<span class="muted">never</span>}</td>
+                <td>@if (x.lastsubmitheight) {<a [routerLink]="['/block', x.lastsubmitheight]">{{ x.lastsubmitheight | number }}</a><span class="hint ms-2">{{ x.blockssincesubmit | number }} blocks ago</span>} @else {<span class="muted">never</span>}</td>
                 <td>@if (x.unbondrequestheight) {since {{ x.unbondrequestheight | number }}} @else {<span class="muted">–</span>}</td></tr>
             } @empty {<tr><td colspan="6" class="empty">No submitter has bonded yet.</td></tr>}
           </tbody></table>

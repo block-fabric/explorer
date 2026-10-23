@@ -85,7 +85,7 @@ export type FreebankWidgetKind = 'freebank-chain' | 'freebank-credit' | 'freeban
             @case ('freebank-houses') {
               <table class="rows"><tbody>
                 @for (h of d.top; track h.id) {
-                  <tr><td><a [routerLink]="['/house', h.id]">#{{ h.id }}</a> <span class="muted">{{ h.classid }}</span></td>
+                  <tr><td><a [routerLink]="['/house', h.id]">#{{ h.id }}</a><span class="muted ms-2">{{ h.classid }}</span></td>
                     <td><span class="pill" [ngClass]="fx.statusTone(h.effective_status)">{{ fx.houseStatus(h.effective_status) }}</span></td>
                     <td class="text-end">{{ fx.ecx(h.activeescrow, 4) }} <span class="muted">ECX</span></td>
                     <td class="text-end" title="Attested reserve ratio">{{ fx.bps(h.attestedratiobps) }}</td></tr>

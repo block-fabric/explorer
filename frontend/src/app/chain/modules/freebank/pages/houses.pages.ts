@@ -52,7 +52,7 @@ function deadline(h: House, tip: number | null): { label: string; late: boolean 
             <tbody>
               @for (h of d.houses; track h.id) {
                 <tr>
-                  <td class="nowrap"><a [routerLink]="['/house', h.id]">#{{ h.id }}</a> <span class="muted">{{ h.classid }}</span></td>
+                  <td class="nowrap"><a [routerLink]="['/house', h.id]">#{{ h.id }}</a><span class="muted ms-2">{{ h.classid }}</span></td>
                   <td class="nowrap">{{ fx.houseType(h.type) }}@if (h.type === 'members') {<span class="muted"> · {{ h.member_records ?? 0 }}</span>}</td>
                   <td class="nowrap"><span class="pill" [ngClass]="fx.statusTone(h.effective_status)" title="Effective status at the tip">{{ fx.houseStatus(h.effective_status) }}</span>
                     @if (h.status !== h.effective_status) {<span class="pill ms-1" title="Stored status">{{ fx.houseStatus(h.status) }}</span>}
