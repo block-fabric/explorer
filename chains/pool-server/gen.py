@@ -279,8 +279,15 @@ def main():
 # Written by {ROOT}/gen.py. The api containers listen on 127.0.0.1 (host network), one port each.
 # The certificate is its own (certbot certonly --webroot -w /var/www/html -d {DOMAIN}), apart from the other sites'.
 
-# the POST routes (a tx to broadcast), per client IP (this file is included in nginx's http block)
-limit_req_zone $binary_remote_addr zone=explorer_tx:10m rate={TX_RATE};
+# the POST routes that broadcast a tx, per client IP (this file is included in nginx's http block). Keyed on the
+# method and the normalized path, whatever location serves it: a trailing slash or another location cannot get around it
+# (the backends route /tx/ like /tx). Other requests have an empty key: not limited.
+map "$request_method:$uri" $explorer_tx_key {{
+    "~^POST:/.+/api/(v1/)?(l2/)?tx/?$"                    $binary_remote_addr;
+    "~^POST:/.+/api/(v1/)?txs/(test|package)/?$"          $binary_remote_addr;
+    default                                               "";
+}}
+limit_req_zone $explorer_tx_key zone=explorer_tx:10m rate={TX_RATE};
 
 server {{
     listen 80;
@@ -304,6 +311,7 @@ server {{
     access_log /var/log/nginx/ecash-explorer.access.log;
     error_log  /var/log/nginx/ecash-explorer.error.log;
     limit_req_status 429;
+    limit_req zone=explorer_tx burst={TX_BURST} nodelay;
 
     root {ROOT}/www;
     index index.html;

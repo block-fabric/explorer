@@ -41,11 +41,17 @@ class SidechainRpc {
   }
 
   async call<T = any>(method: string, ...params: unknown[]): Promise<T> {
+    return this.callLimited<T>(method, -1, ...params);
+  }
+
+  /** As call(), refusing a reply larger than maxBytes (-1: no limit): for lookups whose size others can drive up */
+  async callLimited<T = any>(method: string, maxBytes: number, ...params: unknown[]): Promise<T> {
     await this.slot();
     try {
       const res = await axios.post(config.CHAIN.SIDECHAIN_RPC.URL, { jsonrpc: '2.0', id: ++this.id, method, params }, {
         headers: { 'Content-Type': 'application/json' },
         timeout: config.CHAIN.SIDECHAIN_RPC.TIMEOUT,
+        maxContentLength: maxBytes,
         validateStatus: () => true,
       });
       const body = res.data;

@@ -167,6 +167,9 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R
 
 const FILLABLE = new Set(['bitname', 'bitnameReservation', 'bitasset', 'bitassetControl', 'bitassetReservation', 'ammLpToken', 'dutchAuctionReceipt']);
 
+/** The largest reply accepted when looking up the node's outputs of a market tx's addresses (stateOfTx) */
+const NODE_OUTPUTS_MAX_BYTES = 8 * 1024 * 1024;
+
 export class L2Index {
   /** the chain's module; the default is CHAIN.PROFILE's (tests give one) */
   constructor(readonly chain: L2Chain = MODULE.l2 as L2Chain) {}
@@ -489,7 +492,19 @@ export class L2Index {
       return;
     }
     const specs = terms ? (this.chain.market as NonNullable<L2Chain['market']>).payouts(tx.txid, terms) : [];
-    const node = await this.nodeOutputs([...tx.signers.filter((x): x is string => !!x), ...specs.map(s => s.address)]);
+    let node: Map<string, { output: RawOutput; spentBy: string | null }>;
+    try {
+      node = await this.nodeOutputs([...tx.signers.filter((x): x is string => !!x), ...specs.map(s => s.address)]);
+    } catch (e) {
+      // Anyone can pile outputs onto an address and make these lookups huge: rather than stall the index on this block,
+      // leave the tx unvalued (inputs without values, the market's state unknown: counted as applied, no payouts). A
+      // node that is down is another matter: that error goes up, and the block is read again on the next sync.
+      if (!/maxContentLength/i.test(e instanceof Error ? e.message : String(e))) {
+        throw e;
+      }
+      logger.warn(`L2 index: tx ${tx.txid} left unvalued, the node's outputs of its addresses could not be read: ${e instanceof Error ? e.message : e}`);
+      return;
+    }
     if (unknown.some(x => x)) {
       tx.prevouts = tx.inputs.map((o, i) => (unknown[i] ? node.get(outPoint(o).key)?.output ?? null : null));
     }
@@ -516,8 +531,8 @@ export class L2Index {
     const list = [...new Set(addresses)];
     for (let i = 0; i < list.length; i += 20) {
       const chunk = list.slice(i, i + 20);
-      const utxos = await rpc.call<any[]>('get_utxos', chunk);
-      const stxos = await rpc.call<any[]>('get_stxos', chunk);
+      const utxos = await rpc.callLimited<any[]>('get_utxos', NODE_OUTPUTS_MAX_BYTES, chunk);
+      const stxos = await rpc.callLimited<any[]>('get_stxos', NODE_OUTPUTS_MAX_BYTES, chunk);
       for (const u of utxos ?? []) {
         out.set(outPoint(u.outpoint).key, { output: raw(u.output), spentBy: null });
       }
