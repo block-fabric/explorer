@@ -1,11 +1,11 @@
 import { ChangeDetectionStrategy, Component, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
-import { BehaviorSubject, Observable, combineLatest, map, shareReplay, switchMap, tap } from 'rxjs';
+import { BehaviorSubject, Observable, catchError, combineLatest, map, of, shareReplay, switchMap, tap } from 'rxjs';
 import { SeoService } from '@app/services/seo.service';
 import { FlushApiService, FlushLoaded, flushLoaded } from '../flush-api.service';
 import { ASSET_TABS, FLUSH_PAGE_IMPORTS } from '../flush-kit';
 import { FLUSH_CHARTS } from '../flush-charts';
-import { Candle, Holder, LaunchDetail, LaunchStats, LaunchSummary, Page, Trade } from '../flush.interfaces';
+import { Candle, FlushStatus, Holder, LaunchDetail, LaunchParams, LaunchStats, LaunchSummary, Page, Trade } from '../flush.interfaces';
 import * as F from '../flush-format';
 import { INTERVALS } from './dex.pages';
 
@@ -36,6 +36,16 @@ const FILTERS = [
         </div>
       }
     }
+    @if (rules$ | async; as r) {
+      <div class="card-box mb-3">
+        <h3>Launch rules <span class="hint">since block {{ r.height | number }}</span></h3>
+        <table class="kv"><tbody>
+          <tr><th>Trade fee</th><td>{{ fx.bps(r.fee_default_bps) }} by default · {{ fx.bps(r.fee_min_bps) }} to {{ fx.bps(r.fee_max_bps) }}, the creator's choice</td></tr>
+          <tr><th>Supply</th><td>{{ fx.compact(+r.supply_min_units) }} to {{ fx.compact(+r.supply_max_units) }} base units (before decimals), a multiple of {{ r.supply_multiple_units | number }}</td></tr>
+          <tr><th>Decimals</th><td>{{ r.decimals_default }} by default, at most {{ r.decimals_max }}</td></tr>
+        </tbody></table>
+      </div>
+    }
     <div class="filters">
       <div class="chips">@for (f of filters; track f.id) {<button class="chip" [class.on]="q.filter === f.id" (click)="set({ filter: f.id })">{{ f.label }}</button>}</div>
       <label>Sort <select class="form-select" [value]="q.sort" (change)="set({ sort: $any($event.target).value })">
@@ -61,12 +71,15 @@ export class FlushLaunchesPage implements OnInit {
   private q$ = new BehaviorSubject(this.q);
   view$: Observable<FlushLoaded<Page<LaunchSummary>>>;
   stats$: Observable<FlushLoaded<LaunchStats>>;
+  /** the launch rules in force (the public API's status, Flush v2); none before */
+  rules$: Observable<LaunchParams | null>;
 
   constructor(private api: FlushApiService, private seo: SeoService) {}
 
   ngOnInit(): void {
     this.seo.setTitle('Flush launches');
     this.stats$ = flushLoaded(this.api.market$<LaunchStats>('launches/stats').pipe(tap(s => this.graduation = s.graduation_ecx || 500)));
+    this.rules$ = this.api.market$<FlushStatus>('status').pipe(map(s => s.launch_params?.active ? s.launch_params : null), catchError(() => of(null)));
     this.view$ = this.q$.pipe(switchMap(q => flushLoaded(this.api.market$<Page<LaunchSummary>>('launches', { ...q, filter: q.filter === 'all' ? '' : q.filter, limit: 50 }))));
   }
 

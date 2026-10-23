@@ -119,6 +119,12 @@ What the LIVE betanet API (photon-slot branch) answers, 2026-10-23: every path a
 (the assets-unified registry: 404 until that branch deploys); `assets/{name}/logo` and `launches/{name}/logo` exist.
 Its chain had no launches, pools or holders yet (lists empty, ids 404).
 
+Flush v2 (activated at block 3300 on the slot-99 betanet chain, 2026-10-23): `status` gains `launch_params` (shown on
+/launches); `assets` (q, sort, market, cursor, limit ≤ 100: AssetSummary with `holders` and `market{status, kinds,
+progress, pools, books, auctions, price_ecx, volume_24h_ecx}`) and `assets/{id}` (plus description, links, launch,
+pools, books, auctions, can_curve) now answer (joined into /assets by id, and shown on /asset/:id); book levels gain
+`price_exact`/`amount_units` and books `best_ask_exact`/`best_bid_exact` (shown as given).
+
 ## BMM
 Flush's BMM on eCash comes from the eCash explorer's drivechain API for its slot (cockpit, events), read by the
 frontend from the mainchain explorer's own /api/v1/drivechain/* (same site).

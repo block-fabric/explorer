@@ -309,8 +309,8 @@ export class FlushBooksPage implements OnInit {
         <div class="sub">Asks sell {{ b.base }} for {{ b.quote }}; prices in {{ b.quote }} per {{ b.base }} · book <span class="id">{{ b.book }}</span>
           · <a [routerLink]="['/pool', b.book]">its pool record</a></div>
         <div class="kpis">
-          <div class="kpi"><div class="l">Best bid</div><div class="v pos">{{ fx.price(b.best_bid) }}</div><div class="s">{{ b.bid_orders | number }} buy orders</div></div>
-          <div class="kpi"><div class="l">Best ask</div><div class="v neg">{{ fx.price(b.best_ask) }}</div><div class="s">{{ b.ask_orders | number }} sell orders</div></div>
+          <div class="kpi"><div class="l">Best bid</div><div class="v pos">{{ b.best_bid_exact ?? fx.price(b.best_bid) }}</div><div class="s">{{ b.bid_orders | number }} buy orders</div></div>
+          <div class="kpi"><div class="l">Best ask</div><div class="v neg">{{ b.best_ask_exact ?? fx.price(b.best_ask) }}</div><div class="s">{{ b.ask_orders | number }} sell orders</div></div>
           <div class="kpi"><div class="l">Spread</div><div class="v">{{ fx.price(b.spread) }}</div><div class="s">{{ spreadPct(b) }}</div></div>
         </div>
         <h2>Depth</h2>
@@ -318,11 +318,11 @@ export class FlushBooksPage implements OnInit {
         <div class="grid2 mt-3">
           <div class="card-box"><h3>Bids <span class="hint">buy {{ b.base }}</span></h3>
             <table class="table table-borderless table-sm"><thead><tr><th class="r">Price</th><th class="r">Amount</th><th class="r">Orders</th><th class="r">Total</th></tr></thead>
-              <tbody>@for (l of b.bids; track $index) {<tr><td class="r pos">{{ fx.price(l.price) }}</td><td class="r">{{ fx.amount(l.amount) }}</td><td class="r">{{ l.orders }}</td><td class="r">{{ fx.amount(l.total) }}</td></tr>}
+              <tbody>@for (l of b.bids; track $index) {<tr><td class="r pos">{{ l.price_exact ?? fx.price(l.price) }}</td><td class="r">{{ fx.amount(l.amount) }}</td><td class="r">{{ l.orders }}</td><td class="r">{{ fx.amount(l.total) }}</td></tr>}
                 @empty {<tr><td colspan="4" class="empty">No bid.</td></tr>}</tbody></table></div>
           <div class="card-box"><h3>Asks <span class="hint">sell {{ b.base }}</span></h3>
             <table class="table table-borderless table-sm"><thead><tr><th class="r">Price</th><th class="r">Amount</th><th class="r">Orders</th><th class="r">Total</th></tr></thead>
-              <tbody>@for (l of b.asks; track $index) {<tr><td class="r neg">{{ fx.price(l.price) }}</td><td class="r">{{ fx.amount(l.amount) }}</td><td class="r">{{ l.orders }}</td><td class="r">{{ fx.amount(l.total) }}</td></tr>}
+              <tbody>@for (l of b.asks; track $index) {<tr><td class="r neg">{{ l.price_exact ?? fx.price(l.price) }}</td><td class="r">{{ fx.amount(l.amount) }}</td><td class="r">{{ l.orders }}</td><td class="r">{{ fx.amount(l.total) }}</td></tr>}
                 @empty {<tr><td colspan="4" class="empty">No ask.</td></tr>}</tbody></table></div>
         </div>
         <p class="note">Open orders rest until they fill, are settled or expire; makers fill by limit, then by id; an order sells a whole unit

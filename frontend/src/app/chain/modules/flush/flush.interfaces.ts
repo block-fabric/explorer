@@ -24,6 +24,63 @@ export interface FlushStatus {
   indexer_lag: number;
   updated: number;
   market_index?: boolean;
+  /** the launch rules a token launch takes since Flush v2 (null or absent before) */
+  launch_params?: LaunchParams | null;
+}
+
+export interface LaunchParams {
+  active: boolean;
+  height: number;
+  fee_min_bps: number;
+  fee_max_bps: number;
+  fee_default_bps: number;
+  supply_min_units: string;
+  supply_max_units: string;
+  supply_multiple_units: number;
+  decimals_max: number;
+  decimals_default: number;
+}
+
+/** GET assets (Flush v2): an asset with its market */
+export interface AssetMarket {
+  status: string;
+  kinds: string[];
+  progress: number | null;
+  pools: number;
+  books: number;
+  auctions: number;
+  price_ecx: number | null;
+  volume_24h_ecx: number;
+}
+
+export interface AssetSummary {
+  id: string;
+  ticker: string;
+  display_name: string | null;
+  info: string | null;
+  decimals: number;
+  supply: number;
+  supply_units: string;
+  holders: number;
+  logo: string | null;
+  fixed_supply: boolean;
+  registered_height: number;
+  registration_txid: string;
+  launched: boolean;
+  controller: string | null;
+  seq: number;
+  market: AssetMarket;
+}
+
+/** GET assets/{id} (Flush v2) */
+export interface AssetDetail extends AssetSummary {
+  description?: string | null;
+  links: { label?: string; url: string }[] | string[];
+  launch: unknown | null;
+  pools: Pool[];
+  books: Pool[];
+  auctions: unknown[];
+  can_curve: { allowed: boolean; reason: string | null } | null;
 }
 
 export interface FeeShare { to: string; bps: number }
@@ -269,7 +326,7 @@ export interface Position {
   asset_b: string;
 }
 
-export interface BookLevel { price: number; amount: number; orders: number; total: number }
+export interface BookLevel { price: number; amount: number; orders: number; total: number; price_exact?: string; amount_units?: string }
 
 export interface Book {
   book: string;
@@ -279,6 +336,8 @@ export interface Book {
   bids: BookLevel[];
   best_ask: number | null;
   best_bid: number | null;
+  best_ask_exact?: string | null;
+  best_bid_exact?: string | null;
   spread: number | null;
   ask_orders: number;
   bid_orders: number;

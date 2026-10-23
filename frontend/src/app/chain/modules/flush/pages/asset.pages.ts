@@ -5,7 +5,7 @@ import { SeoService } from '@app/services/seo.service';
 import { FlushApiService, FlushLoaded, flushLoaded } from '../flush-api.service';
 import { ASSET_TABS, DEX_TABS, FLUSH_PAGE_IMPORTS } from '../flush-kit';
 import { FLUSH_CHARTS } from '../flush-charts';
-import { Candle, Holder, LaunchDetail, Page, Pool } from '../flush.interfaces';
+import { AssetDetail, AssetSummary, Candle, Holder, LaunchDetail, Page, Pool } from '../flush.interfaces';
 import * as F from '../flush-format';
 import { INTERVALS } from './dex.pages';
 
@@ -88,21 +88,23 @@ export interface AssetRow {
       @if (v.data; as d) {
         <div class="box">
           <table class="table table-borderless table-sm">
-            <thead><tr><th>Asset</th><th class="r">Supply</th><th class="r">Decimals</th><th class="r">Pools</th><th class="r">Pool depth</th><th class="r">Volume</th><th class="d-none d-md-table-cell">Registered</th><th class="d-none d-lg-table-cell">Last active</th></tr></thead>
+            <thead><tr><th>Asset</th><th class="r">Supply</th><th class="r">Holders</th><th class="r">Price</th><th class="r">Pools</th><th class="r">Pool depth</th><th class="r">Volume</th><th class="d-none d-md-table-cell">Registered</th><th class="d-none d-lg-table-cell">Last active</th></tr></thead>
             <tbody>
               @for (a of d.assets; track a.asset) {
                 <tr>
                   <td><app-flush-token [ticker]="a.name" [id]="a.asset" [logo]="a.has_logo || a.logo ? 'logo' : null" [name]="a.display_name" [showName]="true"></app-flush-token>
                     @if (a.fixed) {<span class="pill ms-1" title="No more can be minted">fixed</span>} @if (a.retired) {<span class="pill warn ms-1">retired</span>}</td>
                   <td class="r nowrap">{{ fx.compact(a.supply) }}</td>
-                  <td class="r">{{ a.decimals }}</td>
+                  @let m = d.market[a.asset];
+                  <td class="r">{{ m ? (m.holders | number) : '–' }}</td>
+                  <td class="r nowrap">{{ m?.market?.price_ecx ? fx.price(m.market.price_ecx) + ' ECX' : '–' }}@if (m && m.market.status !== 'none') {<div class="muted small">{{ m.market.kinds.join(' · ') || m.market.status }}</div>}</td>
                   <td class="r">{{ a.pools ?? 0 }}</td>
                   <td class="r nowrap">{{ a.pool_depth ? fx.compact(a.pool_depth) + ' ECX' : '–' }}</td>
                   <td class="r nowrap">{{ a.volume ? fx.compact(a.volume) + ' ECX' : '–' }}</td>
                   <td class="d-none d-md-table-cell"><a [routerLink]="['/block', a.registered]">{{ a.registered | number }}</a></td>
                   <td class="d-none d-lg-table-cell">@if (a.last_activity) {<a [routerLink]="['/block', a.last_activity]">{{ a.last_activity | number }}</a>}</td>
                 </tr>
-              } @empty {<tr><td colspan="8" class="empty">No asset matches.</td></tr>}
+              } @empty {<tr><td colspan="9" class="empty">No asset matches.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -117,7 +119,7 @@ export class FlushAssetsPage implements OnInit {
   fx = F;
   q = { q: '', sort: 'activity', has_pool: false, has_logo: false, cursor: '' };
   private q$ = new BehaviorSubject(this.q);
-  view$: Observable<FlushLoaded<{ assets: AssetRow[]; next_cursor: string | null; partial: boolean; scanned: number }>>;
+  view$: Observable<FlushLoaded<{ assets: AssetRow[]; next_cursor: string | null; partial: boolean; scanned: number; market: Record<string, AssetSummary> }>>;
   info$: Observable<FlushLoaded<any>>;
 
   constructor(private api: FlushApiService, private seo: SeoService) {}
@@ -135,9 +137,15 @@ export class FlushAssetsPage implements OnInit {
       }
       const sort = q.sort === 'relevance' && !q.q ? 'activity' : q.sort;
       // searchassets query filters sort cursor limit; a backend that allows the query alone (400) gets the query alone
-      return flushLoaded(this.api.rpc$<any>('searchassets', q.q, filters, sort, q.cursor, 50).pipe(
+      const search$ = this.api.rpc$<any>('searchassets', q.q, filters, sort, q.cursor, 50).pipe(
         catchError(e => e?.status === 400 ? this.api.rpc$<any>('searchassets', q.q) : throwError(() => e)),
-      ));
+      );
+      // holders, price and market of the page's assets: the public API's asset list (Flush v2), by id; none before v2
+      const market$ = this.api.market$<Page<AssetSummary>>('assets', { q: q.q, limit: 100 }).pipe(
+        map(p => Object.fromEntries((p.items ?? []).map(a => [a.id, a]))),
+        catchError(() => of({} as Record<string, AssetSummary>)),
+      );
+      return flushLoaded(combineLatest([search$, market$]).pipe(map(([r, market]) => ({ ...r, market }))));
     }));
   }
 
@@ -173,6 +181,22 @@ export class FlushAssetsPage implements OnInit {
           <div class="kpi"><div class="l">Registered</div><div class="v"><a [routerLink]="['/block', a.registered]">{{ a.registered | number }}</a></div><div class="s"><a [routerLink]="['/tx', a.registration]" class="mono">{{ fx.shortId(a.registration, 6) }}</a></div></div>
           <div class="kpi"><div class="l">Sequence</div><div class="v">{{ a.seq || '–' }}</div><div class="s">its place in the registry</div></div>
         </div>
+        @if (market$ | async; as mk) {
+          @if (mk.data; as m) {
+            <div class="kpis">
+              <div class="kpi"><div class="l">Holders</div><div class="v">{{ m.holders | number }}</div><div class="s">addresses holding it</div></div>
+              <div class="kpi"><div class="l">Price</div><div class="v">{{ m.market.price_ecx ? fx.price(m.market.price_ecx) : '–' }} <span class="muted">ECX</span></div><div class="s">24 h volume {{ fx.compact(m.market.volume_24h_ecx) }} ECX</div></div>
+              <div class="kpi"><div class="l">Market</div><div class="v">{{ m.market.status }}</div><div class="s">{{ m.market.pools }} pool{{ m.market.pools === 1 ? '' : 's' }} · {{ m.market.books }} book{{ m.market.books === 1 ? '' : 's' }} · {{ m.market.auctions }} auction{{ m.market.auctions === 1 ? '' : 's' }}@if (m.market.progress !== null) { · curve {{ m.market.progress | number: '1.0-1' }}%}</div></div>
+              <div class="kpi"><div class="l">Bonding curve</div><div class="v">{{ m.launched ? 'launched' : m.can_curve?.allowed ? 'can launch' : 'no' }}</div><div class="s">{{ m.can_curve?.reason || (m.launched ? 'launched on a curve' : 'not launched') }}</div></div>
+            </div>
+            @if (m.description || m.info || linkList(m).length) {
+              <div class="card-box mb-3">
+                @if (m.description || m.info) {<p class="desc mb-1">{{ m.description || m.info }}</p>}
+                @for (l of linkList(m); track l.url) {<a [href]="l.url" target="_blank" rel="noopener noreferrer nofollow" class="me-3">{{ l.label }}</a>}
+              </div>
+            }
+          }
+        }
         <div class="grid2">
           <div class="card-box">
             <h3>Details</h3>
@@ -260,6 +284,7 @@ export class FlushAssetPage implements OnInit {
   holders$: Observable<FlushLoaded<Page<Holder>>>;
   auctions$: Observable<FlushLoaded<any[]>>;
   verified$: Observable<FlushLoaded<any>>;
+  market$: Observable<FlushLoaded<AssetDetail>>;
 
   constructor(private api: FlushApiService, private route: ActivatedRoute, private seo: SeoService) {}
 
@@ -276,6 +301,8 @@ export class FlushAssetPage implements OnInit {
     this.view$ = asset$;
     const ok = <T>(f: (id: string, a: AssetRow) => Observable<T>) => asset$.pipe(switchMap(v => v.data ? flushLoaded(f(v.data.asset, v.data)) : of({ loading: false } as FlushLoaded<T>)));
     this.history$ = ok(id => this.api.rpc$<any>('getassethistory', F.assetArg(id)));
+    // its market from the public API (Flush v2: GET assets/{id}); none before v2
+    this.market$ = ok(id => this.api.market$<AssetDetail>('assets/' + id)).pipe(map(m => m.error ? { loading: false } : m));
     this.launch$ = ok(id => this.api.market$<LaunchDetail>('launches/' + id));
     this.holders$ = ok(id => this.api.market$<Page<Holder>>(`launches/${id}/holders`, { limit: 25 }));
     this.pools$ = ok((id, a) => this.api.market$<Page<Pool>>('pools', { q: a.name, include_abandoned: true, limit: 50 }).pipe(
@@ -304,6 +331,12 @@ export class FlushAssetPage implements OnInit {
   mainPool(pools: Pool[]): Pool | null {
     const withEcx = pools.filter(p => p.curve !== 'book' && (p.asset_a === 'ECX' || p.asset_b === 'ECX')).sort((a, b) => b.depth_ecx - a.depth_ecx);
     return withEcx[0] ?? pools.find(p => p.curve !== 'book') ?? null;
+  }
+
+  /** its links that are http(s) URLs (the API gives URLs, or { label, url }) */
+  linkList(m: AssetDetail): { label: string; url: string }[] {
+    return (m.links ?? []).map((l: any) => typeof l === 'string' ? { label: l, url: l } : { label: String(l?.label || l?.url || ''), url: String(l?.url ?? '') })
+      .filter(l => /^https?:\/\/[^\s"'<>]+$/i.test(l.url)).slice(0, 10);
   }
 
   dataRows(a: AssetRow): [string, string][] {
