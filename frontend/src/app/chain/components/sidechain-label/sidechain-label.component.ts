@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, Input, OnChanges } from '@angular/core';
 import { ChainProfile } from '@app/chain/chain-module';
-import { SIDECHAIN_MARK, SIDECHAIN_MARKS } from '@app/chain/marks';
+import { ECASH_GOLD, ECASH_MARK_PATHS, ECASH_MARK_VIEWBOX, SIDECHAIN_MARK, SIDECHAIN_MARKS } from '@app/chain/marks';
 import { PROFILES, profileBySlot, sidechainMarkId, slotColor } from '@app/chain/profiles';
 
 /**
@@ -21,7 +21,7 @@ import { PROFILES, profileBySlot, sidechainMarkId, slotColor } from '@app/chain/
     .m { display: inline-block; width: 1.1em; height: 1.1em; vertical-align: -0.2em; margin-right: 0.3em; color: var(--scl); flex: none; }
     .n.c { color: var(--scl); font-weight: 600; }
   `],
-  template: `<span [style.--scl]="color" [attr.title]="title"><svg class="m" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">@for (r of rects; track $index) {<rect [attr.x]="r.x" [attr.y]="r.y" [attr.width]="r.w" [attr.height]="r.h" [attr.rx]="r.rx"></rect>}@for (d of paths; track $index) {<path [attr.d]="d"></path>}</g></svg><span class="n" [class.c]="colored">{{ name }}</span><ng-content></ng-content></span>`,
+  template: `<span [style.--scl]="color" [attr.title]="title">@if (ecash) {<svg class="m" [attr.viewBox]="ecashViewBox" aria-hidden="true" focusable="false">@for (d of ecashPaths; track $index) {<path [attr.d]="d" [attr.fill]="ecashGold"></path>}</svg>} @else {<svg class="m" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">@for (r of rects; track $index) {<rect [attr.x]="r.x" [attr.y]="r.y" [attr.width]="r.w" [attr.height]="r.h" [attr.rx]="r.rx"></rect>}@for (d of paths; track $index) {<path [attr.d]="d"></path>}</g></svg>}<span class="n" [class.c]="colored">{{ name }}</span><ng-content></ng-content></span>`,
 })
 export class SidechainLabelComponent implements OnChanges {
   /** BIP300 slot (colour, and the mark when the name has none) */
@@ -38,6 +38,11 @@ export class SidechainLabelComponent implements OnChanges {
   @Input() title: string | null = null;
 
   color = '#9aa4b2';
+  /** eCash: its own round mark, filled in its gold (chain/marks.ts) */
+  ecash = false;
+  ecashPaths = ECASH_MARK_PATHS;
+  ecashViewBox = ECASH_MARK_VIEWBOX;
+  ecashGold = ECASH_GOLD;
   paths: string[] = [];
   rects: { x: number; y: number; w: number; h: number; rx: number }[] = [];
 
@@ -46,6 +51,7 @@ export class SidechainLabelComponent implements OnChanges {
       : (this.slot !== null && this.slot !== undefined ? profileBySlot(this.slot) : undefined);
     const byName = sidechainMarkId(this.markOf ?? this.name);
     const mark = (byName ? SIDECHAIN_MARKS[byName] : null) ?? profile ?? SIDECHAIN_MARK;
+    this.ecash = this.chain === 'ecash';
     this.paths = mark.mark ?? [];
     this.rects = mark.markRects ?? [];
     this.color = profile?.color ?? (this.slot !== null && this.slot !== undefined ? slotColor(this.slot) : '#9aa4b2');

@@ -7,7 +7,7 @@
 
 import { ChainFrontendModule, ChainProfile } from '@app/chain/chain-module';
 import { MODULES } from '@app/chain/modules';
-import { SIDECHAIN_MARKS } from '@app/chain/marks';
+import { SIDECHAIN_MARKS, ECASH_GOLD, ECASH_MARK_PATHS, ECASH_MARK_VIEWBOX } from '@app/chain/marks';
 
 export type { ChainProfile, NavItem } from '@app/chain/chain-module';
 export type ProfileId = string;
@@ -119,6 +119,10 @@ export function shade(hex: string, f: number): string {
 
 /** A chain's mark as a standalone SVG (favicon, previews) on a dark rounded square */
 export function markSvg(p: ChainProfile, size: number): string {
+  if (p.id === 'ecash') {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="${ECASH_MARK_VIEWBOX}">`
+      + ECASH_MARK_PATHS.map(d => `<path d="${d}" fill="${ECASH_GOLD}"/>`).join('') + '</svg>';
+  }
   const rects = (p.markRects ?? []).map(r => `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="${r.rx}"/>`).join('');
   const paths = p.mark.map(d => `<path d="${d}"/>`).join('');
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 32 32">`
@@ -162,7 +166,10 @@ export function applyProfileToDocument(): void {
       .navbar-nav .nav-item.active .nav-link { color: ${accent} !important; }
       /* ECX has no price feed here: no fiat amounts */
       app-fiat, .fiat, .table-cell-fiat { display: none !important; }
-    `;
+    ` + (PROFILE.kind === 'l2' ? `
+      /* a sidechain explorer's logo carries eCash's mark before its own: one mark wider (svg-images, 612 x 126) */
+      .mempool-logo { width: 171px !important; }
+    ` : '');
     document.head.appendChild(style);
     const favicon = document.querySelector('link[rel="icon"][type="image/svg+xml"]') || document.querySelector('link[rel="icon"]');
     if (favicon) {
