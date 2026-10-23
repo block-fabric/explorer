@@ -17,7 +17,7 @@ export class AmountSelectorComponent implements OnInit {
   // eCash Explorer: a sidechain explorer counts in sats, and shows its amounts in ECX (1e8 sats) as the 'btc' mode;
   // it keeps its choice under its own key (sats by default), apart from the eCash explorer's
   unit = PROFILE.kind === 'l2' ? 'ECX' : PROFILE.unit;
-  showFiat = PROFILE.kind !== 'l2';
+  showFiat = PROFILE.kind === 'l1';
   amountForm: UntypedFormGroup;
   modes = ['btc', 'sats', 'fiat'];
 

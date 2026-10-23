@@ -79,6 +79,25 @@
               </ng-container>
             </div>
           </ng-container>
+        } @else if (flush) {
+          <!-- Flush (chain/modules/flush): upstream's pages, its own, and the eCash and sidechain explorers -->
+          <div class="links">
+            <p class="category">Explore {{ profile.name }}</p>
+            <p><a [routerLink]="['/']">Dashboard</a></p>
+            <p><a [routerLink]="['/blocks']">Blocks</a></p>
+            <p><a [routerLink]="['/txs']">Recent Transactions</a></p>
+            <p *ngFor="let item of flushNav"><a [routerLink]="[item.path]">{{ item.title }}</a></p>
+            <p><a [routerLink]="['/tx/push']">Broadcast Transaction</a></p>
+          </div>
+          <ng-container *ngIf="chainLinks$ | async as chains">
+            <div class="links" *ngIf="chains.length > 1">
+              <p class="category">Chains</p>
+              <ng-container *ngFor="let c of chains">
+                <p *ngIf="c.here" class="text-muted small"><app-sidechain-label [chain]="c.id" [name]="c.name"></app-sidechain-label> (this explorer)</p>
+                <p *ngIf="!c.here"><a [href]="c.url"><app-sidechain-label [chain]="c.id" [name]="c.name"></app-sidechain-label> Explorer</a></p>
+              </ng-container>
+            </div>
+          </ng-container>
         } @else {
         <div class="links">
           <p class="category">Explore</p>

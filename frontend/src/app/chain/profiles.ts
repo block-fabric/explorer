@@ -71,6 +71,10 @@ export const CHAIN_UI: ChainUi = PROFILE.kind === 'l2' && String(env.CHAIN_UI ||
 export const L2_FULL = PROFILE.kind === 'l2' && CHAIN_UI === 'full';
 /** a sidechain explorer on the lean L2 page set */
 export const L2_LEAN = PROFILE.kind === 'l2' && CHAIN_UI === 'lean';
+/** Flush (kind 'flush'): upstream's full UI on the Flush node, and the Flush module's pages (chain/modules/flush/) */
+export const FLUSH = PROFILE.kind === 'flush';
+/** a sidechain's explorer of either kind: its own panels on upstream's pages, no proof of work, no eCash cockpit */
+export const SIDECHAIN_EXPLORER = PROFILE.kind !== 'l1';
 
 /** The eCash networks (backend/src/chain/networks.ts): their names and address prefixes (Bitcoin's) */
 export type NetworkId = 'ecash' | 'ecashbeta' | 'ecashtest';
@@ -107,7 +111,24 @@ export function explorerUrl(id: ProfileId, path = ''): string | null {
 }
 
 export function bech32Prefix(): string {
-  return NETWORKS[CHAIN_NETWORK].bech32;
+  return FLUSH ? FLUSH_ADDRESSES[CHAIN_NETWORK].bech32 : NETWORKS[CHAIN_NETWORK].bech32;
+}
+
+/**
+ * Flush's addresses on each eCash network (backbone-flush src/kernel/chainparams.cpp, CEcashSidechainParams): its own
+ * bech32 prefix per network (flx, bflx, tflx); base58 as the chain's base network (main: versions 28 'C' and 88 'c';
+ * eCash testnet: Bitcoin testnet's 111 and 196)
+ */
+export interface ChainAddressParams { bech32: string; p2pkh: number; p2sh: number; base58: { pubkey: string[]; script: string[] } }
+export const FLUSH_ADDRESSES: Record<NetworkId, ChainAddressParams> = {
+  ecash: { bech32: 'flx', p2pkh: 28, p2sh: 88, base58: { pubkey: ['C'], script: ['c'] } },
+  ecashbeta: { bech32: 'bflx', p2pkh: 28, p2sh: 88, base58: { pubkey: ['C'], script: ['c'] } },
+  ecashtest: { bech32: 'tflx', p2pkh: 111, p2sh: 196, base58: { pubkey: ['m', 'n'], script: ['2'] } },
+};
+
+/** The address formats of this explorer's chain when they are not Bitcoin's (Flush's), else null */
+export function chainAddressParams(): ChainAddressParams | null {
+  return FLUSH ? FLUSH_ADDRESSES[CHAIN_NETWORK] : null;
 }
 
 /** #rrggbb scaled towards black by f (0..1) */
@@ -166,7 +187,7 @@ export function applyProfileToDocument(): void {
       .navbar-nav .nav-item.active .nav-link { color: ${accent} !important; }
       /* ECX has no price feed here: no fiat amounts */
       app-fiat, .fiat, .table-cell-fiat { display: none !important; }
-    ` + (PROFILE.kind === 'l2' ? `
+    ` + (SIDECHAIN_EXPLORER ? `
       /* a sidechain explorer's logo carries eCash's mark before its own: one mark wider (svg-images, 612 x 126) */
       .mempool-logo { width: 171px !important; }
     ` : '');
@@ -184,6 +205,7 @@ export function applyProfileToDocument(): void {
   }
   const desc = PROFILE.kind === 'l2'
     ? `Explore ${PROFILE.name}, a drivechain sidechain of eCash: blocks, transactions, addresses, deposits and withdrawals.`
+    : FLUSH ? `Explore ${PROFILE.name}, a sidechain of eCash: blocks of stake, assets, the DEX, launches, validators and the peg.`
     : `Explore ${PROFILE.name}: ${PROFILE.tagline}. Blocks, transactions and mempool in real time.`;
   for (const sel of ['meta[name="description"]', 'meta[property="og:description"]', 'meta[name="twitter:description"]']) {
     document.querySelector(sel)?.setAttribute('content', desc);

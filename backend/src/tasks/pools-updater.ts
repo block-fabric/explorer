@@ -60,7 +60,8 @@ class PoolsUpdater {
         this.currentSha = await this.getShaFromDb();
       }
 
-      if (PROFILE.mainchain) { // eCash explorer: its own pool list (chain/pools.ts), not mempool.space's Bitcoin one
+      // eCash explorer: its own pool list (chain/pools.ts); Flush: none (blocks of stake), every block "Unknown"
+      if (PROFILE.mainchain || PROFILE.kind === 'flush') { // not mempool.space's Bitcoin list
         return await this.$importChainPools();
       }
 

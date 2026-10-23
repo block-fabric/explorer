@@ -35,6 +35,9 @@ export class GlobalFooterComponent implements OnInit, OnDestroy, OnChanges {
   moduleNav = MODULE.nav ?? [];
   /** a sidechain explorer (chain/l2/): its pages, and the other chains' explorers */
   l2 = PROFILE.kind === 'l2';
+  /** Flush (chain/modules/flush): its pages, and the other chains' explorers */
+  flush = PROFILE.kind === 'flush';
+  flushNav: NavItem[] = PROFILE.kind === 'flush' ? [...(MODULE.nav ?? []), ...(MODULE.footerNav ?? [])] : [];
   l2Nav$: Observable<NavItem[]>;
   chainLinks$: Observable<ChainLink[]>;
   /** the other eCash networks' explorers (GET /api/v1/chain) */
@@ -76,6 +79,9 @@ export class GlobalFooterComponent implements OnInit, OnDestroy, OnChanges {
       map(c => (c?.networks ?? []).filter(n => n.id !== (c?.network ?? CHAIN_NETWORK) && !!n.explorer)),
     );
 
+    if (this.flush) {
+      this.chainLinks$ = this.chainApi.chain$().pipe(map(chainLinks));
+    }
     if (this.l2) {
       this.l2Nav$ = this.l2Api.features$.pipe(map(f => l2FeatureNav(f)));
       this.chainLinks$ = this.chainApi.chain$().pipe(map(chainLinks));

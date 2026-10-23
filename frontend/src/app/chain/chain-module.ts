@@ -20,9 +20,11 @@ export interface ChainProfile {
   id: string;
   /**
    * 'l1': the eCash mainchain, on upstream mempool's pages and APIs; 'l2': a sidechain explorer, on its own lean page
-   * set (chain/l2/) and API (/api/v1/l2/*), with none of upstream's pages, websocket or APIs
+   * set (chain/l2/) and API (/api/v1/l2/*), with none of upstream's pages, websocket or APIs; 'flush': Flush, a
+   * Core-style sidechain (blocks of stake, assets, a DEX), on upstream's full UI over its own node plus its module's
+   * pages (chain/modules/flush/, GET /api/v1/flush/*)
    */
-  kind: 'l1' | 'l2';
+  kind: 'l1' | 'l2' | 'flush';
   name: string;
   tagline: string;
   unit: string;
@@ -52,6 +54,8 @@ export interface ChainFrontendModule {
   profile: ChainProfile;
   /** nav bar entries of the module's pages */
   nav?: NavItem[];
+  /** more of its pages, listed in the footer only (Flush: treasury, auctions, oracles...) */
+  footerNav?: NavItem[];
   /** the module's pages, added to the site's routes (use loadComponent / loadChildren to keep them lazy) */
   routes?: Routes;
   /** the transaction page's panel for describeTx data */

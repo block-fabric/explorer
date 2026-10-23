@@ -24,7 +24,7 @@ export class MasterPageComponent implements OnInit, OnDestroy {
   profile = PROFILE;
   chainNetwork = CHAIN_NETWORK;
   networkName = NETWORK_NAME;
-  chainNav: NavItem[] = [
+  chainNav: NavItem[] = PROFILE.kind === 'flush' ? (MODULE.nav ?? []) : [
     { path: '/drivechain', title: 'Drivechain: sidechains, BMM, deposits, withdrawals, votes', icon: 'nav-drivechain' },
     ...(MODULE.nav ?? []),
   ];

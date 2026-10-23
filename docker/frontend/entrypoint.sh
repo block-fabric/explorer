@@ -91,9 +91,12 @@ case "${CHAIN_PROFILE:-ecash}" in
   truthcoin) __CHAIN_NAME__=Truthcoin ;;
   zside) __CHAIN_NAME__=zSide ;;
   coinshift) __CHAIN_NAME__=Coinshift ;;
+  flush) __CHAIN_NAME__=Flush ;;
   *) __CHAIN_NAME__=eCash ;;
 esac
-if [ "${__CHAIN_NAME__}" != "eCash" ]; then
+if [ "${__CHAIN_NAME__}" = "Flush" ]; then
+  __CHAIN_DESC__="Explore Flush, a sidechain of eCash: blocks of stake, assets, the DEX, launches, validators and the peg."
+elif [ "${__CHAIN_NAME__}" != "eCash" ]; then
   __CHAIN_DESC__="Explore ${__CHAIN_NAME__}, a drivechain sidechain of eCash: blocks, transactions, addresses, deposits and withdrawals."
 fi
 case "${CHAIN_NETWORK:-ecashbeta}" in
@@ -109,7 +112,7 @@ if [ -z "$(find /var/www/mempool -path "*/resources/previews/${__CHAIN_PREVIEW__
 fi
 for f in $(find /var/www/mempool -name index.html); do
   # (with the name and network suffix of an earlier start matched too, so that a restart does not add another)
-  sed -i -E -e "s/(eCash|Thunder|BitNames|BitAssets|Truthcoin|Hivemind|zSide|Coinshift) Explorer( \((Betanet|Testnet)\))?/${__CHAIN_NAME__} Explorer${__NETWORK_SUFFIX__}/g" \
+  sed -i -E -e "s/(eCash|Thunder|BitNames|BitAssets|Truthcoin|Hivemind|zSide|Coinshift|Flush) Explorer( \((Betanet|Testnet)\))?/${__CHAIN_NAME__} Explorer${__NETWORK_SUFFIX__}/g" \
     -e "s#resources/previews/chain-[a-z0-9]+\.png#resources/previews/${__CHAIN_PREVIEW__}#g" "$f"
   if [ -n "$__CHAIN_DESC__" ]; then
     sed -i -E -e "s#content=\"Explore [^\"]*\"#content=\"${__CHAIN_DESC__}\"#g" "$f"

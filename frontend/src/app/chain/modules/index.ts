@@ -6,10 +6,11 @@ import thunder from './thunder';
 import truthcoin from './truthcoin';
 import zside from './zside';
 import coinshift from './coinshift';
+import flush from './flush';
 
 /**
  * The chain modules this frontend knows; window.__env.CHAIN_PROFILE picks one (the first, eCash, by default).
- * The sidechains (kind 'l2') run on the L2 page set (chain/l2/); the backend has the matching modules in
+ * The sidechains (kind 'l2') run on the L2 page set (chain/l2/), Flush (kind 'flush') on upstream's full UI; the backend has the matching modules in
  * backend/src/chain/modules/index.ts.
  */
 export const MODULES: ChainFrontendModule[] = [
@@ -20,4 +21,5 @@ export const MODULES: ChainFrontendModule[] = [
   truthcoin,
   zside,
   coinshift,
+  flush,
 ];

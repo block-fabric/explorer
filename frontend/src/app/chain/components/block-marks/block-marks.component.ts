@@ -3,6 +3,7 @@ import { Observable, Subscription } from 'rxjs';
 import { BlockMark, DrivechainLiveService } from '@app/chain/drivechain-live.service';
 import { PROFILE, PROFILES, slotColor, slotMarkId } from '@app/chain/profiles';
 import { L2LiveService, L2Mark } from '@app/chain/l2/full/l2-live.service';
+import { FlushBlockMark, FlushLiveService } from '@app/chain/modules/flush/flush-live.service';
 import { L2ApiService } from '@app/chain/l2/l2-api.service';
 
 /**
@@ -48,7 +49,22 @@ import { L2ApiService } from '@app/chain/l2/l2-api.service';
       </ng-container>
     </ng-container>
 
-    <ng-container *ngIf="!l2 && mark?.summary as s">
+    <!-- Flush (chain/modules/flush): a block of stake or a BMM block, and its finality (GET /api/v1/flush/block/:hash) -->
+    <ng-container *ngIf="flush && fMark">
+      <div *ngIf="mode === 'stripe'" class="stripe" [title]="fTitle">
+        <span class="band" [style.background]="fColor" [style.outline]="fMark.finality?.status === 'final' || fMark.finality?.status === 'anchored' ? null : '1px dashed var(--transparent-fg)'"></span>
+      </div>
+      <span *ngIf="mode === 'miner'" class="badge miner-badge" [title]="fTitle">
+        <ng-container *ngIf="fMark.kind === 'pos'">Block of stake · slot {{ fMark.slot | number }}<ng-container *ngIf="fMark.proposer"> · <a [routerLink]="['/validator', fMark.proposer]" class="mono">{{ fMark.proposer | slice:0:8 }}…</a></ng-container></ng-container>
+        <ng-container *ngIf="fMark.kind === 'bmm'">BMM block<ng-container *ngIf="fMark.mainheight"> · <app-sidechain-label chain="ecash" name="eCash"></app-sidechain-label> {{ fMark.mainheight | number }}</ng-container></ng-container>
+        · {{ fMark.finality?.status || 'not on the active chain' }}
+      </span>
+      <div *ngIf="mode === 'below' || mode === 'inline'" class="marks" [class.inline]="mode === 'inline'" [title]="fTitle">
+        <span class="icons"><span class="fk">{{ fMark.kind === 'pos' ? 'PoS' : 'BMM' }}</span><span class="fdot" [style.background]="fColor"></span></span>
+      </div>
+    </ng-container>
+
+    <ng-container *ngIf="!l2 && !flush && mark?.summary as s">
       <!-- a band per sidechain carried -->
       <div *ngIf="mode === 'stripe'" class="stripe" [title]="stripeTitle">
         <span *ngFor="let a of s.bmm" class="band" [style.background]="colorOf(a.slot)"></span>
@@ -86,6 +102,9 @@ import { L2ApiService } from '@app/chain/l2/l2-api.service';
     .peg { font-weight: 700; font-size: 11px; padding: 0 2px; }
     .dep { color: #3bd16f; } .wd { color: #ff6b6b; } .bn { color: #ffd166; } .pr { color: #5aa6ff; }
     .none { color: var(--transparent-fg); }
+    .fk { font-weight: 700; font-size: 11px; color: var(--transparent-fg); }
+    .fdot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-left: 4px; }
+    .mono { font-family: monospace; }
     .carrier { display: inline-flex; align-items: center; gap: 3px; color: var(--fg); font-weight: 600; text-decoration: none; }
     a.carrier:hover { text-decoration: underline; }
   `],
@@ -104,6 +123,11 @@ export class ChainBlockMarksComponent implements OnChanges, OnDestroy {
 
   /** a sidechain explorer: the block's BMM mark (undefined: not known yet, null: none) */
   l2 = PROFILE.kind === 'l2';
+  /** Flush: the block's kind and finality */
+  flush = PROFILE.kind === 'flush';
+  fMark: FlushBlockMark | null = null;
+  fTitle = '';
+  fColor = 'transparent';
   l2Mark: L2Mark | null | undefined;
   l2Title = '';
   ecashColor = PROFILES['ecash']?.color ?? '#E6A849';
@@ -113,6 +137,22 @@ export class ChainBlockMarksComponent implements OnChanges, OnDestroy {
 
   ngOnChanges(): void {
     this.sub?.unsubscribe();
+    if (this.flush) {
+      this.fMark = null;
+      if (!this.hash) {
+        return;
+      }
+      this.sub = this.injector.get(FlushLiveService).mark$(this.hash).subscribe((m) => {
+        this.fMark = m;
+        const st = m?.finality?.status;
+        this.fColor = st === 'final' ? '#3bd16f' : st === 'anchored' ? (PROFILE.color) : 'transparent';
+        this.fTitle = m ? (m.kind === 'pos' ? `Block of stake, slot ${m.slot}` + (m.proposer ? `, signed by ${m.proposer}` : '')
+          : 'BMM block' + (m.mainheight ? `, committed to by eCash block ${m.mainheight}` : ''))
+          + (st ? ` · ${st}` + (m.finality?.anchors ? ` (${m.finality.anchors} anchors)` : '') : '') : '';
+        this.cd.markForCheck();
+      });
+      return;
+    }
     if (this.l2) {
       // (the services are taken here, so that the eCash explorer never makes the sidechain one, nor the reverse)
       const l2Live = this.injector.get(L2LiveService);

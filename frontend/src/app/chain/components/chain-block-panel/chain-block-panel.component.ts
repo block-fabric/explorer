@@ -23,7 +23,7 @@ export class ChainBlockPanelComponent implements OnChanges, OnDestroy {
 
   profile = PROFILE;
   /** a sidechain explorer: its own panel (chain/l2/full/l2-block-panel.component.ts) */
-  l2 = PROFILE.kind === 'l2';
+  l2 = PROFILE.kind !== 'l1'; // (Flush too: chain/modules/flush/views)
   block: DrivechainBlock | null = null;
   loading = true;
   error: string | null = null;

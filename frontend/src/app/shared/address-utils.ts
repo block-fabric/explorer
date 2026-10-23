@@ -3,7 +3,7 @@ import { ScriptInfo } from '@app/shared/script.utils';
 import { Vin, Vout } from '@interfaces/electrs.interface';
 import { BECH32_CHARS_LW, BASE58_CHARS, HEX_CHARS } from '@app/shared/regex.utils';
 import { parseTaproot } from './transaction.utils';
-import { CHAIN_NETWORK, PROFILE } from '@app/chain/profiles';
+import { CHAIN_NETWORK, PROFILE, chainAddressParams } from '@app/chain/profiles';
 import { isL2Address } from '@app/chain/l2/l2-address';
 
 export type AddressType = 'fee'
@@ -83,6 +83,11 @@ const ADDRESS_PREFIXES = {
 // explorer runs as (see regex.utils.ts)
 if (CHAIN_NETWORK === 'ecashtest') {
   (ADDRESS_PREFIXES as any).mainnet = ADDRESS_PREFIXES.testnet;
+}
+// ... and Flush (chain/profiles.ts FLUSH_ADDRESSES) its own prefixes
+const CHAIN_ADDR = chainAddressParams();
+if (CHAIN_ADDR) {
+  (ADDRESS_PREFIXES as any).mainnet = { base58: { pubkey: CHAIN_ADDR.base58.pubkey, script: CHAIN_ADDR.base58.script }, bech32: CHAIN_ADDR.bech32 + '1' };
 }
 
 // precompiled regexes for common address types (excluding prefixes)

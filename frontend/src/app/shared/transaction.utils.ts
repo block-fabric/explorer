@@ -6,7 +6,7 @@ import { StateService } from '@app/services/state.service';
 import { hash, Hash } from '@app/shared/sha256';
 import { AddressType, AddressTypeInfo, detectAddressType } from '@app/shared/address-utils';
 import * as secp256k1 from '@noble/secp256k1';
-import { PROFILE } from '@app/chain/profiles';
+import { PROFILE, chainAddressParams } from '@app/chain/profiles';
 
 // Bitcoin Core default policy settings
 const MAX_STANDARD_TX_WEIGHT = 400_000;
@@ -472,8 +472,9 @@ function isDustOutput(value: number, scriptpubkey: string): boolean {
  * For now, just pull out individual rules into versioned functions where necessary.
  */
 export function isNonStandard(tx: Transaction, height?: number, network?: string): boolean {
-  // eCash Explorer: a sidechain's transactions follow its own rules, not Bitcoin Core's standardness (dust, sigops...)
-  if (PROFILE.kind === 'l2') {
+  // eCash Explorer: a sidechain's transactions follow its own rules, not Bitcoin Core's standardness (dust, sigops...);
+  // Flush's (kind 'flush') too: its asset, peg and stake markers are OP_RETURNs its policy takes
+  if (PROFILE.kind !== 'l1') {
     return false;
   }
   // version
@@ -2017,9 +2018,21 @@ export function addressToScriptPubKey(address: string, network: string): { scrip
   return { scriptPubKey: null, type };
 }
 
+// eCash Explorer: Flush's addresses have prefixes of their own (chain/profiles.ts FLUSH_ADDRESSES)
+const CHAIN_ADDR = chainAddressParams();
+function hrpOf(network: string): string {
+  return CHAIN_ADDR ? CHAIN_ADDR.bech32 : ['testnet', 'testnet4', 'signet'].includes(network) ? 'tb' : 'bc';
+}
+function p2pkhVersionOf(network: string): number {
+  return CHAIN_ADDR ? CHAIN_ADDR.p2pkh : ['testnet', 'testnet4', 'signet'].includes(network) ? 0x6f : 0x00;
+}
+function p2shVersionOf(network: string): number {
+  return CHAIN_ADDR ? CHAIN_ADDR.p2sh : ['testnet', 'testnet4', 'signet'].includes(network) ? 0xc4 : 0x05;
+}
+
 function p2pkh(pubKeyHash: string, network: string): string {
   const pubkeyHashArray = hexStringToUint8Array(pubKeyHash);
-  const version = ['testnet', 'testnet4', 'signet'].includes(network) ? 0x6f : 0x00;
+  const version = p2pkhVersionOf(network);
   const versionedPayload = Uint8Array.from([version, ...pubkeyHashArray]);
   const hash1 = new Hash().update(versionedPayload).digest();
   const hash2 = new Hash().update(hash1).digest();
@@ -2031,7 +2044,7 @@ function p2pkh(pubKeyHash: string, network: string): string {
 
 function p2sh(scriptHash: string, network: string): string {
   const scriptHashArray = hexStringToUint8Array(scriptHash);
-  const version = ['testnet', 'testnet4', 'signet'].includes(network) ? 0xc4 : 0x05;
+  const version = p2shVersionOf(network);
   const versionedPayload = Uint8Array.from([version, ...scriptHashArray]);
   const hash1 = new Hash().update(versionedPayload).digest();
   const hash2 = new Hash().update(hash1).digest();
@@ -2043,7 +2056,7 @@ function p2sh(scriptHash: string, network: string): string {
 
 function p2wpkh(pubKeyHash: string, network: string): string {
   const pubkeyHashArray = hexStringToUint8Array(pubKeyHash);
-  const hrp = ['testnet', 'testnet4', 'signet'].includes(network) ? 'tb' : 'bc';
+  const hrp = hrpOf(network);
   const version = 0;
   const words = [version].concat(toWords(pubkeyHashArray));
   const bech32Address = bech32Encode(hrp, words);
@@ -2052,7 +2065,7 @@ function p2wpkh(pubKeyHash: string, network: string): string {
 
 function p2wsh(scriptHash: string, network: string): string {
   const scriptHashArray = hexStringToUint8Array(scriptHash);
-  const hrp = ['testnet', 'testnet4', 'signet'].includes(network) ? 'tb' : 'bc';
+  const hrp = hrpOf(network);
   const version = 0;
   const words = [version].concat(toWords(scriptHashArray));
   const bech32Address = bech32Encode(hrp, words);
@@ -2061,7 +2074,7 @@ function p2wsh(scriptHash: string, network: string): string {
 
 function p2tr(pubKey: string, network: string): string {
   const pubkeyArray = hexStringToUint8Array(pubKey);
-  const hrp = ['testnet', 'testnet4', 'signet'].includes(network) ? 'tb' : 'bc';
+  const hrp = hrpOf(network);
   const version = 1;
   const words = [version].concat(toWords(pubkeyArray));
   const bech32Address = bech32Encode(hrp, words, 'bech32m');
@@ -2070,7 +2083,7 @@ function p2tr(pubKey: string, network: string): string {
 
 function p2a(network: string): string {
   const pubkeyHashArray = hexStringToUint8Array('4e73');
-  const hrp = ['testnet', 'testnet4', 'signet'].includes(network) ? 'tb' : 'bc';
+  const hrp = hrpOf(network);
   const version = 1;
   const words = [version].concat(toWords(pubkeyHashArray));
   const bech32Address = bech32Encode(hrp, words, 'bech32m');
@@ -2162,13 +2175,13 @@ function base58ToSpk(address: string, network: string): string | null {
     const payloadHex = uint8ArrayToHexString(payload);
 
     // P2PKH
-    const p2pkhVersion = ['testnet', 'testnet4', 'signet'].includes(network) ? 0x6f : 0x00;
+    const p2pkhVersion = p2pkhVersionOf(network);
     if (version === p2pkhVersion) {
       return '76a914' + payloadHex + '88ac';
     }
 
     // P2SH
-    const p2shVersion = ['testnet', 'testnet4', 'signet'].includes(network) ? 0xc4 : 0x05;
+    const p2shVersion = p2shVersionOf(network);
     if (version === p2shVersion) {
       return 'a914' + payloadHex + '87';
     }
@@ -2220,7 +2233,7 @@ function bech32Decode(address: string): { prefix: string, words: number[], encod
 }
 
 function bech32ToSpk(address: string, network: string): string | null {
-  const expectedHrp = ['testnet', 'testnet4', 'signet'].includes(network) ? 'tb' : 'bc';
+  const expectedHrp = hrpOf(network);
   try {
     const decoded = bech32Decode(address);
     if (decoded.prefix !== expectedHrp) {

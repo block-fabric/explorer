@@ -11,8 +11,12 @@ import { L2Chain } from './l2/types';
 export interface ChainProfile {
   /** the module id, the value of CHAIN.PROFILE */
   id: string;
-  /** l1: the eCash mainchain explorer (a node, upstream mempool); l2: a sidechain explorer (chain/l2/) */
-  kind: 'l1' | 'l2';
+  /**
+   * l1: the eCash mainchain explorer (a node, upstream mempool); l2: a sidechain explorer (chain/l2/); flush: a
+   * sidechain whose node speaks Bitcoin Core's RPC itself (Flush): upstream mempool on it, without the eCash
+   * drivechain index, plus the module's own routes (chain/modules/flush/)
+   */
+  kind: 'l1' | 'l2' | 'flush';
   name: string;
   unit: string;
   /** BIP300 slot on the eCash mainchain; null for the mainchain itself */

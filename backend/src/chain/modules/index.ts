@@ -6,6 +6,7 @@ import bitassets from './bitassets';
 import truthcoin from './truthcoin';
 import zside from './zside';
 import coinshift from './coinshift';
+import flush from './flush';
 
 /**
  * The chain modules this backend knows; CHAIN.PROFILE picks one. Each has its folder here and its counterpart on the
@@ -20,4 +21,6 @@ export const MODULES: ChainModule[] = [
   truthcoin,
   zside,
   coinshift,
+  // a sidechain read through its public DEX API (kind flush, chain/modules/flush/)
+  flush,
 ];

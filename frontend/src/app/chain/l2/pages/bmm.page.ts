@@ -51,6 +51,9 @@ export function reverseHex(h: string): string {
 export class L2BmmPage implements OnInit, AfterViewInit, OnDestroy {
   profile = PROFILE;
   slot = PROFILE.slot as number;
+  /** a sidechain explorer of its own blocks and peg lists (kind 'l2'); Flush (chain/modules/flush) reuses this page for
+   * its BMM, with the peg on its /peg page, and its block links by the hash the BMM commitment names */
+  sideLists = PROFILE.kind === 'l2';
   windows = WINDOWS;
   feeds = FEEDS;
   window = 1440;

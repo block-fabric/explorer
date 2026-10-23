@@ -33,7 +33,7 @@ export class DrivechainLiveService {
   private retries = new Map<string, number>();
 
   constructor(private api: ChainApiService, private stateService: StateService) {
-    if (PROFILE.kind === 'l2') {
+    if (PROFILE.kind !== 'l1') {
       // a sidechain explorer has no drivechain index of its own (its BMM marks: chain/l2/full/l2-live.service.ts)
       this.cockpit$ = of(null);
       this.peg$ = of([]);
@@ -88,7 +88,7 @@ export class DrivechainLiveService {
 
   /** a mark for one block, wherever it is shown (block and transaction pages, old blocks) */
   requestHash(hash: string): void {
-    if (PROFILE.kind === 'l2' || !hash || this.marks.has(hash) || this.asked.has(hash)) {
+    if (PROFILE.kind !== 'l1' || !hash || this.marks.has(hash) || this.asked.has(hash)) {
       return;
     }
     this.asked.add(hash);
@@ -110,7 +110,7 @@ export class DrivechainLiveService {
 
   /** marks for blocks shown elsewhere (the blocks list page) */
   request(blocks: { hash: string; height: number }[]): void {
-    if (PROFILE.kind === 'l2') {
+    if (PROFILE.kind !== 'l1') {
       return;
     }
     const missing = blocks.filter(b => !this.marks.has(b.hash));

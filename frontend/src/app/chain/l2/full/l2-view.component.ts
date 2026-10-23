@@ -7,13 +7,21 @@ import { PROFILE } from '@app/chain/profiles';
  * transaction page's content panel, the address page's holdings, the dashboard's widgets. Upstream's templates (and
  * the chain/ components SharedModule declares) place them through this host, which imports nothing of chain/l2 up
  * front: the views import SharedModule themselves, and stay out of the eCash explorer's bundles. On the eCash explorer
- * (PROFILE.kind 'l1') it shows nothing.
+ * (PROFILE.kind 'l1') it shows nothing; on Flush's (kind 'flush') it shows Flush's views (chain/modules/flush/views).
  */
 const VIEWS: Record<string, () => Promise<Type<any>>> = {
   block: () => import('@app/chain/l2/full/l2-block-panel.component').then(m => m.L2BlockPanelComponent),
   tx: () => import('@app/chain/l2/full/l2-tx-panel.component').then(m => m.L2TxPanelComponent),
   address: () => import('@app/chain/l2/full/l2-address-panel.component').then(m => m.L2AddressPanelComponent),
   widget: () => import('@app/chain/l2/full/l2-widget.component').then(m => m.L2WidgetComponent),
+};
+
+/** Flush's views (kind 'flush', chain/modules/flush/views): the same places on upstream's pages */
+const FLUSH_VIEWS: Record<string, () => Promise<Type<any>>> = {
+  block: () => import('@app/chain/modules/flush/views/flush-block-panel.component').then(m => m.FlushBlockPanelComponent),
+  tx: () => import('@app/chain/modules/flush/views/flush-tx-panel.component').then(m => m.FlushTxPanelComponent),
+  address: () => import('@app/chain/modules/flush/views/flush-address-panel.component').then(m => m.FlushAddressPanelComponent),
+  widget: () => import('@app/chain/modules/flush/views/flush-widget.component').then(m => m.FlushWidgetComponent),
 };
 
 export type L2ViewName = 'block' | 'tx' | 'address' | 'widget';
@@ -34,11 +42,12 @@ export class L2ViewComponent implements OnChanges {
   constructor(private cd: ChangeDetectorRef) {}
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (PROFILE.kind !== 'l2' || !changes.view || this.loaded === this.view || !VIEWS[this.view]) {
+    const views = PROFILE.kind === 'flush' ? FLUSH_VIEWS : VIEWS;
+    if (PROFILE.kind === 'l1' || !changes.view || this.loaded === this.view || !views[this.view]) {
       return;
     }
     const view = this.loaded = this.view;
-    VIEWS[view]().then((c) => {
+    views[view]().then((c) => {
       if (this.loaded === view) {
         this.component = c;
         this.cd.markForCheck();

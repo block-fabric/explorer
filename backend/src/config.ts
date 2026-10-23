@@ -206,6 +206,16 @@ interface IConfig {
     L2_ROLE: 'index' | 'full';
     // 'index': the port of the Core JSON-RPC view, bound to 127.0.0.1; 0 = none
     L2_RPC_PORT: number;
+    // The Flush explorer (kind flush, chain/modules/flush/, chains/FLUSH-API.md): upstream's backend on the Flush node
+    // (CORE_RPC, -txindex), plus /api/v1/flush/*. PUBLIC_API: the node's public DEX API (flushd -publicapi), its base
+    // URL (http://host:port), read with the Host header PUBLIC_API_HOST (the node accepts only the names it is told,
+    // -publicapihost); empty = no /api/v1/flush/market/*. SLOT: its BIP300 slot on eCash (46; 99 on betanet for now).
+    FLUSH: {
+      PUBLIC_API: string;
+      PUBLIC_API_HOST: string;
+      PUBLIC_API_TIMEOUT: number;
+      SLOT: number;
+    };
   }
 }
 
@@ -399,6 +409,12 @@ const defaults: IConfig = {
     'MAINCHAIN_API': '',
     'L2_ROLE': 'index',
     'L2_RPC_PORT': 0,
+    'FLUSH': {
+      'PUBLIC_API': '',
+      'PUBLIC_API_HOST': '',
+      'PUBLIC_API_TIMEOUT': 10000,
+      'SLOT': 46,
+    },
   }
 };
 

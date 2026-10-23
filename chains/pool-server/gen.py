@@ -19,7 +19,12 @@ node and serves /api/v1/l2/* and /api/v1/chain, plus a Bitcoin Core JSON-RPC vie
 port>; api-<explorer>-full (CHAIN.L2_ROLE full) is upstream mempool's backend (MariaDB explorer_<id>, mempool,
 websocket, statistics, block indexing, address index) with that view as its node. nginx sends /api/v1/chain and
 /api/v1/l2/ to the first, the websocket and the rest of /api to the second.
-  python3 gen.py [--out stage] [--tag local]
+The Flush explorer (kind flush, chains/FLUSH-API.md) is one backend, api-betanet-flush: upstream mempool's (MariaDB
+explorer_betanet_flush, mempool, websocket, statistics, block indexing, address index) on the Flush node's own Core
+RPC (secrets/betanet-flush.rpc), plus /api/v1/flush/*: the node's read RPCs on an allowlist and the reads of the
+node's public DEX API (markets, launches). nginx rate-limits /api/v1/flush/ per IP. An explorer whose 'enabled' is
+False is left out (no container, config, database, nginx location or link): for a network whose node is not reachable.
+  python3 gen.py [--out stage] [--tag local] [--enable betanet-flush]
 """
 import argparse, json, os
 
@@ -48,7 +53,24 @@ EXPLORERS = [
     }
     for i, (profile, rpc) in enumerate([('thunder', 16009), ('bitnames', 16002), ('bitassets', 16004),
                                         ('truthcoin', 16013), ('zside', 16098), ('coinshift', 16255)])
+] + [
+    # Flush (kind flush): upstream mempool on the Flush node's Core RPC (-txindex; a read-only rpcauth user with an
+    # rpcwhitelist, its "user:password" in secrets/betanet-flush.rpc) and the node's public DEX API (flushd -publicapi,
+    # firewalled to this server; it accepts the Host name flush.markets only). Betanet runs Flush on slot 99 for now
+    # (its own slot is 46). The lab node's slot-99 flushd: RPC 38994 (rpcauth user "explorer" with an rpcwhitelist of
+    # the reads chains/FLUSH-API.md lists, -txindex) and public API 38996, both firewalled to this server.
+    {
+        'id': 'betanet-flush', 'path': 'betanet/flush', 'kind': 'flush', 'profile': 'flush', 'network': 'ecashbeta',
+        'enabled': True, 'api_port': 18957, 'rpc_host': SIDECHAIN_HOST, 'rpc_port': 38994, 'secret': 'betanet-flush',
+        'public_api': f'http://{SIDECHAIN_HOST}:38996', 'public_api_host': 'flush.markets',
+        # 15-second blocks: a week of them indexed into MariaDB
+        'indexing_blocks': 40320, 'weight': 4000000, 'mem': '512m', 'heap_mb': 384,
+    },
 ]
+# An explorer with 'enabled': False (e.g. a Flush explorer of a network whose node's RPC is not reachable from here) is
+# left out of everything gen.py writes, unless named with --enable <id>
+# Flush's slot on each network (CHAIN.FLUSH.SLOT of every explorer there: the eCash explorer names the slot after it)
+FLUSH_SLOT = {'ecashbeta': 99}
 # The front page goes to this explorer
 HOME = 'betanet'
 # Explorers renamed since they went public: the old URL path redirects to the new one (301, the rest of the path and
@@ -59,6 +81,11 @@ RENAMED = {'betanet/hivemind': 'betanet/truthcoin'}
 # TX_BODY (a sidechain tx: chain/l2/submit.ts takes 64 KB; an eCash tx up to 100 kB, 200 kB as hex)
 TX_RATE, TX_BURST = '6r/m', 6
 TX_BODY = {'l1': '256k', 'l2': '64k'}
+TX_BODY['flush'] = TX_BODY['l1']
+# The Flush explorer's reads of its node (/api/v1/flush/: allowlisted RPCs, quotes, the public DEX API) per client IP;
+# the public API counts this whole server as one client (-publicapirate, -publicapiburst): the backend's cache and
+# this keep us under its budget
+FLUSH_RATE, FLUSH_BURST = '5r/s', 20
 
 # The server has no swap: if memory runs out, the kernel must kill an explorer container before the pool's node or its
 # enforcer (which would stop mining). Positive scores make the explorer the OOM killer's first choice, the full sidechain
@@ -75,18 +102,25 @@ def db_name(e):
     return 'explorer_' + e['id'].replace('-', '_')
 
 
-def rpc_auth(network):
-    path = os.path.join(ROOT, 'secrets', f'{network}.rpc')
+def rpc_auth(name):
+    path = os.path.join(ROOT, 'secrets', f'{name}.rpc')
     try:
         user, password = open(path).read().strip().split(':', 1)
     except (OSError, ValueError):
-        raise SystemExit(f'{path}: missing or not "user:password" (the read-only RPC user of the {network} node)')
+        raise SystemExit(f'{path}: missing or not "user:password" (the read-only RPC user of the {name} node)')
     return user, password
+
+
+def flush_chain(network, extra=None):
+    """CHAIN.FLUSH of an explorer on a network: Flush's slot there (and the public API for the Flush explorer)"""
+    return {**({'SLOT': FLUSH_SLOT[network]} if network in FLUSH_SLOT else {}), **(extra or {})}
 
 
 def backend_config(e, urls):
     if e['kind'] == 'l2':
         return l2_config(e, urls)
+    if e['kind'] == 'flush':
+        return flush_config(e, urls)
     user, password = rpc_auth(e['network'])
     return {
         'MEMPOOL': {
@@ -111,6 +145,41 @@ def backend_config(e, urls):
             'ENFORCER': {'URL': e['enforcer'], 'TIMEOUT': 60000, 'MAX_CONCURRENT': 2},
             'EXPLORER_URLS': urls,
             'ADDRESS_INDEX': False,
+            'FLUSH': flush_chain(e['network']),
+        },
+    }
+
+
+def flush_config(e, urls):
+    """The Flush explorer: upstream mempool on the Flush node's RPC (no enforcer, no drivechain index), its address
+    index, and /api/v1/flush/* (the node's read RPCs, its public DEX API)"""
+    user, password = rpc_auth(e['secret'])
+    return {
+        'MEMPOOL': {
+            'NETWORK': 'mainnet', 'BACKEND': 'none', 'HTTP_PORT': e['api_port'], 'CACHE_DIR': '/backend/cache',
+            'BLOCK_WEIGHT_UNITS': e['weight'], 'INDEXING_BLOCKS_AMOUNT': e['indexing_blocks'], 'USER_AGENT': 'ecash-explorer',
+            'STDOUT_LOG_MIN_PRIORITY': 'info', 'AUTOMATIC_POOLS_UPDATE': False, 'ENABLED': True,
+            'POLL_RATE_MS': 2000, 'API_URL_PREFIX': '/api/v1/', 'SPAWN_CLUSTER_PROCS': 0,
+        },
+        'CORE_RPC': {
+            'HOST': e['rpc_host'], 'PORT': e['rpc_port'], 'USERNAME': user, 'PASSWORD': password, 'TIMEOUT': 60000,
+            'COOKIE': False,
+        },
+        'DATABASE': {
+            'ENABLED': True, 'HOST': '127.0.0.1', 'PORT': DB_PORT, 'DATABASE': db_name(e),
+            'USERNAME': 'mempool', 'PASSWORD': 'mempool',
+        },
+        'STATISTICS': {'ENABLED': True, 'TX_PER_SECOND_SAMPLE_PERIOD': 150},
+        'FIAT_PRICE': {'ENABLED': False},
+        'MAXMIND': {'ENABLED': False},
+        'CHAIN': {
+            'PROFILE': e['profile'], 'NETWORK': e['network'],
+            'MAINCHAIN_EXPLORER': urls.get(e['network'], ''),
+            'EXPLORER_URLS': urls,
+            'ADDRESS_INDEX': True,
+            'FLUSH': flush_chain(e['network'], {
+                'PUBLIC_API': e['public_api'], 'PUBLIC_API_HOST': e['public_api_host'], 'PUBLIC_API_TIMEOUT': 10000,
+            }),
         },
     }
 
@@ -139,6 +208,7 @@ def l2_config(e, urls):
             'ADDRESS_INDEX': False,
             'L2_ROLE': 'index',
             'L2_RPC_PORT': e['l2_rpc_port'],
+            'FLUSH': flush_chain(e['network']),
         },
     }
 
@@ -170,6 +240,7 @@ def l2_full_config(e, urls):
             'EXPLORER_URLS': urls,
             'ADDRESS_INDEX': True,
             'L2_ROLE': 'full',
+            'FLUSH': flush_chain(e['network']),
         },
     }
 
@@ -183,7 +254,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--out', default='stage')
     ap.add_argument('--tag', default='local')
+    ap.add_argument('--enable', action='append', default=[], help="an explorer whose 'enabled' is False, to deploy anyway")
     a = ap.parse_args()
+    EXPLORERS[:] = [e for e in EXPLORERS if e.get('enabled', True) or e['id'] in a.enable]
     out = a.out
     # cross links: the eCash explorer of each network by network id (the network switcher), the sidechain explorers by
     # profile id (the chain switcher)
@@ -223,7 +296,7 @@ def main():
          f'    entrypoint: ["sh", "-c", "mysql -h 127.0.0.1 -P {DB_PORT} -uroot -padmin < /initdb/databases.sql"]']
 
     def api(name, e, mem, cpus, heap, config, data, depends):
-        oom = OOM_SCORE_FULL if name.endswith('-full') else OOM_SCORE
+        oom = OOM_SCORE_FULL if name.endswith('-full') or e['kind'] == 'flush' else OOM_SCORE
         r = [f'  api-{name}:', f'    image: ecash-explorer/backend:{a.tag}', f'    container_name: ecash-explorer-api-{name}',
              '    restart: unless-stopped', '    network_mode: host', '    user: "1000:1000"', f"    mem_limit: {mem}", f"    cpus: {cpus}",
              f'    oom_score_adj: {oom}']
@@ -237,6 +310,8 @@ def main():
         p = e['id']
         if e['kind'] == 'l1':
             L += api(p, e, e['mem'], 1.0, e['heap_mb'], p, p, [('db-setup', 'service_completed_successfully')])
+        elif e['kind'] == 'flush':
+            L += api(p, e, e['mem'], 0.5, e['heap_mb'], p, p, [('db-setup', 'service_completed_successfully')])
         else:
             L += api(p, e, e['mem'], 0.5, e['heap_mb'], p, p, [])
             L += api(f'{p}-full', e, e['full_mem'], 0.5, e['full_heap_mb'], f'{p}-full', f'{p}-full',
@@ -254,9 +329,13 @@ def main():
         post = f"limit_req zone=explorer_tx burst={TX_BURST} nodelay; client_max_body_size {TX_BODY[e['kind']]};"
         posts = ''.join(f"    location = /{p}/api/{v}{r} {{ {post} proxy_pass http://127.0.0.1:{prt}/api/v1/{r}; }}\n"
                         for r in ('tx', 'txs/test', 'txs/package') for v in ('', 'v1/'))
+        if e['kind'] == 'flush':
+            # Flush's own reads (node RPCs, quotes, the public DEX API): rate limited per IP
+            posts += (f"    location ^~ /{p}/api/v1/flush/ {{ limit_except GET {{ deny all; }} limit_req zone=explorer_tx burst={TX_BURST} nodelay; "
+                      f"limit_req zone=explorer_flush burst={FLUSH_BURST} nodelay; proxy_pass http://127.0.0.1:{prt}/api/v1/flush/; }}\n")
         if e['kind'] == 'l2':
             posts += f"    location = /{p}/api/v1/l2/tx {{ {post} proxy_pass http://127.0.0.1:{e['api_port']}/api/v1/l2/tx; }}\n"
-        idx = '' if e['kind'] == 'l1' else f'''    location = /{p}/api/v1/chain {{ proxy_pass http://127.0.0.1:{e['api_port']}/api/v1/chain; }}
+        idx = '' if e['kind'] != 'l2' else f'''    location = /{p}/api/v1/chain {{ proxy_pass http://127.0.0.1:{e['api_port']}/api/v1/chain; }}
     location ^~ /{p}/api/v1/l2/ {{ proxy_pass http://127.0.0.1:{e['api_port']}/api/v1/l2/; }}
 '''
         loc.append(f'''    # {p}: {e['profile']} on {e['network']}
@@ -290,6 +369,8 @@ map "$request_method:$uri" $explorer_tx_key {{
     default                                               "";
 }}
 limit_req_zone $explorer_tx_key zone=explorer_tx:10m rate={TX_RATE};
+# The Flush explorer's reads of Flush's public DEX API, per client IP
+limit_req_zone $binary_remote_addr zone=explorer_flush:10m rate={FLUSH_RATE};
 
 server {{
     listen 80;
@@ -333,6 +414,10 @@ server {{
     with open(os.path.join(out, 'explorers.json'), 'w') as f:
         json.dump(EXPLORERS, f, indent=2)
     for e in EXPLORERS:
+        if e['kind'] == 'flush':
+            print(f"{e['id']:18} https://{DOMAIN}/{e['path']}/  {e['profile']} on {e['network']}  api 127.0.0.1:{e['api_port']}"
+                  f"  rpc {e['rpc_host']}:{e['rpc_port']} ({db_name(e)})  public api {e['public_api']} (Host {e['public_api_host']})")
+            continue
         src = f"rpc 127.0.0.1:{e['rpc_port']}" if e['kind'] == 'l1' else \
             f"sidechain {e['sidechain_rpc']}  core view 127.0.0.1:{e['l2_rpc_port']}  full api 127.0.0.1:{e['full_port']} ({db_name(e)})"
         print(f"{e['id']:18} https://{DOMAIN}/{e['path']}/  {e['profile']} on {e['network']}  api 127.0.0.1:{e['api_port']}"

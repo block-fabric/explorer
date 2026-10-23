@@ -18,17 +18,17 @@
       <!-- eCash Explorer: a sidechain (chain/l2/full): its tip, its eCash carrier block, counts -->
       <div class="col card-wrapper" *ngIf="l2">
         <div class="main-title">{{ profile.name }}</div>
-        <app-drivechain-widget kind="chain"></app-drivechain-widget>
+        <app-drivechain-widget [kind]="flush ? 'flush-chain' : 'chain'"></app-drivechain-widget>
       </div>
     </ng-container>
     <!-- eCash Explorer: drivechain widgets (a sidechain's: its escrow on eCash against its wealth, its BMM on eCash) -->
     <div class="col card-wrapper">
-      <div class="main-title">{{ l2 ? 'Escrow and wealth' : 'Sidechain treasury' }}</div>
-      <app-drivechain-widget kind="treasury"></app-drivechain-widget>
+      <div class="main-title">{{ flush ? 'DEX' : l2 ? 'Escrow and wealth' : 'Sidechain treasury' }}</div>
+      <app-drivechain-widget [kind]="flush ? 'flush-dex' : 'treasury'"></app-drivechain-widget>
     </div>
     <div class="col card-wrapper">
-      <div class="main-title">Blind merged mining</div>
-      <app-drivechain-widget kind="bmm"></app-drivechain-widget>
+      <div class="main-title">{{ flush ? 'Launches' : 'Blind merged mining' }}</div>
+      <app-drivechain-widget [kind]="flush ? 'flush-launches' : 'bmm'"></app-drivechain-widget>
     </div>
     <div class="col">
       <div class="card graph-card">
@@ -125,7 +125,7 @@
                 <th class="table-cell-height" i18n="dashboard.latest-blocks.height">Height</th>
                 <th class="table-cell-mined" i18n="dashboard.latest-blocks.mined">Mined</th>
                 <th class="table-cell-transaction-count" i18n="dashboard.latest-blocks.transaction-count">TXs</th>
-                <th class="table-cell-chain">{{ l2 ? 'eCash block' : 'Sidechains' }}</th>
+                <th class="table-cell-chain">{{ flush ? 'Kind' : l2 ? 'eCash block' : 'Sidechains' }}</th>
                 <th class="table-cell-size" i18n="dashboard.latest-blocks.size">Size</th>
               </thead>
               <tbody *ngIf="blocks$ | async as blocks; else blocksSkeleton">
@@ -161,24 +161,24 @@
       </div>
     </div>
     <div class="col card-wrapper">
-      <div class="main-title">{{ l2 ? 'Pending withdrawal bundle' : 'Withdrawal bundles' }}</div>
-      <app-drivechain-widget kind="bundles"></app-drivechain-widget>
+      <div class="main-title">{{ flush ? 'Stake' : l2 ? 'Pending withdrawal bundle' : 'Withdrawal bundles' }}</div>
+      <app-drivechain-widget [kind]="flush ? 'flush-stake' : 'bundles'"></app-drivechain-widget>
     </div>
     <!-- (a sidechain without fee estimates: deposits and withdrawals apart, to keep the grid even) -->
     <ng-container *ngIf="!l2 || mempoolInfoData.fees; else splitPeg">
       <div class="col card-wrapper">
-        <div class="main-title">Peg activity</div>
-        <app-drivechain-widget kind="peg"></app-drivechain-widget>
+        <div class="main-title">{{ flush ? 'Drivechain' : 'Peg activity' }}</div>
+        <app-drivechain-widget [kind]="flush ? 'flush-peg' : 'peg'"></app-drivechain-widget>
       </div>
     </ng-container>
     <ng-template #splitPeg>
       <div class="col card-wrapper">
-        <div class="main-title">Deposits</div>
-        <app-drivechain-widget kind="deposits"></app-drivechain-widget>
+        <div class="main-title">{{ flush ? 'Drivechain' : 'Deposits' }}</div>
+        <app-drivechain-widget [kind]="flush ? 'flush-peg' : 'deposits'"></app-drivechain-widget>
       </div>
       <div class="col card-wrapper">
-        <div class="main-title">Withdrawals</div>
-        <app-drivechain-widget kind="withdrawals"></app-drivechain-widget>
+        <div class="main-title">{{ flush ? 'Recent trades' : 'Withdrawals' }}</div>
+        <app-drivechain-widget [kind]="flush ? 'flush-trades' : 'withdrawals'"></app-drivechain-widget>
       </div>
     </ng-template>
   </div>

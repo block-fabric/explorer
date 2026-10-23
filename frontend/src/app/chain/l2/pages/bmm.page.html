@@ -270,8 +270,12 @@
     </div>
   }
 
+  @if (sideLists) {
   <div id="peg">
     <h2 class="cp-h2">Deposits and withdrawals <span class="cp-h2-sub">every deposit into {{ profile.name }} and every withdrawal to eCash, newest first</span></h2>
     <app-l2-transfers [embedded]="true" [kind]="pegKind"></app-l2-transfers>
   </div>
+  } @else {
+  <p class="mt-3"><a routerLink="/peg">{{ profile.name }}'s peg: the escrow, deposits, withdrawals and the bundle →</a></p>
+  }
 </div>

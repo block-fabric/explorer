@@ -1,5 +1,6 @@
 import { createHash } from 'crypto';
 import { NETWORK, NetworkId } from './networks';
+import { PROFILE } from './profile';
 
 /**
  * The eCash mining pools, per network, from LayerTwo's mining-pools list (the source of pool attribution for the
@@ -67,12 +68,17 @@ export function poolLogo(tag: string | null | undefined): string | null {
   return poolFor(tag)?.logo ?? null;
 }
 
+/** The pools of this explorer's chain: eCash's on its network; none for Flush (blocks of stake, every one "Unknown") */
+function chainPools(): PoolMeta[] {
+  return PROFILE.kind === 'flush' ? [] : POOLS[NETWORK.id] ?? [];
+}
+
 /**
  * This network's pools in mempool's pools-v2.json format, for upstream's block attribution (tasks/pools-updater.ts
  * imports it instead of mempool.space's Bitcoin list): the coinbase tag, escaped, is the regex its blocks match.
  */
 export function poolsJson(): { id: number; name: string; link: string; addresses: string[]; tags: string[] }[] {
-  return (POOLS[NETWORK.id] ?? []).map(p => ({
+  return chainPools().map(p => ({
     id: p.id, name: p.name, link: '', addresses: [], tags: [p.tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')],
   }));
 }
@@ -84,5 +90,5 @@ export function poolsSha(): string {
 
 /** The pools-table unique ids this network's list uses */
 export function poolIds(): number[] {
-  return (POOLS[NETWORK.id] ?? []).map(p => p.id);
+  return chainPools().map(p => p.id);
 }

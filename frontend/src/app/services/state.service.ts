@@ -249,7 +249,8 @@ export class StateService {
 
     // eCash Explorer: a sidechain explorer (chain/profiles.ts L2_FULL) has no proof of work, no price, no lightning,
     // no accelerator and no other network: whatever the container says, upstream's pages for those stay off
-    if (PROFILE.kind === 'l2') {
+    // (Flush, kind 'flush', likewise: proof of stake, no price)
+    if (PROFILE.kind !== 'l1') {
       Object.assign(this.env, {
         MINING_DASHBOARD: false, LIGHTNING: false, AUDIT: false, ACCELERATOR: false, ACCELERATOR_BUTTON: false,
         PUBLIC_ACCELERATIONS: false, HISTORICAL_PRICE: false, ADDITIONAL_CURRENCIES: false, STRATUM_ENABLED: false,

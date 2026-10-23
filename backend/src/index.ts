@@ -55,6 +55,7 @@ import addressIndex from './chain/address-index';
 import drivechainRoutes, { moduleNewBlock } from './chain/drivechain.routes';
 import { PROFILE, l2Role } from './chain/profile';
 import l2Routes from './chain/l2/routes';
+import flushRoutes from './chain/modules/flush/routes';
 import l2Index from './chain/l2/index';
 import { CoreFacade } from './chain/l2/facade';
 import { MAX_SUBMIT_BYTES } from './chain/l2/submit';
@@ -235,9 +236,9 @@ class Server {
 
     this.setUpHttpApiRoutes();
     addressIndex.start(); // Chains Explorer: address lookups without electrs
-    if (role === 'full') {
+    if (role === 'full' || PROFILE.kind === 'flush') {
       // a sidechain: the drivechain index and the chain module are the eCash explorer's (the BMM views and the
-      // sidechain's features are the index backend's, /api/v1/l2/*)
+      // sidechain's features are the index backend's, /api/v1/l2/*, or Flush's own routes below)
       blocks.setNewBlockCallback(() => addressIndex.onNewBlock());
     } else {
       // Chains Explorer: the drivechain index (BIP300/301 on the mainchain) and the chain module
@@ -470,7 +471,9 @@ class Server {
     if (!config.MEMPOOL.OFFICIAL) {
       aboutRoutes.initRoutes(this.app);
     }
-    if (l2Role() !== 'full') { // a sidechain's /api/v1/chain and /api/v1/l2/* are its index backend's
+    if (PROFILE.kind === 'flush') {
+      flushRoutes.initRoutes(this.app); // Chains Explorer: Flush's /api/v1/chain and /api/v1/flush/* (chains/FLUSH-API.md)
+    } else if (l2Role() !== 'full') { // a sidechain's /api/v1/chain and /api/v1/l2/* are its index backend's
       drivechainRoutes.initRoutes(this.app); // Chains Explorer: /api/v1/chain, /api/v1/drivechain/*, /api/v1/chain/*
     }
   }

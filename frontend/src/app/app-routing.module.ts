@@ -8,7 +8,7 @@ import { ClockComponent } from '@components/clock/clock.component';
 import { StatusViewComponent } from '@components/status-view/status-view.component';
 import { AddressGroupComponent } from '@components/address-group/address-group.component';
 import { TrackerGuard } from '@app/route-guards';
-import { L2_FULL, L2_LEAN } from '@app/chain/profiles';
+import { FLUSH, L2_FULL, L2_LEAN } from '@app/chain/profiles';
 
 const browserWindow = window as typeof window & { __env?: any };
 const browserWindowEnv = browserWindow.__env || {};
@@ -371,12 +371,13 @@ if (browserWindowEnv && browserWindowEnv.BASE_MODULE === 'liquid') {
 // upstream's routes (its sidechain pages are in master-page.module.ts), but not the pages of what a sidechain has not:
 // proof of work (mining, pools, hashrate), the accelerator, lightning, the price, the eCash drivechain cockpit
 const L2_NOT_HERE = /^(mining|acceleration|lightning|stratum|drivechain|graphs\/(mining|acceleration|lightning|price))(\/|$)/;
-if (L2_FULL) {
+// (Flush, kind 'flush', likewise: proof of stake; its drivechain page is /peg)
+if (L2_FULL || FLUSH) {
   routes = [
     {
       matcher: (segments: UrlSegment[]) => L2_NOT_HERE.test(segments.map(s => s.path).join('/'))
         ? { consumed: segments } : null,
-      redirectTo: (r) => r.url.map(s => s.path).join('/').startsWith('drivechain') ? '/bmm' : '/',
+      redirectTo: (r) => r.url.map(s => s.path).join('/').startsWith('drivechain') ? (FLUSH ? '/peg' : '/bmm') : '/',
     },
     ...routes,
   ];

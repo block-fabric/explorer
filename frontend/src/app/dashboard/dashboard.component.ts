@@ -38,7 +38,9 @@ interface MempoolStatsData {
 export class DashboardComponent implements OnInit, OnDestroy, AfterViewInit {
   network$: Observable<string>;
   /** eCash Explorer: a sidechain explorer (chain/l2/full): its sidechain widgets in place of the drivechain and mining ones */
-  l2 = PROFILE.kind === 'l2';
+  l2 = PROFILE.kind !== 'l1';
+  /** Flush (chain/modules/flush): its own widgets in those places (stake and finality, the DEX, launches, the peg) */
+  flush = PROFILE.kind === 'flush';
   profile = PROFILE;
   /** a sidechain backend may give no fee estimates (all zero): then the fees card stays out */
   hasFees$: Observable<boolean>;

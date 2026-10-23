@@ -26,7 +26,8 @@ export class BlocksList implements OnInit {
 
   isMempoolModule = false;
   indexingAvailable = false;
-  l2 = PROFILE.kind === 'l2'; // eCash Explorer: a sidechain explorer (chain/l2/full)
+  l2 = PROFILE.kind !== 'l1'; // (Flush too: its blocks' kind and finality)
+  flushKind = PROFILE.kind === 'flush'; // eCash Explorer: a sidechain explorer (chain/l2/full)
   auditAvailable = false;
   isLoading = true;
   fromBlockHeight = undefined;

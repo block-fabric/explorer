@@ -44,7 +44,20 @@ import { l2FeatureNav } from '@app/chain/l2/l2-nav';
       <p>The explorer reads the chain from a {{ profile.name }} node, indexes it, and reads the eCash side (deposits, withdrawal bundles,
         BMM requests and accepts) from the eCash explorer of the same network.</p>
     </ng-container>
-    <ng-container *ngIf="!l2">
+    <ng-container *ngIf="flush">
+      <p>{{ profile.name }} is a sidechain of eCash (BIP300 slot {{ profile.slot }}) built on Bitcoin Core: blocks of stake every slot, signed by
+        the slot's leader among the bonded validators, and anchored to eCash by blind merged mining (BIP301), so that blocks become anchored,
+        then final. On it: assets with tickers and logos, a DEX (pools of several kinds, concentrated liquidity, order books, all orders of
+        a block cleared together), bonding-curve launches that graduate into a locked pool, a treasury, oracles and verified issuers.
+        ECX moves onto it by a deposit into its escrow on eCash, and back in withdrawal bundles that eCash miners vote on.</p>
+      <p>Besides blocks, transactions, addresses and the mempool (with each block's kind, slot, signer and finality, and what each
+        transaction does with assets, the peg and stake), this explorer shows
+        <ng-container *ngFor="let n of nav; let last = last"><a [routerLink]="[n.path]">{{ n.title.toLowerCase() }}</a>{{ last ? '' : ', ' }}</ng-container>.</p>
+      <h2>Where the data comes from</h2>
+      <p>The explorer reads the chain from a {{ profile.name }} node over RPC (its read-only methods), the markets' trades, candles and
+        holders from the node's public DEX API, and the eCash side of the peg and BMM from the eCash explorer of the same network.</p>
+    </ng-container>
+    <ng-container *ngIf="!l2 && !flush">
     <p>eCash ({{ profile.unit }}) is a fork of Bitcoin with Bitcoin's own formats: the same addresses, 8-decimal amounts, 10-minute blocks,
       difficulty retargets every 2016 blocks and halvings every 210,000 blocks. It adds drivechains (BIP300 and BIP301): sidechains that
       lock {{ profile.unit }} in an escrow on eCash, have their blocks committed by eCash miners through blind merged mining, and send coins
@@ -90,6 +103,7 @@ export class ChainAboutPage implements OnInit {
   profile = PROFILE;
   networkName = NETWORK_NAME;
   l2 = PROFILE.kind === 'l2';
+  flush = PROFILE.kind === 'flush';
   nav = PROFILE.kind === 'l2' ? l2FeatureNav((MODULE.features ?? []) as string[]) : (MODULE.nav ?? []);
   chain$: Observable<ChainInfo | null>;
 
