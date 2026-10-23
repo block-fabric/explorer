@@ -136,7 +136,14 @@
           <span>{{ (backendInfo$ | async)?.hostname }} (v{{ (backendInfo$ | async )?.version }}) [<a target="_blank" href="https://github.com/mempool/mempool/commit/{{ (backendInfo$ | async )?.gitCommit | slice:0:8 }}">{{ (backendInfo$ | async )?.gitCommit | slice:0:8 }}</a>]</span>
           <span *ngIf="stateService.env.GIT_COMMIT_HASH_MEMPOOL_SPACE">[{{ (servicesBackendInfo$ | async )?.gitCommit | slice:0:8 }}]</span>
         </p>
-        <p *ngIf="!officialMempoolSpace">{{ profile.name }} {{ networkName }} Explorer · by <a href="https://blockfab.org" target="_blank" rel="noopener">blockfab.org</a> · mempool v{{ packetJsonVersion }} [{{ frontendGitCommitHash }}]</p>
+        <ng-container *ngIf="!officialMempoolSpace">
+          <!-- eCash Explorer: who runs these explorers, and what they are built on -->
+          <a class="blockfab" href="https://blockfab.org" target="_blank" rel="noopener" title="BlockFab: an independent lab on eCash">
+            <svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" fill="#38e0e8"/><rect x="18" y="2" width="12" height="12" rx="2" fill="#38e0e8" opacity=".55"/><rect x="2" y="18" width="12" height="12" rx="2" fill="#38e0e8" opacity=".55"/><rect x="18" y="18" width="12" height="12" rx="2" fill="#38e0e8"/></svg>
+            <span class="name">BlockFab</span><span class="tag">an independent lab on eCash</span>
+          </a>
+          <p class="credit">{{ profile.name }} {{ networkName }} Explorer · based on <a href="https://github.com/mempool/mempool" target="_blank" rel="noopener">mempool</a> (AGPL-3.0) · v{{ packetJsonVersion }} [{{ frontendGitCommitHash }}]</p>
+        </ng-container>
       </div>
     </div>
   </div>
