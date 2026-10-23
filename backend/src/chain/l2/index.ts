@@ -62,8 +62,12 @@ export interface StoredTx {
   shielded: Shielded | null;
   /** per input, the output it spends when no tx of the index made it (the chain's state did): from get_stxos */
   prevouts?: (RawOutput | null)[];
-  /** a market tx: whether its block applied it, and the Payout outputs the state made for it */
-  market?: { applied: boolean; payouts: { outpoint: any; output: RawOutput; kind: PayoutKind }[] };
+  /**
+   * a market tx: whether its block applied it, and the Payout outputs the state made for it. `unknown`: the node's
+   * outputs could not be read (stateOfTx); the tx then spends and pays nothing in the index until a later sync reads
+   * them (retryUnknown), and the API says its state is unknown
+   */
+  market?: { applied: boolean; payouts: { outpoint: any; output: RawOutput; kind: PayoutKind }[]; unknown?: boolean };
 }
 
 export interface BundleEventRef {
@@ -119,7 +123,7 @@ export interface TxEntry {
   shielded: Shielded | null;
   signers: (string | null)[];
   /** a market tx: its terms, whether applied, its cost in the market (null: an input not valued) */
-  market: { terms: MarketTerms; applied: boolean; cost: number | null; kinds: PayoutKind[] } | null;
+  market: { terms: MarketTerms; applied: boolean; unknown: boolean; cost: number | null; kinds: PayoutKind[] } | null;
   /** the outputs the chain's state made for it (a market tx's payouts), Core view vouts after its own outputs */
   payouts: OutRef[];
 }
@@ -169,6 +173,8 @@ const FILLABLE = new Set(['bitname', 'bitnameReservation', 'bitasset', 'bitasset
 
 /** The largest reply accepted when looking up the node's outputs of a market tx's addresses (stateOfTx) */
 const NODE_OUTPUTS_MAX_BYTES = 8 * 1024 * 1024;
+/** How many market txs of unknown state are read again per sync */
+const RETRY_UNKNOWN_PER_SYNC = 5;
 
 export class L2Index {
   /** the chain's module; the default is CHAIN.PROFILE's (tests give one) */
@@ -314,7 +320,31 @@ export class L2Index {
       }
       this.saveCache(this.stored.length > tip);
     }
+    await this.retryUnknown();
     this.ready = true;
+  }
+
+  /** Market txs whose state could not be read (stateOfTx): try a few again each sync */
+  private async retryUnknown(): Promise<void> {
+    let changed = false;
+    let tries = 0;
+    for (const b of this.stored) {
+      const earlier = new Set<string>();
+      for (const t of b.txs) {
+        if (t.market?.unknown && tries < RETRY_UNKNOWN_PER_SYNC) {
+          tries++;
+          delete t.market;
+          await this.stateOfTx(t, earlier);
+          const state = t.market as StoredTx['market'];
+          changed = changed || !state?.unknown;
+        }
+        earlier.add(t.txid);
+      }
+    }
+    if (changed) {
+      this.rebuild();
+      this.saveCache(true);
+    }
   }
 
   private async fetch(height: number): Promise<{ height: number; hash: string; block: any; index: any } | null> {
@@ -497,10 +527,14 @@ export class L2Index {
       node = await this.nodeOutputs([...tx.signers.filter((x): x is string => !!x), ...specs.map(s => s.address)]);
     } catch (e) {
       // Anyone can pile outputs onto an address and make these lookups huge: rather than stall the index on this block,
-      // leave the tx unvalued (inputs without values, the market's state unknown: counted as applied, no payouts). A
-      // node that is down is another matter: that error goes up, and the block is read again on the next sync.
+      // record the tx's market state as unknown (it spends and pays nothing in the index, and says so) and read it again
+      // on later syncs (retryUnknown). A node that is down is another matter: that error goes up, and the block is read
+      // again on the next sync.
       if (!/maxContentLength/i.test(e instanceof Error ? e.message : String(e))) {
         throw e;
+      }
+      if (terms) {
+        tx.market = { applied: false, payouts: [], unknown: true };
       }
       logger.warn(`L2 index: tx ${tx.txid} left unvalued, the node's outputs of its addresses could not be read: ${e instanceof Error ? e.message : e}`);
       return;
@@ -676,7 +710,7 @@ export class L2Index {
       if (terms) {
         fee = applied ? (this.chain.market as NonNullable<L2Chain['market']>).fee : 0;
         market = {
-          terms, applied, cost: !applied ? 0 : resolved ? inSum - outSum - payoutSum - fee : null, kinds: applied ? (t.market?.payouts ?? []).map(p => p.kind) : [],
+          terms, applied, unknown: !!t.market?.unknown, cost: !applied ? 0 : resolved ? inSum - outSum - payoutSum - fee : null, kinds: applied ? (t.market?.payouts ?? []).map(p => p.kind) : [],
         };
       } else {
         fee = resolved ? Math.max(0, inSum + shieldedIn - outSum) : 0;
@@ -929,7 +963,7 @@ export class L2Index {
     }
     const { trader, ...terms } = t.market.terms;
     return {
-      ...terms, applied: t.market.applied, cost: t.market.cost,
+      ...terms, applied: t.market.unknown ? null : t.market.applied, unknown: t.market.unknown, cost: t.market.unknown ? null : t.market.cost,
       payouts: t.payouts.map((r, i) => ({
         kind: t.market?.kinds[i] ?? 'buyChange', outpoint: r.outpoint, vout: r.vout, address: r.address, value: r.value, spent: r.spent,
       })),

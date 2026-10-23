@@ -143,6 +143,8 @@ export interface L2Market {
   limit: number | null;
   /** false: its block skipped it; null: unconfirmed */
   applied: boolean | null;
+  /** the node's record of this trade could not be read yet: what went to the market and came back is unknown */
+  unknown?: boolean;
   cost: number | null;
   payouts: { kind: L2PayoutKind; outpoint: L2OutPoint; vout: number; address: string; value: number; spent: L2Spent | null }[];
 }

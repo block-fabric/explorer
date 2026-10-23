@@ -49,7 +49,8 @@ const PAYOUT_NAMES: Record<string, string> = { buyChange: 'change', sellChange: 
           {{ abs(m.shares) | number }} shares of outcome {{ m.outcome }} in market <a [routerLink]="['/markets' | relativeUrl, m.marketId]" class="mono">{{ m.marketId }}</a>
         }
         @if (m.applied === false) {<div class="muted small">Skipped by its block (over its limit): its inputs were not spent and it paid no fee.</div>}
-        @if (m.applied === null) {<div class="muted small">Unconfirmed: what goes to the market and comes back is settled when a block applies it.</div>}
+        @if (m.unknown) {<div class="muted small">The node's record of this trade could not be read yet (the explorer retries): what went to the market and came back is not shown.</div>}
+        @else if (m.applied === null) {<div class="muted small">Unconfirmed: what goes to the market and comes back is settled when a block applies it.</div>}
       </td></tr>
       @if (m.applied !== false) {
         @if (m.cost !== null) {

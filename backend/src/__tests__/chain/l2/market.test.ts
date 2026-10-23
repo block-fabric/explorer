@@ -182,7 +182,7 @@ describe('Truthcoin: what the node says of a market tx (get_utxos, get_stxos)', 
   function stored(applied: boolean): any {
     const tx: any = { txid: BUY, size: 158, inputs: [{ Deposit: `${h('d')}:1` }], outputs: [], data: trade(10000, T, 8013), signers: [P], shielded: null };
     const change = payout(BUY, 1, 'buyChange');
-    jest.spyOn(rpc, 'call').mockImplementation(async (method: string, addrs: any) => {
+    jest.spyOn(rpc, 'callLimited').mockImplementation(async (method: string, _max: number, addrs: any) => {
       expect(addrs).toEqual([P, T]);
       if (method === 'get_utxos') {
         return applied ? [{ outpoint: change, output: { address: T, content: value(9992000) } }]
@@ -210,8 +210,25 @@ describe('Truthcoin: what the node says of a market tx (get_utxos, get_stxos)', 
     expect(tx.market).toEqual({ applied: false, payouts: [] });
   });
 
+  test('a reply too large to read leaves its state unknown: it spends and pays nothing', async () => {
+    const index = new L2Index(chain);
+    index.loadBlocks(blocks().slice(0, 1));
+    const tx = stored(true);
+    jest.spyOn(rpc, 'callLimited').mockRejectedValue(new Error('maxContentLength size of 8388608 exceeded'));
+    await (index as any).stateOfTx(tx, new Set());
+    expect(tx.market).toEqual({ applied: false, payouts: [], unknown: true });
+  });
+
+  test('a node that does not answer is not taken for an unknown state: the error goes up', async () => {
+    const index = new L2Index(chain);
+    index.loadBlocks(blocks().slice(0, 1));
+    const tx = stored(true);
+    jest.spyOn(rpc, 'callLimited').mockRejectedValue(new Error('connect ECONNREFUSED'));
+    await expect((index as any).stateOfTx(tx, new Set())).rejects.toThrow('ECONNREFUSED');
+  });
+
   test('another chain\'s txs ask nothing', async () => {
-    const spy = jest.spyOn(rpc, 'call');
+    const spy = jest.spyOn(rpc, 'callLimited');
     const index = new L2Index(thunder.l2 as L2Chain);
     const tx: any = { txid: BUY, inputs: [{ Regular: { txid: h('0'), vout: 0 } }], outputs: [], data: null, signers: [P] };
     await (index as any).stateOfTx(tx, new Set());

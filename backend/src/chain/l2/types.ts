@@ -159,8 +159,10 @@ export interface MarketView {
   outcome: number | null;
   shares: number;
   limit: number | null;
-  /** false: the block skipped it (a buy over its limit, a sell under its minimum): no sats moved, no fee */
-  applied: boolean;
+  /** false: the block skipped it (a buy over its limit, a sell under its minimum): no sats moved, no fee; null: unknown */
+  applied: boolean | null;
+  /** the node's outputs for this tx could not be read yet: its state (applied, cost, payouts) is unknown */
+  unknown?: boolean;
   /** sats into the market (LMSR cost + the market's trading fee, an AmplifyBeta's amount), negative for a sell's net
    * proceeds; null when an input could not be valued (or for a mempool tx) */
   cost: number | null;

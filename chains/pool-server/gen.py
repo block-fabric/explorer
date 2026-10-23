@@ -265,6 +265,7 @@ def main():
     location ^~ /{p}/resources/ {{ alias {ROOT}/www/resources/; expires 1h; }}
     location ^~ /{p}/api/v1/ws {{ proxy_pass http://127.0.0.1:{prt}/; proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "Upgrade"; proxy_read_timeout 1h; }}
     location ^~ /{p}/api/v1/services {{ return 404; }}
+    location ^~ /{p}/api/v1/internal {{ return 404; }}
 {posts}{idx}    location ^~ /{p}/api/v1 {{ proxy_pass http://127.0.0.1:{prt}/api/v1; }}
     location ^~ /{p}/api/ {{ proxy_pass http://127.0.0.1:{prt}/api/v1/; }}
     location = /{p}/api {{ try_files /{p}/index.html =404; }}
@@ -279,12 +280,13 @@ def main():
 # Written by {ROOT}/gen.py. The api containers listen on 127.0.0.1 (host network), one port each.
 # The certificate is its own (certbot certonly --webroot -w /var/www/html -d {DOMAIN}), apart from the other sites'.
 
-# the POST routes that broadcast a tx, per client IP (this file is included in nginx's http block). Keyed on the
-# method and the normalized path, whatever location serves it: a trailing slash or another location cannot get around it
-# (the backends route /tx/ like /tx). Other requests have an empty key: not limited.
+# Every POST to an explorer's API, per client IP (this file is included in nginx's http block): the routes that
+# broadcast a tx (tx, tx/push, txs/test, txs/package, l2/tx, …) and those that make the node work (decode, psbt). Keyed
+# on the method and the normalized path, whatever location serves it, so a trailing slash or another location cannot
+# get around it. Only the read-only POSTs the pages use (prevouts, cpfp) are exempt; GETs have an empty key.
 map "$request_method:$uri" $explorer_tx_key {{
-    "~^POST:/.+/api/(v1/)?(l2/)?tx/?$"                    $binary_remote_addr;
-    "~^POST:/.+/api/(v1/)?txs/(test|package)/?$"          $binary_remote_addr;
+    "~^POST:/.+/api/(v1/)?(prevouts|cpfp)/?$"             "";
+    "~^POST:/.+/api/"                                     $binary_remote_addr;
     default                                               "";
 }}
 limit_req_zone $explorer_tx_key zone=explorer_tx:10m rate={TX_RATE};
