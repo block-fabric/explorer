@@ -48,7 +48,7 @@ export type FreebankWidgetKind = 'freebank-chain' | 'freebank-credit' | 'freeban
                 <div class="big"><div class="big-value">{{ d.active ?? '–' }}</div><div class="big-label">active bills</div></div>
               </div>
               <table class="kv"><tbody>
-                <tr><td>eCash chain</td><td>@if (d.mainCount) {<app-fb-ecash kind="block" [id]="d.mainCount" [text]="(d.mainCount | number) + ' blocks'"></app-fb-ecash> <span class="muted">as the node follows it</span>} @else {<span class="muted">–</span>}</td></tr>
+                <tr><td>eCash chain</td><td>@if (d.mainCount) {<app-fb-ecash kind="block" [id]="d.mainCount" [text]="(d.mainCount | number) + ' blocks'"></app-fb-ecash><span class="muted">&nbsp;as the node follows it</span>} @else {<span class="muted">–</span>}</td></tr>
                 <tr><td>Slot</td><td>{{ profile.slot }} · blind merged mined on eCash</td></tr>
                 <tr><td>Chain</td><td>{{ d.bci?.chain }} · {{ (d.bci?.size_on_disk ?? 0) / 1e9 | number:'1.0-1' }} GB on disk</td></tr>
               </tbody></table>
@@ -137,7 +137,7 @@ export class FreebankWidgetComponent implements OnChanges {
     const load = (): Observable<any> => {
       switch (this.kind) {
         case 'freebank-chain':
-          return combineLatest([this.api.rpc$<any>('getblockchaininfo'), safe(this.api.rpc$<number>('getmainchainblockcount')),
+          return combineLatest([this.api.rpc$<any>('getblockchaininfo'), safe(this.api.mainBlockCount$()),
             safe(this.api.rpc$<House[]>('listhouses'), []), safe(this.api.rpc$<Bill[]>('listbills'), [])])
             .pipe(map(([bci, mainCount, houses, bills]) => ({ bci, mainCount, houses, active: (bills ?? []).filter(b => b.status === 'a').length })));
         case 'freebank-credit':

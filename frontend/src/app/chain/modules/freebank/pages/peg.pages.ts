@@ -155,7 +155,7 @@ export class FreebankPegPage implements OnInit {
   ngOnInit(): void {
     this.seo.setTitle(`${PROFILE.name} drivechain: the peg`);
     const safe = <T>(o: Observable<T>) => o.pipe(catchError(() => of(null)));
-    this.node$ = timer(0, 60000).pipe(switchMap(() => fbResult(this.api.rpc$<number>('getmainchainblockcount').pipe(
+    this.node$ = timer(0, 60000).pipe(switchMap(() => fbResult(this.api.mainBlockCount$().pipe(
       catchError(() => of(null)),
       switchMap(count => safe(this.api.rpc$<any>('getmainchaininfo')).pipe(map(info => ({ count, info })))),
       switchMap(n => safe(this.api.drivechain$<any>('cockpit', { window: 144 })).pipe(map(c => ({ ...n, slot: c?.slots?.find((s: any) => s.slot === PROFILE.slot) ?? null })))),

@@ -75,6 +75,13 @@ export class FreebankApiService {
     return this.api.get<T>('freebank/rpc/' + method, args.length ? { args: JSON.stringify(args) } : undefined);
   }
 
+  /** the eCash chain's height as the node follows it (getmainchainblockcount answers { blockcount }), null: unknown */
+  mainBlockCount$(): Observable<number | null> {
+    return this.rpc$<number | { blockcount?: number }>('getmainchainblockcount').pipe(
+      map(r => (typeof r === 'number' ? r : r?.blockcount) ?? null),
+    );
+  }
+
   /** what a transaction does on FreeBank (GET /api/v1/freebank/tx/:txid): its credit family and operation */
   tx$<T>(txid: string): Observable<T> {
     return this.api.get<T>('freebank/tx/' + this.seg(txid));
