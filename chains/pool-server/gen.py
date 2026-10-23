@@ -52,6 +52,12 @@ EXPLORERS = [
 # The front page goes to this explorer
 HOME = 'betanet'
 
+# The server has no swap: if memory runs out, the kernel must kill an explorer container before the pool's node or its
+# enforcer (which would stop mining). Positive scores make the explorer the OOM killer's first choice, the full sidechain
+# backends before the rest.
+OOM_SCORE = 500
+OOM_SCORE_FULL = 800
+
 # How many of the newest blocks the backend indexes into MariaDB (block stats, mining pages). Each one is read in
 # full from the node, which also serves the pool's block templates: two weeks of blocks, not the whole chain.
 INDEXING_BLOCKS = 2016
@@ -195,7 +201,7 @@ def main():
     L = ['# Written by gen.py (eCash explorers on the pool server); edit that and run it again.',
          'name: ecash-explorer', 'services:',
          '  db:', '    image: mariadb:10.5.21', '    container_name: ecash-explorer-db', '    restart: unless-stopped',
-         '    network_mode: host', '    mem_limit: 512m', '    cpus: 1.0',
+         '    network_mode: host', '    mem_limit: 512m', '    cpus: 1.0', f'    oom_score_adj: {OOM_SCORE}',
          '    environment:', '      MYSQL_USER: mempool', '      MYSQL_PASSWORD: mempool', '      MYSQL_ROOT_PASSWORD: admin',
          f'    command: ["--bind-address=127.0.0.1", "--port={DB_PORT}", "--innodb-buffer-pool-size=256M", "--performance-schema=OFF",'
          ' "--max-connections=120", "--skip-name-resolve", "--innodb-log-buffer-size=8M", "--key-buffer-size=8M"]',
@@ -209,8 +215,10 @@ def main():
          f'    entrypoint: ["sh", "-c", "mysql -h 127.0.0.1 -P {DB_PORT} -uroot -padmin < /initdb/databases.sql"]']
 
     def api(name, e, mem, cpus, heap, config, data, depends):
+        oom = OOM_SCORE_FULL if name.endswith('-full') else OOM_SCORE
         r = [f'  api-{name}:', f'    image: ecash-explorer/backend:{a.tag}', f'    container_name: ecash-explorer-api-{name}',
-             '    restart: unless-stopped', '    network_mode: host', '    user: "1000:1000"', f"    mem_limit: {mem}", f"    cpus: {cpus}"]
+             '    restart: unless-stopped', '    network_mode: host', '    user: "1000:1000"', f"    mem_limit: {mem}", f"    cpus: {cpus}",
+             f'    oom_score_adj: {oom}']
         if depends:
             r += ['    depends_on:'] + [f'      {d}:\n        condition: {c}' for d, c in depends]
         return r + ['    environment:', '      MEMPOOL_CONFIG_FILE: /config/mempool-config.json',
