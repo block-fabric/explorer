@@ -22,6 +22,10 @@ export interface CockpitSlotStats {
   accepts: number;
   coverage: number;            // accepts / blocks in the window
   lastAcceptHeight: number | null;
+  /** the newest accepted bid in the window (sats), its mainchain block and time: the sidechain's current bid */
+  lastBid: number | null;
+  lastBidHeight: number | null;
+  lastBidTime: number | null;
   longestGap: number;          // the most mainchain blocks in a row without a block of this sidechain
   requests: number;
   rejected: number;            // M8 requests not accepted
@@ -92,7 +96,7 @@ function compute(tip: number, window: number, slotFilter: number | null, escrowN
     if (!slots.has(slot)) {
       slots.set(slot, {
         slot, name: sidechains.find(s => s.slot === slot)?.title ?? name, profile: profileBySlot(slot)?.id ?? null,
-        accepts: 0, coverage: 0, lastAcceptHeight: null, longestGap: 0, requests: 0, rejected: 0, contested: 0,
+        accepts: 0, coverage: 0, lastAcceptHeight: null, lastBid: null, lastBidHeight: null, lastBidTime: null, longestGap: 0, requests: 0, rejected: 0, contested: 0,
         bids: 0, bidAvg: 0, bidMedian: 0, bidMax: 0, bidMin: 0, deposits: 0, depositAmount: 0, withdrawals: 0,
         withdrawalAmount: 0, netFlow: 0, upvotes: 0, downvotes: 0, abstains: 0, bundlesProposed: 0, bundlesPaid: 0,
         bundlesFailed: 0, _bids: [], _gap: 0,
@@ -150,6 +154,9 @@ function compute(tip: number, window: number, slotFilter: number | null, escrowN
       if (a.bid !== undefined && a.bid !== null) {
         s._bids.push(a.bid);
         s.bids += a.bid;
+        s.lastBid = a.bid;
+        s.lastBidHeight = b.height;
+        s.lastBidTime = b.time;
         totals.bids += a.bid;
         sb.bids[a.slot] = (sb.bids[a.slot] ?? 0) + a.bid;
         sb.bidsTotal += a.bid;

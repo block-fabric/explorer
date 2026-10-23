@@ -80,6 +80,29 @@
       </div>
     </div>
 
+    <!-- current bids: each active sidechain's newest accepted BMM bid -->
+    <h2 class="cp-h2">Current bids <span class="cp-h2-sub">each sidechain's newest accepted BMM bid, highest first; median and range {{ windowLabel() }}</span></h2>
+    <div class="box table-box">
+      <table class="table table-borderless table-sm cp-table bids-table">
+        <thead>
+          <tr><th>Sidechain</th><th class="text-right">Current bid</th><th class="text-right">Block</th><th class="text-right d-none d-sm-table-cell">Median</th>
+            <th class="text-right d-none d-md-table-cell">Range</th><th class="text-right d-none d-md-table-cell">Coverage</th></tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let s of currentBids(d); trackBy: trackSlot">
+            <td><app-sidechain-label [slot]="s.slot" [name]="s.name"></app-sidechain-label></td>
+            <td class="text-right"><b>{{ s.lastBid | number }}</b> <small>sats</small></td>
+            <td class="text-right"><a [routerLink]="['/block' | relativeUrl, s.lastBidHeight]">{{ s.lastBidHeight | number }}</a>
+              <span class="bid-age">{{ d.live.height - s.lastBidHeight === 0 ? 'tip' : (d.live.height - s.lastBidHeight) + ' ago' }}</span></td>
+            <td class="text-right d-none d-sm-table-cell">{{ s.bidMedian | number }}</td>
+            <td class="text-right d-none d-md-table-cell">{{ s.bidMin | number }} – {{ s.bidMax | number }}</td>
+            <td class="text-right d-none d-md-table-cell">{{ pct(s.coverage, 0) }}</td>
+          </tr>
+          <tr *ngIf="!currentBids(d).length"><td colspan="6" class="text-center">No BMM bid accepted in this window.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
     <!-- sidechains -->
     <h2 class="cp-h2">Sidechains</h2>
     <div class="sc-grid">

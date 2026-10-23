@@ -157,6 +157,18 @@ export class ChainCockpitComponent implements OnInit, OnDestroy {
     return h ? h.slice(0, 8) + '…' + h.slice(-6) : '';
   }
 
+  /** the sidechains with a bid accepted in the window, their newest bid first by amount */
+  currentBids(d: any): any[] {
+    if (this.bidsFor !== d) {
+      this.bidsFor = d;
+      this.bids = (d?.slots ?? []).filter((s: any) => s.lastBid !== null && s.lastBid !== undefined)
+        .sort((a: any, b: any) => b.lastBid - a.lastBid || a.slot - b.slot);
+    }
+    return this.bids;
+  }
+  private bidsFor: any = null;
+  private bids: any[] = [];
+
   slotStats(slot: number): any {
     return this.data?.slots?.find((s: any) => s.slot === slot);
   }
