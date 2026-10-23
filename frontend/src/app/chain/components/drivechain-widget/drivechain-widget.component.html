@@ -25,7 +25,8 @@
             <span *ngFor="let s of byEscrow(d); trackBy: trackSlot" class="seg" [style.flex]="s.escrow" [style.background]="colorOf(s.slot)" [title]="s.title + ': ' + (s.escrow / 1e8 | number:'1.0-2') + ' ' + profile.unit"></span>
           </div>
           <div class="list">
-            <div class="li" *ngFor="let s of byEscrow(d).slice(0, 6); trackBy: trackSlot">
+            <!-- every sidechain, in the order of the BMM panel beside it (d.live.sidechains), empty treasuries too -->
+            <div class="li" *ngFor="let s of d.live.sidechains; trackBy: trackSlot">
               <a *ngIf="s.explorer; else plainName" [href]="s.explorer" class="nm"><app-sidechain-label [slot]="s.slot" [name]="s.title"></app-sidechain-label></a>
               <ng-template #plainName><span class="nm"><app-sidechain-label [slot]="s.slot" [name]="s.title"></app-sidechain-label></span></ng-template>
               <span class="bar"><span class="fill" [style.width.%]="d.live.escrowTotal ? 100 * s.escrow / d.live.escrowTotal : 0" [style.background]="colorOf(s.slot)"></span></span>
