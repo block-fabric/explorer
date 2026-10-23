@@ -154,7 +154,8 @@ class Blocks {
     }
 
     // Fetch remaining txs in bulk
-    if ((isEsplora && (txIds.length - totalFound > 500)) || stale) {
+    // a node sidechain's big blocks (FreeBank: thousands of txs, a far node) from one getblock, not one call a tx
+    if (((isEsplora || nodeSidechain()) && (txIds.length - totalFound > 500)) || stale) {
       try {
         const rawTransactions = await bitcoinApi.$getTxsForBlock(blockHash, stale);
         for (const tx of rawTransactions) {

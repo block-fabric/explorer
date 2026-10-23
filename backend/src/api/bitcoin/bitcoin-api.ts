@@ -9,7 +9,7 @@ import transactionUtils from '../transaction-utils';
 import { Common } from '../common';
 import addressIndex from '../../chain/address-index';
 import indexer from '../../indexer';
-import { PROFILE } from '../../chain/profile';
+import { PROFILE, nodeSidechain } from '../../chain/profile';
 
 // Chains Explorer: a sidechain's node is the Core JSON-RPC view of its index (chain/l2/core.ts): verbose transactions
 // come with every input's prevout and the fee (getrawtransaction 2, getblock 3) and fields of the chain's own
@@ -125,7 +125,11 @@ class BitcoinApi implements AbstractBitcoinApi {
     const verboseBlock: IBitcoinApi.VerboseBlock = await this.bitcoindClient.getBlock(hash, FACADE ? 3 : 2);
     const transactions: IEsploraApi.Transaction[] = [];
     for (const tx of verboseBlock.tx) {
-      const converted = await this.$convertTransaction(tx, true, false, verboseBlock.confirmations === -1);
+      // a node sidechain (no getblock verbosity 3): no prevouts, as its per-tx fetch, and the block's confirmations so
+      // that no tx is looked up in the mempool
+      const converted = nodeSidechain()
+        ? await this.$convertTransaction({ ...tx, confirmations: verboseBlock.confirmations }, false)
+        : await this.$convertTransaction(tx, true, false, verboseBlock.confirmations === -1);
       converted.status = {
         confirmed: true,
         block_height: verboseBlock.height,
