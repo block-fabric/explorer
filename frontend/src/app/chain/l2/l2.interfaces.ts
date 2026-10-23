@@ -90,7 +90,7 @@ export interface L2Spent {
   txid: string | null;
   vin: number | null;
   height: number;
-  kind: 'tx' | 'bundle';
+  kind: 'tx' | 'bundle' | 'state';
 }
 
 export interface L2Input {
@@ -124,6 +124,37 @@ export interface L2TxSummary {
   shielded: { actions: number; valueBalance: number; flags: number } | null;
   /** the address of each input's verifying key, in input order */
   signers: string[];
+  /** a market tx (Truthcoin's Trade, AmplifyBeta), else null */
+  market?: L2Market | null;
+}
+
+export type L2PayoutKind = 'buyChange' | 'sellProceeds' | 'sellChange';
+
+/**
+ * What a market tx did (Truthcoin): its inputs = payouts + cost + fee (the miner fee). cost: sats into the market
+ * (negative: a sell's proceeds out of it); null when not known (an unconfirmed tx, an input the index cannot value)
+ */
+export interface L2Market {
+  action: 'buy' | 'sell' | 'amplify';
+  marketId: string;
+  outcome: number | null;
+  shares: number;
+  /** a buy's max cost incl. the miner fee, a sell's min proceeds */
+  limit: number | null;
+  /** false: its block skipped it; null: unconfirmed */
+  applied: boolean | null;
+  cost: number | null;
+  payouts: { kind: L2PayoutKind; outpoint: L2OutPoint; vout: number; address: string; value: number; spent: L2Spent | null }[];
+}
+
+/** An address's shares in the markets and its Votecoin (Truthcoin: GET l2/address/:address/positions) */
+export interface L2Positions {
+  address: string;
+  positions: { marketId: string; title: string | null; outcome: number; outcomeName: string | null; shares: number; price: number | null; value: number | null }[];
+  /** sats, the positions at the markets' current prices */
+  value: number;
+  votecoin: number;
+  height: number;
 }
 
 export interface L2Tx extends L2TxSummary {
@@ -176,6 +207,8 @@ export interface L2Address {
   balance: number;
   txs: { txid: string; height: number; time: number | null; delta: number }[];
   utxos: { outpoint: L2OutPoint; content: L2Content; value: number; height: number }[];
+  /** its unconfirmed txs (chains whose node lists its mempool; null: no mempool listing) and their net effect */
+  mempool?: { txs: (L2Tx & { delta: number })[]; delta: number } | null;
 }
 
 export interface L2SearchResult {

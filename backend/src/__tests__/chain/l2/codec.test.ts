@@ -7,7 +7,7 @@ import {
 import { thunderContent } from '../../../chain/modules/thunder';
 import { bitnamesContent } from '../../../chain/modules/bitnames';
 import { bitassetsContent } from '../../../chain/modules/bitassets';
-import { hivemindContent } from '../../../chain/modules/hivemind';
+import { truthcoinContent } from '../../../chain/modules/truthcoin';
 import { coinshiftContent, coinshiftData } from '../../../chain/modules/coinshift';
 
 // Fixtures: thunder-txhex.jsonl and bitnames-txhex.jsonl from backbone-{thunder,bitnames}/tests/data/betanet
@@ -38,7 +38,7 @@ describe('L2 txids', () => {
     expect(txidOfCanonical(z.canonical_bytes)).not.toBe(z.txid);
   });
 
-  test('coinbase txid: blake3(merkle_root ‖ prev_main ‖ Option<prev_side>) (Hivemind betanet block 0, spent in block 2)', () => {
+  test('coinbase txid: blake3(merkle_root ‖ prev_main ‖ Option<prev_side>) (Truthcoin betanet block 0, spent in block 2)', () => {
     expect(coinbaseTxid('984824aaa2883a8365cfa40df4b07b0f2caf2148256367a5e6147e331c575b1b',
       '0000000000000000cc7325c7048d6e0cb6eb87c35e8032917cddf70dd992b832', null))
       .toBe('a0a40e6a92a49d32254a93f713917d4080b8c28fc82d18ec07c00d893d16e228');
@@ -102,7 +102,7 @@ describe('L2 deposit text', () => {
     expect(depositAddress(hexText(`s2_${a}_zz`), 'prefix', 2)).toBe(BURN_ADDRESS);         // wrong checksum
     expect(depositAddress(hexText(formatDeposit(a, 4)), 'prefix', 2)).toBe(BURN_ADDRESS); // another slot
   });
-  test('Hivemind: the full 6-hex checksum, any case', () => {
+  test('Truthcoin: the full 6-hex checksum, any case', () => {
     const dep = formatDeposit(a, 13);
     expect(depositAddress(hexText(dep), 'checksum', 13)).toBe(a);
     expect(depositAddress(hexText(dep.toUpperCase().replace('S13_', 's13_').replace(a.toUpperCase(), a)), 'checksum', 13)).toBe(a);
@@ -148,8 +148,8 @@ describe('L2 content and data', () => {
     expect(bitassetsContent({ BitcoinWithdrawal: { value_sats: 189000, main_fee_sats: 10000, main_address: 'bc1q' } }))
       .toMatchObject({ type: 'withdrawal', value: 189000, mainFee: 10000 });
   });
-  test('Hivemind market funds hold sats', () => {
-    const c = hivemindContent({ MarketFunds: { market_id: [97, 94, 213, 19, 245, 102], amount: 1000000, is_fee: false } });
+  test('Truthcoin market funds hold sats', () => {
+    const c = truthcoinContent({ MarketFunds: { market_id: [97, 94, 213, 19, 245, 102], amount: 1000000, is_fee: false } });
     expect(c).toMatchObject({ type: 'marketFunds', value: 1000000, name: '615ed513f566' });
     expect(valueOf(c)).toBe(1000000);
   });

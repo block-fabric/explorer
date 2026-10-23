@@ -21,7 +21,7 @@ while read -r id p profile network weight; do
   grep -q "<base href=\"/$p/\">" "$OUT/www/$p/index.html"
   # the network in the page title, and absolute links for crawlers and link previews (they do not run the app)
   # (as the app titles its pages: "eCash Explorer (Betanet)")
-  case $profile in ecash) c=eCash ;; bitnames) c=BitNames ;; bitassets) c=BitAssets ;; zside) c=zSide ;; coinshift) c=Coinshift ;; *) c=${profile^} ;; esac
+  case $profile in ecash) c=eCash ;; truthcoin) c=Truthcoin ;; bitnames) c=BitNames ;; bitassets) c=BitAssets ;; zside) c=zSide ;; coinshift) c=Coinshift ;; *) c=${profile^} ;; esac
   case $network in ecash) n="$c Explorer" ;; ecashbeta) n="$c Explorer (Betanet)" ;; ecashtest) n="$c Explorer (Testnet)" ;; *) n="$c Explorer ($network)" ;; esac
   u="https://explorer.blockfab.org/$p"
   sed -i -e "s/eCash Explorer/$n/g" \

@@ -44,7 +44,7 @@ export function coinshiftData(raw: any): any {
 const coinshift: ChainModule = {
   profile: { id: 'coinshift', kind: 'l2', name: 'Coinshift', unit: 'sats', slot: 255, mainchain: false, subsidy: false },
   l2: {
-    txids: 'index', blockIndex: true, inputPairs: true, withdrawalBundleRpc: false, mempool: true, txInfo: false, fill: false,
+    txids: 'index', blockIndex: true, inputPairs: true, withdrawalBundleRpc: false, mempool: true, fill: false,
     depositRule: 'prefix', coinbaseOutPoint: 'merkleRoot', features: ['swaps'],
     content: coinshiftContent,
     data: coinshiftData,

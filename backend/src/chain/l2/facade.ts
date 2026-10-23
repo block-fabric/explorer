@@ -5,6 +5,7 @@ import { PROFILE } from '../profile';
 import { L2Index } from './index';
 import rpc from './rpc';
 import { isAddress } from './codec';
+import { SubmitError, submit } from './submit';
 import {
   CoreBlock, CoreOut, CoreTx, CoreView, DIFFICULTY, addressOfScript, chainwork, coins, renderTx, scriptJson, scriptOf,
 } from './core';
@@ -13,8 +14,9 @@ import {
  * A Bitcoin Core JSON-RPC view of the sidechain index (core.ts), for upstream mempool's backend running on a
  * sidechain (CHAIN.L2_ROLE 'full', CORE_RPC → 127.0.0.1:CHAIN.L2_RPC_PORT): the methods mempool calls with
  * MEMPOOL.BACKEND "none", in Core's shapes and error codes. Served by the index instance (CHAIN.L2_ROLE 'index'),
- * bound to 127.0.0.1, read-only: no wallet, no relay, no mining. JSON-RPC 1.0 or 2.0, one call or a batch per POST;
- * credentials are not checked (loopback only).
+ * bound to 127.0.0.1, read-only but for sendrawtransaction (the chain's own serialized tx as hex, to the node's
+ * public submit method: submit.ts; upstream's POST /api/tx): no wallet, no mining. JSON-RPC 1.0 or 2.0, one call or a
+ * batch per POST; credentials are not checked (loopback only).
  *
  * The mempool is the node's list_mempool (chains that have one; Thunder and zSide do not), read at most every
  * MEMPOOL_TTL ms. Mining figures are neutral: difficulty 1, no hashrate, a fixed 1 sat/vB fee estimate.
@@ -31,6 +33,7 @@ const RPC_TYPE_ERROR = -3;
 const RPC_INVALID_ADDRESS_OR_KEY = -5;
 const RPC_INVALID_PARAMETER = -8;
 const RPC_DESERIALIZATION_ERROR = -22;
+const RPC_VERIFY_REJECTED = -26;
 const RPC_IN_WARMUP = -28;
 const RPC_INVALID_REQUEST = -32600;
 const RPC_METHOD_NOT_FOUND = -32601;
@@ -251,6 +254,25 @@ export class CoreFacade {
       }
       case 'getzmqnotifications':
         return [];
+      case 'sendrawtransaction': {
+        const hex = p[0];
+        if (typeof hex !== 'string' || !/^([0-9a-f]{2})+$/i.test(hex)) {
+          throw new RpcError(RPC_DESERIALIZATION_ERROR, 'TX decode failed');
+        }
+        try {
+          const txid = await submit(this.index.chain, this.nodeRpc, { hex: hex.toLowerCase() });
+          this.poolAt = 0; // read list_mempool again
+          return txid;
+        } catch (e) {
+          if (!(e instanceof SubmitError)) {
+            throw e;
+          }
+          if (e.status === 502) {
+            throw new RpcError(RPC_MISC_ERROR, e.message);
+          }
+          throw new RpcError(e.reason ? RPC_VERIFY_REJECTED : RPC_DESERIALIZATION_ERROR, e.reason ? `${e.message}: ${e.reason}` : e.message);
+        }
+      }
     }
 
     const tip = this.warm();

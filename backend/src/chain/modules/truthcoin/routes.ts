@@ -1,9 +1,10 @@
 import { Application } from 'express';
 import { L2FeatureContext } from '../../l2/types';
+import { isAddress } from '../../l2/codec';
 import { IndexTx, IndexView, derived, hexOf, notFound, txsOf } from '../l2-views';
 
 /**
- * Hivemind's feature routes (chains/L2-API.md "markets"): the node's public market and oracle reads (market_list,
+ * Truthcoin's feature routes (chains/L2-API.md "markets"): the node's public market and oracle reads (market_list,
  * market_get, market_price_history, decision_status, decision_list, decision_get, vote_period, vote_list,
  * vote_voters, list_open_periods_with_pricing) joined with the index's CreateMarket and Trade txs.
  *
@@ -12,6 +13,8 @@ import { IndexTx, IndexView, derived, hexOf, notFound, txsOf } from '../l2-views
  *   GET feature/decisions           the oracle's decisions past "Created" (claimed, voting, resolved), counts by state
  *   GET feature/decisions/:id       one decision (6 hex): its votes and the markets that use it
  *   GET feature/votes               the current voting period, the voters (Votecoin holders), slot pricing
+ *   GET address/:address/positions  an address's shares (market_positions) valued at the markets' prices, and its
+ *                                   Votecoin (votecoin_balance)
  */
 
 export interface Trade {
@@ -24,8 +27,12 @@ export interface Trade {
   shares: number;
   trader: string | null;
   limitSats: number;
-  /** sats the tx put in: its inputs (or, for inputs the index cannot value, the fee the node reports: a trade has no outputs) */
+  /** sats the tx's inputs held */
   input: number;
+  /** sats into the market (negative: a sell's proceeds); null when an input could not be valued */
+  cost: number | null;
+  /** false: the block skipped it (over its limit) */
+  applied: boolean;
   fee: number;
 }
 
@@ -47,7 +54,8 @@ export function buildMarkets(txs: IndexTx[]): MarketsView {
       const id = marketIdOf(d.market_id);
       trades.set(id, [...(trades.get(id) ?? []), {
         txid: t.txid, height: t.height, time: t.time, marketId: id, outcome: Number(d.outcome_index ?? 0), shares: Number(d.shares ?? 0),
-        trader: d.trader ?? null, limitSats: Number(d.limit_sats ?? 0), input: Math.max(t.inputs.reduce((s, i) => s + (i.value ?? 0), 0), t.fee), fee: t.fee,
+        trader: d.trader ?? null, limitSats: Number(d.limit_sats ?? 0), input: t.inputs.reduce((s, i) => s + (i.value ?? 0), 0),
+        cost: t.market ? t.market.cost : null, applied: t.market ? t.market.applied !== false : true, fee: t.fee,
       }]);
     } else if (d?.type === 'CreateMarket') {
       created.push({ title: String(d.title ?? ''), height: t.height, time: t.time, txid: t.txid, creator: t.signers[0] ?? null });
@@ -91,6 +99,28 @@ export function featureRoutes(app: Application, prefix: string, ctx: L2FeatureCo
     }
     return out;
   });
+
+  app.get(ctx.root + 'address/:address/positions', ctx.handler(async (req, res) => {
+    const a = String(req.params.address);
+    if (!isAddress(a)) {
+      return ctx.fail(req, res, 400, 'Invalid address');
+    }
+    const [p, votecoin, list] = await Promise.all([
+      ctx.cached('positions:' + a, 5000, () => ctx.rpc.call('market_positions', a, null)),
+      ctx.cached('votecoin:' + a, 5000, () => ctx.rpc.call<number>('votecoin_balance', a)),
+      markets(),
+    ]);
+    const titles = new Map<string, string>((list ?? []).map(m => [m.market_id, m.title]));
+    const positions = (p?.positions ?? []).map((x: any) => ({
+      marketId: String(x.market_id), title: titles.get(x.market_id) ?? null, outcome: Number(x.outcome_index), outcomeName: x.outcome_name ?? null,
+      shares: Number(x.shares), price: typeof x.current_price === 'number' ? x.current_price : null,
+      value: typeof x.current_value === 'number' ? Math.floor(x.current_value) : null,
+    }));
+    res.json({
+      address: a, positions, value: positions.reduce((s: number, x: any) => s + (x.value ?? 0), 0), votecoin: Number(votecoin ?? 0),
+      height: index.tipHeight(),
+    });
+  }));
 
   app.get(prefix + 'markets', ctx.handler(async (req, res) => {
     const v = view(index);

@@ -25,7 +25,8 @@ export function thunderContent(raw: any): Content {
 const thunder: ChainModule = {
   profile: { id: 'thunder', kind: 'l2', name: 'Thunder', unit: 'sats', slot: 9, mainchain: false, subsidy: false },
   l2: {
-    txids: 'canonical', blockIndex: false, inputPairs: true, withdrawalBundleRpc: true, mempool: false, txInfo: false, fill: false,
+    txids: 'canonical', blockIndex: false, inputPairs: true, withdrawalBundleRpc: true, mempool: false, fill: false,
+    submit: { json: 'submit_transaction' },
     depositRule: 'bare', features: ['richlist'],
     content: thunderContent,
     featureRoutes(app, prefix, ctx) {

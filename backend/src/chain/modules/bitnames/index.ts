@@ -31,7 +31,8 @@ export function bitnamesContent(raw: any): Content {
 const bitnames: ChainModule = {
   profile: { id: 'bitnames', kind: 'l2', name: 'BitNames', unit: 'sats', slot: 2, mainchain: false, subsidy: false },
   l2: {
-    txids: 'index', blockIndex: true, inputPairs: false, withdrawalBundleRpc: false, mempool: true, txInfo: true, fill: true,
+    txids: 'index', blockIndex: true, inputPairs: false, withdrawalBundleRpc: false, mempool: true, fill: true,
+    submit: { json: 'submit_transaction' },
     depositRule: 'prefix', features: ['names'],
     content: bitnamesContent,
     featureRoutes(app, prefix, ctx) {

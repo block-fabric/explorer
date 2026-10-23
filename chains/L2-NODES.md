@@ -8,7 +8,7 @@ LayerTwo's Rust nodes). File references are into those repositories.
 | Thunder | 9 | 16009 / 6009 | blake3(canonical_bytes) of `get_block(hash, true)` | no |
 | BitNames | 2 | 16002 / 6002 | `get_block_index(hash).txs[].txid` | yes |
 | BitAssets | 4 | 16004 / 6004 | `get_block_index(hash).txs[].txid` | yes |
-| Hivemind (Truthcoin) | 13 | 16013 / 6013 | `get_block_index(hash).txs[].txid` | no |
+| Truthcoin (node: backbone-hivemind) | 13 | 16013 / 6013 | `get_block_index(hash).txs[].txid` | no |
 | zSide (thunder-orchard) | 98 | 16098 / 6098 | computed, see below | no |
 | Coinshift | 255 | 16255 / 6255 | `get_block_index(hash).txs[].txid` | see source |
 
@@ -22,7 +22,7 @@ or `216.128.183.114:<port>`.
   of the raw bytes, not reversed; mainchain hashes (prev_main_hash, deposit txids, m6id, get_bmm_inclusions) in
   Bitcoin display order (reversed).
 - Block hash = blake3(borsh(Header)): merkle_root[32] ‖ Option<prev_side_hash[32]> ‖ prev_main_hash[32, internal
-  order], and on Thunder, Hivemind and zSide ‖ u32 n ‖ n × root[32] (Empty/Placeholder = 32 zero bytes).
+  order], and on Thunder, Truthcoin and zSide ‖ u32 n ‖ n × root[32] (Empty/Placeholder = 32 zero bytes).
   Test vectors: backbone-thunder/tests/test_thunder_types.cpp:19-30.
 - Coinbase txid = blake3(merkle_root ‖ prev_main_hash ‖ Option<prev_side_hash>); its outputs are spent as
   OutPoint Coinbase{txid, vout}.
@@ -30,7 +30,7 @@ or `216.128.183.114:<port>`.
   `get_bmm_inclusions(block_hash)` = the eCash blocks (display order) whose BMM carried the block (the child of
   prev_main_hash). Blocks have no timestamp: use the BMM block's time.
 - Reorgs: follow prev_side_hash (null = genesis) and re-check get_block_hash(h) against stored hashes.
-- Ignore utreexo data: header.roots, tx.proof, and the second element of Thunder/Hivemind/zSide input pairs
+- Ignore utreexo data: header.roots, tx.proof, and the second element of Thunder/Truthcoin/zSide input pairs
   (utxo_hash = blake3(borsh(outpoint) ‖ borsh(spent output))).
 - Address = 20 bytes, base58 (Bitcoin alphabet) with no version byte or checksum; of a verifying key, the first 20
   bytes of BLAKE3-XOF(32-byte ristretto key). Burn address: 20 zero bytes = `11111111111111111111`.
@@ -71,7 +71,7 @@ or `216.128.183.114:<port>`.
   DutchAuctionCollect. RPC adds bitassets ([[seq,id,data]]), bitasset_data, dutch_auctions, get_amm_pool_state,
   get_amm_price. No list_stxos. Keys `ba-svk1…`. Deposit text as BitNames with `s4_`.
 
-## Hivemind / Truthcoin (slot 13)
+## Truthcoin (slot 13; backbone-hivemind, LayerTwo's Hivemind)
 - tx borsh: inputs (OutPoint, utxo_hash) ‖ outputs ‖ Option<TxData>; OutPoint kinds Regular, Coinbase, Deposit,
   MarketFunds{market_id[6],block_height,is_fee}, Payout{hash,vout}; Content Value, Withdrawal,
   MarketFunds{market_id,amount,is_fee}. TxData: ClaimDecision, CreateMarket, Trade{market_id,outcome_index,shares,
@@ -79,6 +79,14 @@ or `216.128.183.114:<port>`.
 - RPC: get_block_index, get_two_way_peg_events(block_hash) → [{Deposit}|{BundleSpend}|{BundleReturn}],
   get_transaction, get_transaction_info, list_mempool, votecoin_balance, market_list/market_get/…, vote_period/….
 - Deposit text: `s13_<b58>_<6 hex>` (full checksum, any case) or bare base58.
+- Market txs (Trade, AmplifyBeta) have no outputs; the block takes a 1000-sat miner fee from their inputs and pays
+  back through Payout outpoints blake3("BUY_CHANGE" ‖ market_id ‖ trader ‖ txid), blake3("SELL_INPUT_CHANGE" ‖ trader
+  ‖ txid), blake3("SELL_PAYOUT" ‖ market_id ‖ trader ‖ txid), vout 0 (market_block.cpp apply_trade, consolidate). A
+  trade over its limit is skipped: its inputs stay unspent. `get_transaction_info.fee_sats` is Σ in − Σ out, i.e. a
+  trade's whole input, not its fee (L2-API.md "Market txs").
+- Signed txs: `push_tx(hex of the borsh AuthorizedTransaction)` and `submit_transaction(AuthorizedTransaction JSON)`,
+  both on the public RPC; no minimum fee (block.cpp validate_filled, node.cpp submit_transaction). The other chains'
+  public RPC has `submit_transaction(Authorized JSON)` (Thunder, BitNames, BitAssets, zSide); Coinshift's none.
 
 ## zSide (thunder-orchard, slot 98)
 - txid = blake3(borsh(inputs) ‖ borsh(outputs) ‖ Option<bundle_without_auth>), not blake3(canonical_bytes):
@@ -96,5 +104,5 @@ or `216.128.183.114:<port>`.
   arrays of 32 numbers. Swap state is partly node-local by design (L1 monitoring, update_swap_l1_txid, cancel_swap).
 
 ## Test data
-`tests/data/betanet/txhex.jsonl` ({txid, hex}) in each repo; Hivemind `tests/data/oracle_vectors.jsonl` and
+`tests/data/betanet/txhex.jsonl` ({txid, hex}) in each repo; backbone-hivemind `tests/data/oracle_vectors.jsonl` and
 `encoding_vectors.json`. The public seed index https://seed.beta.ecash.eu.com/<chain> can be compared against.

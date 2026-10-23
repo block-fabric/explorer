@@ -40,7 +40,8 @@ export function bitassetsContent(raw: any): Content {
 const bitassets: ChainModule = {
   profile: { id: 'bitassets', kind: 'l2', name: 'BitAssets', unit: 'sats', slot: 4, mainchain: false, subsidy: false },
   l2: {
-    txids: 'index', blockIndex: true, inputPairs: false, withdrawalBundleRpc: false, mempool: true, txInfo: true, fill: true,
+    txids: 'index', blockIndex: true, inputPairs: false, withdrawalBundleRpc: false, mempool: true, fill: true,
+    submit: { json: 'submit_transaction' },
     depositRule: 'prefix', features: ['assets'],
     content: bitassetsContent,
     featureRoutes(app, prefix, ctx) {

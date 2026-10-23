@@ -9,16 +9,18 @@ import index from './index';
 import rpc from './rpc';
 import mainchain from './mainchain';
 import { isAddress } from './codec';
+import { SubmitError, parseSubmission, submit } from './submit';
 import { BlockSummary, L2Chain, L2FeatureContext } from './types';
 
-// Read-only JSON of a sidechain explorer (kind l2), chains/L2-API.md. Rate limiting is nginx's.
+// The JSON of a sidechain explorer (kind l2), chains/L2-API.md: read-only but for POST l2/tx. Rate limiting is nginx's.
 //
 //   GET chain                          this explorer's profile (kind l2, slot, features, links)
 //   GET l2/summary                     tip, index progress, totals, wealth, escrow, pending bundle, mempool
 //   GET l2/blocks?before=&limit=       block summaries, newest first (limit <= 50)
 //   GET l2/block/:hashOrHeight         a block: summary, coinbase, txs, deposits, bundle spends
 //   GET l2/tx/:txid                    a tx of the index, or of the node's mempool
-//   GET l2/address/:address?before=&limit=
+//   GET l2/address/:address?before=&limit=   with its unconfirmed txs (`mempool`, chains with list_mempool)
+//   POST l2/tx                         a signed tx to the node (submit.ts): {txid}
 //   GET l2/deposits?before=&limit=     GET l2/withdrawals?before=&limit=
 //   GET l2/search/:query               a height, block hash, txid or address
 //   GET l2/feature/<name>[/...]        the module's node features (names, assets, markets, shielded, swaps)
@@ -121,6 +123,7 @@ class L2Routes {
       .get(l2 + 'blocks', wrap(this.$getBlocks))
       .get(l2 + 'block/:id', wrap(this.$getBlock))
       .get(l2 + 'tx/:txid', wrap(this.$getTx))
+      .post(l2 + 'tx', wrap(this.$postTx))
       .get(l2 + 'address/:address', wrap(this.$getAddress))
       .get(l2 + 'deposits', wrap(this.$getDeposits))
       .get(l2 + 'withdrawals', wrap(this.$getWithdrawals))
@@ -136,6 +139,7 @@ class L2Routes {
 
   private initFeatures(app: Application, prefix: string): void {
     const ctx: L2FeatureContext = {
+      root: prefix.replace(/feature\/$/, ''),
       rpc,
       cached: (key, ttl, fn) => cached('feature:' + key, ttl, fn),
       handler: wrap,
@@ -305,8 +309,7 @@ class L2Routes {
       return;
     }
     if (this.chain.mempool) {
-      const pool = await cached('mempool', 3000, () => rpc.call<any[]>('list_mempool').catch(() => []));
-      const entry = (pool ?? []).find(e => e.txid === txid);
+      const entry = (await this.mempoolEntries()).find(e => e.txid === txid);
       if (entry) {
         res.json(index.mempoolTx(entry));
         return;
@@ -315,6 +318,33 @@ class L2Routes {
     missing(req, res, 'Unknown transaction');
   };
 
+  /** @asyncUnsafe: wrap() answers other errors */
+  private $postTx = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const txid = await submit(this.chain, rpc, parseSubmission(req.body));
+      logger.info(`L2 API: tx ${txid} submitted`);
+      cache.delete('mempool');
+      res.json({ txid });
+    } catch (e) {
+      if (!(e instanceof SubmitError)) {
+        throw e;
+      }
+      if (e.reason) {
+        logger.info(`L2 API: tx rejected: ${e.reason}`);
+      }
+      res.status(e.status).json(e.reason ? { error: e.message, reason: e.reason } : { error: e.message });
+    }
+  };
+
+  /** list_mempool, read at most every few seconds; [] on chains without one */
+  /** @asyncUnsafe */
+  private async mempoolEntries(): Promise<any[]> {
+    if (!this.chain.mempool) {
+      return [];
+    }
+    return (await cached('mempool', 3000, () => rpc.call<any[]>('list_mempool').catch(() => []))) ?? [];
+  }
+
   private $getAddress = async (req: Request, res: Response): Promise<void> => {
     const a = String(req.params.address);
     if (!isAddress(a)) {
@@ -322,11 +352,18 @@ class L2Routes {
     }
     const before = intParam(req.query.before, null, 0, 1e9);
     const limit = intParam(req.query.limit, 25, 1, 100) as number;
+    const mempool = this.chain.mempool ? index.addressMempool(a, await this.mempoolEntries()) : null;
     const r = index.address(a, before, limit);
     if (!r) {
+      if (mempool?.txs.length) {
+        // only unconfirmed txs so far
+        return void res.json({
+          address: a, funded: { count: 0, sum: 0 }, spent: { count: 0, sum: 0 }, balance: 0, txs: [], utxos: [], mempool,
+        });
+      }
       return missing(req, res, 'Unknown address');
     }
-    res.json(r);
+    res.json({ ...r, mempool });
   };
 
   private $getDeposits = async (req: Request, res: Response): Promise<void> => {

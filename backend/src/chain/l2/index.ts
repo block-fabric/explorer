@@ -11,7 +11,9 @@ import {
   BURN_ADDRESS, addressOfKey, coinbaseTxid, depositAddress, liftData, outPoint, outPointJson, reverseHex, txidOfCanonical,
   valueOf, zsideTxid,
 } from './codec';
-import { BlockSummary, Content, Input, L2Chain, MainBlockRef, OutPoint, Output, Shielded, Spent } from './types';
+import {
+  BlockSummary, Content, Input, L2Chain, MainBlockRef, MarketTerms, MarketView, OutPoint, Output, PayoutKind, Shielded, Spent,
+} from './types';
 
 /**
  * The sidechain index (kind l2): every block of the sidechain from genesis to the node's tip, walked with
@@ -27,8 +29,12 @@ import { BlockSummary, Content, Input, L2Chain, MainBlockRef, OutPoint, Output, 
  * - every output with its spender, so inputs get their address, content and value, transactions their fee, and
  *   addresses their history and balance.
  *
- * - for a chain whose state moves sats without a tx (Hivemind's markets), the UTXOs list_utxos has and no tx made,
- *   and the outputs it no longer has though no tx spent them, both at the height they were first seen.
+ * - for a chain whose state moves sats without a tx (Truthcoin's markets), the UTXOs list_utxos has and no tx made,
+ *   and the outputs it no longer has though no tx spent them, both at the height they were first seen; an input
+ *   spending an output the index never saw is valued with get_stxos (made by the state at that height);
+ * - a market tx (Truthcoin's Trade and AmplifyBeta, chain.market): whether its block applied it (its inputs spent by
+ *   it, get_stxos) and the Payout outputs the state made for it (their outpoints are derived from the tx, their
+ *   values read with get_utxos / get_stxos), so that its fee is the miner fee and the rest the cost in the market.
  *
  * Stored per block is only what the node gave (StoredBlock); the rest (outputs, spends, addresses) is replayed from
  * the stored blocks at startup and after a reorg, which takes moments for chains of thousands of blocks. In memory,
@@ -36,7 +42,7 @@ import { BlockSummary, Content, Input, L2Chain, MainBlockRef, OutPoint, Output, 
  * get_block_hash, and each new block must extend the stored tip; else blocks are dropped until they agree.
  */
 
-const CACHE_VERSION = 1;
+const CACHE_VERSION = 2;   // 2: market txs and the values of state outputs (StoredTx market, prevouts)
 const STEP = 25;          // blocks fetched per round
 const POLL_MS = 10000;
 
@@ -54,7 +60,10 @@ export interface StoredTx {
   data: any;                      // TxData JSON
   signers: (string | null)[];     // per input
   shielded: Shielded | null;
-  fee?: number;                   // the node's fee_sats, for a tx spending outputs no tx created
+  /** per input, the output it spends when no tx of the index made it (the chain's state did): from get_stxos */
+  prevouts?: (RawOutput | null)[];
+  /** a market tx: whether its block applied it, and the Payout outputs the state made for it */
+  market?: { applied: boolean; payouts: { outpoint: any; output: RawOutput; kind: PayoutKind }[] };
 }
 
 export interface BundleEventRef {
@@ -109,6 +118,10 @@ export interface TxEntry {
   data: any;
   shielded: Shielded | null;
   signers: (string | null)[];
+  /** a market tx: its terms, whether applied, its cost in the market (null: an input not valued) */
+  market: { terms: MarketTerms; applied: boolean; cost: number | null; kinds: PayoutKind[] } | null;
+  /** the outputs the chain's state made for it (a market tx's payouts), Core view vouts after its own outputs */
+  payouts: OutRef[];
 }
 
 export interface BlockEntry {
@@ -403,6 +416,7 @@ export class L2Index {
     const auths: any[] = body.authorizations ?? [];
     let k = 0;
     const txs: StoredTx[] = [];
+    const earlier = new Set<string>(); // txids of this block so far: their outputs are known once the block applies
     for (let i = 0; i < raw.length; i++) {
       const t = raw[i];
       const inputs = (t.inputs ?? []).map((x: any) => this.chain.inputPairs ? x[0] : x);
@@ -421,12 +435,8 @@ export class L2Index {
         txid, size, inputs, outputs: (t.outputs ?? []).map(o => ({ address: o.address, content: o.content, memo: o.memo ?? null })),
         data: t.data ?? null, signers, shielded: this.chain.shielded?.(t) ?? null,
       };
-      if (this.chain.txInfo && inputs.some(o => { const p = outPoint(o); return (p.kind === 'marketFunds' || p.kind === 'payout') && !this.outputs.has(p.key); })) {
-        const info = await rpc.call('get_transaction_info', txid).catch(() => null);
-        if (info && typeof info.fee_sats === 'number') {
-          tx.fee = info.fee_sats;
-        }
-      }
+      await this.stateOfTx(tx, earlier);
+      earlier.add(txid);
       txs.push(tx);
     }
 
@@ -460,6 +470,63 @@ export class L2Index {
       coinbase: { txid: cbid, outputs: ((Array.isArray(body.coinbase) ? body.coinbase : body.coinbase?.outputs) ?? []).map(o => ({ address: o.address, content: o.content, memo: o.memo ?? null })) },
       txs, deposits, bundleSpends, events,
     };
+  }
+
+  /**
+   * What the chain's state did with a tx, from the node's UTXOs and STXOs of its signers (and payees): the values of
+   * inputs spending outputs no tx made (stateUtxos), and for a market tx whether its block applied it (its inputs
+   * spent by it: a skipped one leaves them unspent) and the Payout outputs made for it. Throws when the node does not
+   * answer: the block is fetched again next round.
+   */
+  /** @asyncUnsafe */
+  private async stateOfTx(tx: StoredTx, earlier: Set<string>): Promise<void> {
+    const terms = this.chain.market?.terms(tx.data) ?? null;
+    const unknown = tx.inputs.map(o => {
+      const p = outPoint(o);
+      return !!this.chain.stateUtxos && !this.outputs.has(p.key) && !(p.kind === 'regular' && earlier.has(p.txid as string));
+    });
+    if (!terms && !unknown.some(x => x)) {
+      return;
+    }
+    const specs = terms ? (this.chain.market as NonNullable<L2Chain['market']>).payouts(tx.txid, terms) : [];
+    const node = await this.nodeOutputs([...tx.signers.filter((x): x is string => !!x), ...specs.map(s => s.address)]);
+    if (unknown.some(x => x)) {
+      tx.prevouts = tx.inputs.map((o, i) => (unknown[i] ? node.get(outPoint(o).key)?.output ?? null : null));
+    }
+    if (terms) {
+      const skipped = tx.inputs.some(o => {
+        const n = node.get(outPoint(o).key);
+        return !!n && n.spentBy !== tx.txid;
+      });
+      tx.market = {
+        applied: !skipped,
+        payouts: skipped ? [] : specs.flatMap(s => {
+          const n = node.get(outPoint(s.outpoint).key);
+          return n ? [{ outpoint: s.outpoint, output: n.output, kind: s.kind }] : [];
+        }),
+      };
+    }
+  }
+
+  /** The node's UTXOs and STXOs of these addresses: outpoint key -> the output and, if spent, the tx that spent it */
+  /** @asyncUnsafe */
+  private async nodeOutputs(addresses: string[]): Promise<Map<string, { output: RawOutput; spentBy: string | null }>> {
+    const out = new Map<string, { output: RawOutput; spentBy: string | null }>();
+    const raw = (o: any): RawOutput => ({ address: o?.address, content: o?.content, memo: o?.memo ?? null });
+    const list = [...new Set(addresses)];
+    for (let i = 0; i < list.length; i += 20) {
+      const chunk = list.slice(i, i + 20);
+      const utxos = await rpc.call<any[]>('get_utxos', chunk);
+      const stxos = await rpc.call<any[]>('get_stxos', chunk);
+      for (const u of utxos ?? []) {
+        out.set(outPoint(u.outpoint).key, { output: raw(u.output), spentBy: null });
+      }
+      for (const x of stxos ?? []) {
+        const inpoint = x.output?.inpoint ?? {};
+        out.set(outPoint(x.outpoint).key, { output: raw(x.output?.output), spentBy: inpoint.Regular?.txid ?? `(${Object.keys(inpoint)[0] ?? 'spent'})` });
+      }
+    }
+    return out;
   }
 
   // ------------------------------------------------------------------ replay
@@ -541,7 +608,8 @@ export class L2Index {
       this.create(outPointJson('Coinbase', cbKey === 'txid' ? b.coinbase.txid : b.merkleRoot, vout, cbKey), o, vout, b.coinbase.txid, b.height));
     deltas(cbOutputs.map(r => [r.address, r.value]), b.coinbase.txid, 'coinbase');
     const coinbase: TxEntry = {
-      txid: b.coinbase.txid, height: b.height, index: -1, size: null, inputs: [], inKeys: [], outputs: cbOutputs, fee: 0, data: null, shielded: null, signers: [],
+      txid: b.coinbase.txid, height: b.height, index: -1, size: null, inputs: [], inKeys: [], outputs: cbOutputs, fee: 0, data: null, shielded: null,
+      signers: [], market: null, payouts: [],
     };
     this.txs.set(coinbase.txid, coinbase);
 
@@ -556,29 +624,48 @@ export class L2Index {
       let resolved = true;
       let inSum = 0;
       const inKeys: string[] = [];
+      const terms = this.chain.market?.terms(t.data) ?? null;
+      const applied = !terms || t.market?.applied !== false; // a skipped market tx spends nothing
       const inputs: Input[] = t.inputs.map((opJson, vin) => {
         const op = outPoint(opJson);
         const { key, ...outpoint } = op;
         inKeys.push(key);
-        const ref = this.outputs.get(key);
+        let ref = this.outputs.get(key);
+        const prev = t.prevouts?.[vin];
+        if (!ref && prev) {
+          // an output of the chain's state the index never saw (made and spent between two looks at list_utxos)
+          ref = this.create(opJson, prev, op.vout ?? 0, null, b.height);
+          this.addr(ref.address).txs.push({ txid: ref.outpoint.txid ?? key, height: b.height, delta: ref.value, kind: 'state' });
+        }
         if (!ref) {
           resolved = false;
           return { outpoint, address: null, content: null, value: null };
         }
-        if (!ref.spent) {
+        if (applied && !ref.spent) {
           this.spend(ref, { txid: t.txid, vin, height: b.height, kind: 'tx' });
         }
         inSum += ref.value;
-        moves.push([ref.address, -ref.value]);
+        moves.push([ref.address, applied ? -ref.value : 0]);
         return { outpoint, address: ref.address, content: ref.content, value: ref.value };
       });
       const outputs = t.outputs.map((o, vout) => this.create(outPointJson('Regular', t.txid, vout), o, vout, t.txid, b.height));
+      const payouts = applied ? (t.market?.payouts ?? []).map((p, i) => this.create(p.outpoint, p.output, outputs.length + i, t.txid, b.height)) : [];
       const outSum = outputs.reduce((s, r) => s + r.value, 0);
-      for (const r of outputs) {
+      const payoutSum = payouts.reduce((s, r) => s + r.value, 0);
+      for (const r of [...outputs, ...payouts]) {
         moves.push([r.address, r.value]);
       }
       const shieldedIn = t.shielded ? t.shielded.valueBalance : 0; // > 0 leaves the pool
-      const fee = t.fee ?? (resolved ? Math.max(0, inSum + shieldedIn - outSum) : 0);
+      let fee: number;
+      let market: TxEntry['market'] = null;
+      if (terms) {
+        fee = applied ? (this.chain.market as NonNullable<L2Chain['market']>).fee : 0;
+        market = {
+          terms, applied, cost: !applied ? 0 : resolved ? inSum - outSum - payoutSum - fee : null, kinds: applied ? (t.market?.payouts ?? []).map(p => p.kind) : [],
+        };
+      } else {
+        fee = resolved ? Math.max(0, inSum + shieldedIn - outSum) : 0;
+      }
       if (t.shielded) {
         const s = this.shieldedTotals;
         s.txs++;
@@ -593,13 +680,14 @@ export class L2Index {
       deltas(moves, t.txid, 'tx');
       const e: TxEntry = {
         txid: t.txid, height: b.height, index, size: t.size, inputs, inKeys, outputs, fee, data: t.data, shielded: t.shielded, signers: t.signers,
+        market, payouts,
       };
       this.txs.set(t.txid, e);
       txs.push(e);
       summary.outputs += outputs.length;
       summary.inputs += inputs.length;
       summary.fees += fee;
-      summary.volume += outSum;
+      summary.volume += outSum + payoutSum;
     });
 
     // the two-way peg, after the transactions
@@ -815,6 +903,21 @@ export class L2Index {
     return {
       txid: t.txid, index: t.index, inputs: t.inputs, outputs: t.outputs.map(r => this.outputView(r)), fee: t.fee, size: t.size,
       data: this.chain.data ? this.chain.data(t.data) : liftData(t.data), shielded: t.shielded, signers: t.signers,
+      market: this.marketOf(t),
+    };
+  }
+
+  /** A market tx's `market` (L2-API.md), else null */
+  marketOf(t: TxEntry): MarketView | null {
+    if (!t.market) {
+      return null;
+    }
+    const { trader, ...terms } = t.market.terms;
+    return {
+      ...terms, applied: t.market.applied, cost: t.market.cost,
+      payouts: t.payouts.map((r, i) => ({
+        kind: t.market?.kinds[i] ?? 'buyChange', outpoint: r.outpoint, vout: r.vout, address: r.address, value: r.value, spent: r.spent,
+      })),
     };
   }
 
@@ -852,11 +955,44 @@ export class L2Index {
       return { vout, address: o.address, content, value: valueOf(content), memo: o.memo || null, spent: null };
     });
     const outSum = outputs.reduce((s, o) => s + o.value, 0);
+    const terms = this.chain.market?.terms(t.data ?? null) ?? null;
+    let market: MarketView | null = null;
+    if (terms) {
+      const { trader, ...rest } = terms;
+      market = { ...rest, applied: null as any, cost: null, payouts: [] }; // the block decides
+    }
     return {
-      txid: entry.txid, status: { confirmed: false }, index: null, inputs, outputs, fee: resolved ? Math.max(0, inSum - outSum) : 0,
+      txid: entry.txid, status: { confirmed: false }, index: null, inputs, outputs,
+      // a market tx pays the fixed miner fee; the rest goes to the market and back as payouts once mined
+      fee: terms ? (this.chain.market as NonNullable<L2Chain['market']>).fee : resolved ? Math.max(0, inSum - outSum) : 0,
       size: entry.size ?? null, data: this.chain.data ? this.chain.data(t.data ?? null) : liftData(t.data ?? null), shielded: null,
       signers: (entry.authorizations ?? []).map((a: any) => addressOfKey(a?.verifying_key)),
+      market,
     };
+  }
+
+  /**
+   * An address's unconfirmed txs among list_mempool's entries: those with an input it owns or an output to it, and
+   * their net effect on its balance (a market tx counts its inputs only: what comes back is known once mined)
+   */
+  addressMempool(a: string, entries: any[]): { txs: any[]; delta: number } {
+    const txs: any[] = [];
+    let delta = 0;
+    for (const e of entries ?? []) {
+      if (typeof e?.txid !== 'string' || this.txs.has(e.txid)) {
+        continue;
+      }
+      const t = this.mempoolTx(e);
+      const mine = t.inputs.some((i: Input) => i.address === a) || t.outputs.some((o: Output) => o.address === a);
+      if (!mine) {
+        continue;
+      }
+      const d = t.outputs.filter((o: Output) => o.address === a).reduce((s: number, o: Output) => s + o.value, 0)
+        - t.inputs.filter((i: Input) => i.address === a).reduce((s: number, i: Input) => s + (i.value ?? 0), 0);
+      txs.push({ ...t, delta: d });
+      delta += d;
+    }
+    return { txs, delta };
   }
 
   heightOf(id: string): number | null {

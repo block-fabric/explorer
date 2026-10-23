@@ -95,15 +95,21 @@ export interface L2Chain {
   withdrawalBundleRpc: boolean;
   /** list_mempool */
   mempool: boolean;
-  /** get_transaction_info(txid) → fee_sats: the fee of a tx spending outputs no tx created (Hivemind's market funds) */
-  txInfo: boolean;
   /** the node fills non-sats content (ids of names, assets) in get_utxos / get_stxos */
   fill: boolean;
   /**
-   * the node's state creates and consumes outputs without a tx (Hivemind's markets: treasury consolidation, buy
-   * change, payouts): the index follows list_utxos for them
+   * the node's state creates and consumes outputs without a tx (Truthcoin's markets: treasury consolidation, market
+   * payouts): the index follows list_utxos for them, and values the inputs spending such outputs with get_stxos
    */
   stateUtxos?: boolean;
+  /** Truthcoin: the txs whose sats the chain's state moves into and out of a market (Trade, AmplifyBeta) */
+  market?: L2MarketRules;
+  /**
+   * how the node's public RPC takes a signed tx (POST /api/v1/l2/tx): `hex` a method taking the chain's serialized
+   * tx as hex (Truthcoin push_tx), `json` one taking the node's Authorized tx JSON (submit_transaction); none: the
+   * explorer takes no txs for this chain
+   */
+  submit?: { hex?: string; json?: string };
   /** how a deposit's OP_RETURN text names the sidechain address (codec.ts depositAddress) */
   depositRule: 'bare' | 'prefix' | 'checksum';
   /** get_block_hash and the rest take the sidechain hash; Coinshift spends coinbase outputs by merkle root */
@@ -120,7 +126,51 @@ export interface L2Chain {
   featureRoutes?(app: Application, prefix: string, ctx: L2FeatureContext): void;
 }
 
+/** A market tx's terms, from its TxData */
+export interface MarketTerms {
+  action: 'buy' | 'sell' | 'amplify';
+  /** 12 hex */
+  marketId: string;
+  outcome: number | null;
+  /** shares bought (negative: sold); 0 for an AmplifyBeta */
+  shares: number;
+  /** a buy's max cost incl. the miner fee, a sell's min proceeds (sats); null for an AmplifyBeta */
+  limit: number | null;
+  /** who gets the payouts: the trader, or the market's author for an AmplifyBeta */
+  trader: string;
+}
+
+export type PayoutKind = 'buyChange' | 'sellProceeds' | 'sellChange';
+
+/** Truthcoin's market txs (backbone-hivemind market_block.cpp apply_trade, consolidate; validation.cpp) */
+export interface L2MarketRules {
+  /** the miner fee of an applied market tx (TRADE_MINER_FEE_SATS), whatever its inputs */
+  fee: number;
+  /** the tx's market terms; null for any other tx */
+  terms(data: any): MarketTerms | null;
+  /** the Payout outpoints (node JSON) the state makes for an applied market tx when there is something to pay */
+  payouts(txid: string, terms: MarketTerms): { outpoint: any; address: string; kind: PayoutKind }[];
+}
+
+/** What a market tx did, as the tx JSON's `market` */
+export interface MarketView {
+  action: MarketTerms['action'];
+  marketId: string;
+  outcome: number | null;
+  shares: number;
+  limit: number | null;
+  /** false: the block skipped it (a buy over its limit, a sell under its minimum): no sats moved, no fee */
+  applied: boolean;
+  /** sats into the market (LMSR cost + the market's trading fee, an AmplifyBeta's amount), negative for a sell's net
+   * proceeds; null when an input could not be valued (or for a mempool tx) */
+  cost: number | null;
+  /** the outputs the chain's state made for the tx: a buy's change, a sell's proceeds and change */
+  payouts: { kind: PayoutKind; outpoint: OutPoint; vout: number; address: string; value: number; spent: Spent | null }[];
+}
+
 export interface L2FeatureContext {
+  /** the API's l2/ prefix (/api/v1/l2/), for a module's routes outside feature/ (Truthcoin's address positions) */
+  root: string;
   rpc: { call<T = any>(method: string, ...params: unknown[]): Promise<T> };
   cached<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<T>;
   handler(fn: (req: Request, res: Response) => Promise<unknown>): (req: Request, res: Response) => Promise<void>;

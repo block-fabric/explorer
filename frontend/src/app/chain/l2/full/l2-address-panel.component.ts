@@ -5,19 +5,26 @@ import { L2ApiService } from '@app/chain/l2/l2-api.service';
 import { L2Address, L2Content } from '@app/chain/l2/l2.interfaces';
 import { L2_PAGE_IMPORTS } from '@app/chain/l2/l2-common';
 import { L2AddressAssetsComponent, hasAssets } from '@app/chain/l2/features/asset-badge';
+import { L2PositionsComponent } from '@app/chain/l2/features/market';
 
 /**
  * The address page's sidechain panel (CHAIN_UI 'full'): the names and assets the address holds (BitNames,
  * BitAssets: their balances with ticker badges) and its unspent outputs that hold more than sats, from
- * GET /api/v1/l2/address/:address. Shows nothing for an address of plain sats.
+ * GET /api/v1/l2/address/:address; on a chain with markets (Truthcoin) its positions and Votecoin
+ * (GET l2/address/:address/positions). Shows nothing for an address of plain sats elsewhere.
  */
 @Component({
   selector: 'app-l2-address-panel',
   standalone: true,
-  imports: [...L2_PAGE_IMPORTS, L2AddressAssetsComponent],
+  imports: [...L2_PAGE_IMPORTS, L2AddressAssetsComponent, L2PositionsComponent],
   styleUrls: ['./l2-panel.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+  @if (markets$ | async) {
+    <br>
+    <div class="title-row"><h2 class="p-title">Positions</h2><span class="p-sub">its shares in {{ profile.name }}'s markets, and its Votecoin</span></div>
+    <div class="box p-box"><app-l2-positions [address]="address"></app-l2-positions></div>
+  }
   @if (view$ | async; as a) {
     <br>
     <div class="title-row"><h2 class="p-title">Names and assets</h2><span class="p-sub">held by this address on {{ profile.name }}</span></div>
@@ -52,8 +59,11 @@ export class L2AddressPanelComponent implements OnChanges {
   profile = PROFILE;
   limit = 100;
   view$: Observable<L2Address | null>;
+  markets$: Observable<boolean>;
 
-  constructor(private api: L2ApiService) {}
+  constructor(private api: L2ApiService) {
+    this.markets$ = this.api.features$.pipe(map(f => f.includes('markets')));
+  }
 
   ngOnChanges(): void {
     if (!this.address) {

@@ -47,10 +47,18 @@ EXPLORERS = [
         'weight': 4000000, 'mem': '384m', 'heap_mb': 256, 'full_mem': '512m', 'full_heap_mb': 384,
     }
     for i, (profile, rpc) in enumerate([('thunder', 16009), ('bitnames', 16002), ('bitassets', 16004),
-                                        ('hivemind', 16013), ('zside', 16098), ('coinshift', 16255)])
+                                        ('truthcoin', 16013), ('zside', 16098), ('coinshift', 16255)])
 ]
 # The front page goes to this explorer
 HOME = 'betanet'
+# Explorers renamed since they went public: the old URL path redirects to the new one (301, the rest of the path and
+# the query kept). Slot 13 was 'hivemind' (the name of its node software) until it took its chain's name, Truthcoin.
+RENAMED = {'betanet/hivemind': 'betanet/truthcoin'}
+
+# The POST routes (a tx to broadcast): per client IP at most TX_RATE, TX_BURST more queued at once; a body of at most
+# TX_BODY (a sidechain tx: chain/l2/submit.ts takes 64 KB; an eCash tx up to 100 kB, 200 kB as hex)
+TX_RATE, TX_BURST = '6r/m', 6
+TX_BODY = {'l1': '256k', 'l2': '64k'}
 
 # The server has no swap: if memory runs out, the kernel must kill an explorer container before the pool's node or its
 # enforcer (which would stop mining). Positive scores make the explorer the OOM killer's first choice, the full sidechain
@@ -241,6 +249,13 @@ def main():
     for e in EXPLORERS:
         # a sidechain: the index backend answers /api/v1/chain and /api/v1/l2/, the full backend the rest
         p, prt = e['path'], e.get('full_port', e['api_port'])
+        # the POST routes, rate limited: upstream's (tx, txs/test, txs/package, also as esplora's /api/...) on the
+        # (full) backend, and a sidechain's POST /api/v1/l2/tx on its index backend (exact matches: ahead of the rest)
+        post = f"limit_req zone=explorer_tx burst={TX_BURST} nodelay; client_max_body_size {TX_BODY[e['kind']]};"
+        posts = ''.join(f"    location = /{p}/api/{v}{r} {{ {post} proxy_pass http://127.0.0.1:{prt}/api/v1/{r}; }}\n"
+                        for r in ('tx', 'txs/test', 'txs/package') for v in ('', 'v1/'))
+        if e['kind'] == 'l2':
+            posts += f"    location = /{p}/api/v1/l2/tx {{ {post} proxy_pass http://127.0.0.1:{e['api_port']}/api/v1/l2/tx; }}\n"
         idx = '' if e['kind'] == 'l1' else f'''    location = /{p}/api/v1/chain {{ proxy_pass http://127.0.0.1:{e['api_port']}/api/v1/chain; }}
     location ^~ /{p}/api/v1/l2/ {{ proxy_pass http://127.0.0.1:{e['api_port']}/api/v1/l2/; }}
 '''
@@ -250,14 +265,23 @@ def main():
     location ^~ /{p}/resources/ {{ alias {ROOT}/www/resources/; expires 1h; }}
     location ^~ /{p}/api/v1/ws {{ proxy_pass http://127.0.0.1:{prt}/; proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "Upgrade"; proxy_read_timeout 1h; }}
     location ^~ /{p}/api/v1/services {{ return 404; }}
-{idx}    location ^~ /{p}/api/v1 {{ proxy_pass http://127.0.0.1:{prt}/api/v1; }}
+{posts}{idx}    location ^~ /{p}/api/v1 {{ proxy_pass http://127.0.0.1:{prt}/api/v1; }}
     location ^~ /{p}/api/ {{ proxy_pass http://127.0.0.1:{prt}/api/v1/; }}
     location = /{p}/api {{ try_files /{p}/index.html =404; }}
     location ^~ /{p}/ {{ try_files $uri $uri/ /{p}/index.html; expires 10m; }}
 ''')
+    for old, new in RENAMED.items():
+        loc.append(f'''    # {old}: renamed {new}
+    location = /{old} {{ return 301 /{new}/; }}
+    location ^~ /{old}/ {{ rewrite ^/{old}/(.*)$ /{new}/$1 permanent; }}
+''')
     site = f'''# eCash block explorers ({ROOT}): https://{DOMAIN}/<explorer>/ for each explorer.
 # Written by {ROOT}/gen.py. The api containers listen on 127.0.0.1 (host network), one port each.
 # The certificate is its own (certbot certonly --webroot -w /var/www/html -d {DOMAIN}), apart from the other sites'.
+
+# the POST routes (a tx to broadcast), per client IP (this file is included in nginx's http block)
+limit_req_zone $binary_remote_addr zone=explorer_tx:10m rate={TX_RATE};
+
 server {{
     listen 80;
     listen [::]:80;
@@ -279,6 +303,7 @@ server {{
 
     access_log /var/log/nginx/ecash-explorer.access.log;
     error_log  /var/log/nginx/ecash-explorer.error.log;
+    limit_req_status 429;
 
     root {ROOT}/www;
     index index.html;

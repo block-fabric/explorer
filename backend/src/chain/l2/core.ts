@@ -3,7 +3,7 @@ import { createHash } from 'crypto';
 import bs58 from 'bs58';
 import { L2Index, OutRef, TxEntry } from './index';
 import { decodeAddress, outPoint, valueOf } from './codec';
-import { Content, OutPoint } from './types';
+import { Content, MarketView, OutPoint } from './types';
 
 /**
  * The sidechain index (index.ts) as Bitcoin Core would show it: blocks, transactions and outputs in the shapes of
@@ -15,20 +15,25 @@ import { Content, OutPoint } from './types';
  *   base58), its sats as `value` (0 for non-sats content) and, for any content but sats, the contract's Content as
  *   `content` (a withdrawal also as `withdrawal: {main_address, value, main_fee}`, its value counting the main fee);
  * - inputs name the output they spend by (txid, n) of the transaction that made it here (the coinbase's for Coinshift's
- *   merkle-root outpoints), with `prevout` inline; a deposit's input carries `deposit: true`, Hivemind's market funds
+ *   merkle-root outpoints), with `prevout` inline; a deposit's input carries `deposit: true`, Truthcoin's market funds
  *   and payouts their `kind`;
  * - what moves coins without a transaction gets a synthetic one (`peg`), placed after the block's transactions as the
  *   nodes apply it: a deposit tx per eCash deposit (txid = the eCash deposit txid, its output at the eCash vout, the
  *   lower ones zero-value OP_RETURN padding, a coinbase-shaped input), a withdrawal tx per bundle (txid = the M6 id,
  *   spending the bundled withdrawal outputs into one OP_RETURN output of their value) and a state tx per block on
- *   Hivemind (what the chain's state made and consumed). Bundles show as the index has them now: a bundle that later
+ *   Truthcoin (what the chain's state made and consumed). Bundles show as the index has them now: a bundle that later
  *   failed gave its outputs back and has no tx;
  * - the block header is a synthetic 80-byte Bitcoin header (version 1, prev hash, merkle root, time, bits, nonce 0,
  *   hashes byte-reversed so that a decoder shows them as here), `time` the BMM eCash block's time kept
  *   non-decreasing, difficulty 1; raw blocks and transactions are Bitcoin serializations of the same inputs and
  *   outputs (a transaction with no inputs, as some BitNames and zSide ones are, does not decode as Bitcoin);
+ * - a market tx (Truthcoin's Trade, AmplifyBeta) has, after its own outputs (none), the Payout outputs the chain's
+ *   state made for it (a buy's change, a sell's change and proceeds) and, for what it paid into the market, an
+ *   OP_RETURN output of that value (`market:<id>`); its fee is the miner fee and the tx JSON carries `market`
+ *   (L2-API.md). A sell's proceeds come from the market's treasury: its outputs exceed its inputs by them. A market
+ *   tx its block skipped spends nothing: one coinbase-shaped input, no outputs, no fee;
  * - size: the chain's own tx size where the node gives one, else the serialization's; weight = 4 × size; fees from the
- *   index (inputs − outputs, or the node's for Hivemind's market spends).
+ *   index (inputs − outputs; a market tx's miner fee).
  */
 
 export const BITS = '1d00ffff';
@@ -75,6 +80,7 @@ export interface CoreTx {
   peg: Peg | null;
   mainTxid?: string;              // peg deposit: the eCash deposit
   m6id?: string;                  // peg withdrawal: the bundle
+  market?: MarketView | null;     // a market tx
 }
 
 export interface CoreBlock {
@@ -179,6 +185,7 @@ const PAD: CoreOut = { value: 0, script: nulldata(Buffer.alloc(0)), content: nul
 // the script of a peg tx's coinbase-shaped input: a push of its text
 const DEPOSIT_TAG = pushData(Buffer.from('eCash deposit', 'utf8'));
 const STATE_TAG = pushData(Buffer.from('state', 'utf8'));
+const SKIPPED_TAG = pushData(Buffer.from('skipped market tx', 'utf8'));
 const CACHED_BLOCKS = 256;
 
 /** What a Core JSON field of an output holds beyond Core's: content, withdrawal, memo */
@@ -238,6 +245,9 @@ export function renderTx(t: CoreTx, o: RenderOptions): any {
   }
   if (t.shielded) {
     j.shielded = t.shielded;
+  }
+  if (t.market) {
+    j.market = t.market;
   }
   if (t.peg) {
     j.peg = t.peg;
@@ -388,6 +398,13 @@ export class CoreView {
   }
 
   private chainTx(t: TxEntry): CoreTx {
+    const market = this.index.marketOf(t);
+    if (t.market && !t.market.applied) {
+      return this.finish({
+        txid: t.txid, size: t.size, ins: [{ coinbase: SKIPPED_TAG, prevout: null }], outs: [], fee: 0, coinbase: false,
+        data: this.index.dataOf(t.data), shielded: null, peg: null, market,
+      });
+    }
     const ins = t.inputs.map((inp, i): CoreIn => {
       const key = t.inKeys[i];
       const [txid, vout] = this.inputOutpoint(key, inp.outpoint);
@@ -406,9 +423,12 @@ export class CoreView {
       }
       return c;
     });
+    const outs = [...t.outputs, ...t.payouts].map(r => this.outOf(r));
+    if (t.market && (t.market.cost ?? 0) > 0) {
+      outs.push({ value: t.market.cost as number, script: nulldata(Buffer.from(`market:${t.market.terms.marketId}`, 'utf8')), content: null, memo: null });
+    }
     return this.finish({
-      txid: t.txid, size: t.size, ins, outs: t.outputs.map(r => this.outOf(r)), fee: t.fee, coinbase: false,
-      data: this.index.dataOf(t.data), shielded: t.shielded, peg: null,
+      txid: t.txid, size: t.size, ins, outs, fee: t.fee, coinbase: false, data: this.index.dataOf(t.data), shielded: t.shielded, peg: null, market,
     });
   }
 
@@ -582,9 +602,12 @@ export class CoreView {
     });
     const outs = this.mempoolOutputs(entry);
     const outSum = outs.reduce((a, o) => a + o.value, 0);
+    // a market tx pays the fixed miner fee (what goes to the market is known once mined)
+    const market = chain.market?.terms(t.data ?? null) ? this.index.mempoolTx(entry).market : null;
     return this.finish({
-      txid: entry.txid, size: typeof entry.size === 'number' ? entry.size : null, ins, outs, fee: resolved ? Math.max(0, inSum - outSum) : 0,
-      coinbase: false, data: this.index.dataOf(t.data), shielded: chain.shielded?.(t) ?? null, peg: null,
+      txid: entry.txid, size: typeof entry.size === 'number' ? entry.size : null, ins, outs,
+      fee: market && chain.market ? chain.market.fee : resolved ? Math.max(0, inSum - outSum) : 0,
+      coinbase: false, data: this.index.dataOf(t.data), shielded: chain.shielded?.(t) ?? null, peg: null, market,
     });
   }
 

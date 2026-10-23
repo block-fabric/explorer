@@ -38,7 +38,7 @@ export function addressOfKeyBytes(key: Uint8Array): string {
 
 /**
  * The address of an authorization's verifying key, as the node shows the key: hex (Thunder, zSide, Coinshift) or
- * bech32m `<x>-svk1…` (BitNames bn-svk, BitAssets and Hivemind ba-svk). Null if neither.
+ * bech32m `<x>-svk1…` (BitNames bn-svk, BitAssets and Truthcoin ba-svk). Null if neither.
  */
 export function addressOfKey(key: string | null | undefined): string | null {
   if (!key) {
@@ -84,7 +84,7 @@ export function formatDeposit(address: string, slot: number): string {
  * - bare: base58 only (Thunder, zSide; the s9_ form burns);
  * - prefix: `s<slot>_<b58>_<checksum>` with any non-empty, case-insensitive prefix of the sha256 hex as checksum,
  *   else bare base58 (BitNames, BitAssets, Coinshift: address.rs from_deposit_address);
- * - checksum: `s<slot>_<b58>_<6 hex>`, the full checksum in any case, else bare base58 (Hivemind).
+ * - checksum: `s<slot>_<b58>_<6 hex>`, the full checksum in any case, else bare base58 (Truthcoin).
  */
 export function depositAddress(textHex: string, rule: 'bare' | 'prefix' | 'checksum', slot: number): string {
   const s = utf8(unhex(textHex));
@@ -223,7 +223,7 @@ export function coinbaseTxid(merkleRoot: string, prevMainHash: string, prevSideH
 
 /**
  * The block hash: blake3(merkle_root ‖ Option<prev_side_hash> ‖ prev_main_hash (internal order) [‖ u32 n ‖ roots]);
- * the utreexo chains (Thunder, Hivemind, zSide, Coinshift) hash their roots too, Empty/Placeholder as zeros.
+ * the utreexo chains (Thunder, Truthcoin, zSide, Coinshift) hash their roots too, Empty/Placeholder as zeros.
  */
 export function blockHash(header: { merkle_root: string; prev_side_hash: string | null; prev_main_hash: string; roots?: any[] }, withRoots: boolean): string {
   const parts: Buffer[] = [

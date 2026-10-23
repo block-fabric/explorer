@@ -6,14 +6,15 @@ import { L2ApiService, loaded } from '@app/chain/l2/l2-api.service';
 import { L2Address, Loaded } from '@app/chain/l2/l2.interfaces';
 import { L2_PAGE_IMPORTS, shortId } from '@app/chain/l2/l2-common';
 import { L2AddressAssetsComponent, hasAssets } from '@app/chain/l2/features/asset-badge';
+import { L2PositionsComponent } from '@app/chain/l2/features/market';
 
 const PAGE = 25;
 
-/** /address/:address?before=<height>: balance, funded and spent, history with deltas, UTXOs */
+/** /address/:address?before=<height>: balance, funded and spent, unconfirmed txs, market positions (Truthcoin), history with deltas, UTXOs */
 @Component({
   selector: 'app-l2-address',
   standalone: true,
-  imports: [...L2_PAGE_IMPORTS, L2AddressAssetsComponent],
+  imports: [...L2_PAGE_IMPORTS, L2AddressAssetsComponent, L2PositionsComponent],
   styleUrls: ['../../components/module-page.scss', './l2-page.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -27,7 +28,35 @@ const PAGE = 25;
           <div class="kpi"><div class="l">Balance</div><div class="v"><app-l2-amount [sats]="a.balance"></app-l2-amount></div><div class="s">{{ a.utxos.length | number }} unspent outputs{{ a.utxos.length >= page ? ' (or more)' : '' }}</div></div>
           <div class="kpi"><div class="l">Received</div><div class="v"><app-l2-amount [sats]="a.funded.sum"></app-l2-amount></div><div class="s">{{ a.funded.count | number }} outputs</div></div>
           <div class="kpi"><div class="l">Sent</div><div class="v"><app-l2-amount [sats]="a.spent.sum"></app-l2-amount></div><div class="s">{{ a.spent.count | number }} outputs spent</div></div>
+          @if (a.mempool?.txs?.length) {
+            <div class="kpi"><div class="l">Unconfirmed</div><div class="v"><app-l2-amount [sats]="a.mempool.delta" [signed]="true"></app-l2-amount></div><div class="s">{{ a.mempool.txs.length | number }} txs in the mempool</div></div>
+          }
         </div>
+
+        @if (a.mempool?.txs?.length) {
+          <h2>Unconfirmed</h2>
+          <div class="box">
+            <table class="table table-borderless table-sm">
+              <thead><tr><th>Transaction</th><th>Data</th><th class="text-end">Fee</th><th class="text-end">Change</th></tr></thead>
+              <tbody>
+                @for (t of a.mempool.txs; track t.txid) {
+                  <tr>
+                    <td><a [routerLink]="['/tx', t.txid]" class="mono" [title]="t.txid">{{ shortId(t.txid, 12) }}</a></td>
+                    <td>@if (t.data) {<span class="pill on">{{ t.data.type }}</span>} @else {<span class="muted">–</span>}</td>
+                    <td class="text-end"><app-l2-amount [sats]="t.fee"></app-l2-amount></td>
+                    <td class="text-end"><app-l2-amount [sats]="t.delta" [signed]="true"></app-l2-amount></td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+            @if (hasMarketTx(a)) {<div class="note">A market tx counts its inputs only: what the market pays back shows once a block applies it.</div>}
+          </div>
+        }
+
+        @if (markets$ | async) {
+          <h2>Positions</h2>
+          <div class="box"><app-l2-positions [address]="address"></app-l2-positions></div>
+        }
 
         @if (hasAssets(a)) {
           <h2>Assets</h2>
@@ -85,9 +114,17 @@ export class L2AddressPage implements OnInit {
   before: number | null = null;
   page = PAGE;
   view$: Observable<Loaded<L2Address>>;
+  /** the chain has markets (Truthcoin): an address has positions */
+  markets$: Observable<boolean>;
   shortId = shortId;
 
-  constructor(private api: L2ApiService, private route: ActivatedRoute, private seo: SeoService) {}
+  constructor(private api: L2ApiService, private route: ActivatedRoute, private seo: SeoService) {
+    this.markets$ = this.api.features$.pipe(map(f => f.includes('markets')));
+  }
+
+  hasMarketTx(a: L2Address): boolean {
+    return !!a.mempool?.txs.some(t => !!t.market);
+  }
 
   /** the address holds assets or names (BitAssets, BitNames): their balances show */
   hasAssets(a: L2Address): boolean {

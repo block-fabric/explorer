@@ -163,7 +163,7 @@ describe('L2 Core view: blocks and transactions', () => {
   });
 });
 
-describe('L2 Core view: what the chain state moves (Hivemind, stateUtxos)', () => {
+describe('L2 Core view: what the chain state moves (Truthcoin, stateUtxos)', () => {
   function stateSetup(): { index: L2Index; view: CoreView } {
     const index = new L2Index({ ...(thunder.l2 as L2Chain), stateUtxos: true });
     (index as any).stateOutputs = new Map([['m:abc:1:0', {
@@ -262,7 +262,7 @@ describe('L2 Core facade (JSON-RPC methods)', () => {
     expect(await code('getblock', [h('0')])).toBe(-5);
     expect(await code('getblockhash', [3])).toBe(-8);
     expect(await code('getblock', ['xyz'])).toBe(-8);
-    expect(await code('sendrawtransaction', ['00'])).toBe(-32601);
+    expect(await code('signrawtransactionwithwallet', ['00'])).toBe(-32601);
     const empty = new CoreFacade(new L2Index(thunder.l2 as L2Chain), { call: async () => [] as any });
     expect(await empty.call('getblockcount', []).catch((e: RpcError) => e.code)).toBe(-28);
   });

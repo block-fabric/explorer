@@ -27,6 +27,11 @@ export interface MarketTrade extends Ref {
   trader: string | null;
   limitSats: number;
   input: number;
+  /** sats into the market (negative: a sell's proceeds); null: not known */
+  cost: number | null;
+  /** false: skipped by its block */
+  applied: boolean;
+  fee: number;
 }
 export interface MarketDetail extends MarketItem {
   tags: string[];
@@ -44,9 +49,9 @@ export interface MarketDetail extends MarketItem {
   tradeList: MarketTrade[];
 }
 
-/** /markets: Hivemind's prediction markets */
+/** /markets: Truthcoin's prediction markets */
 @Component({
-  selector: 'app-hivemind-markets',
+  selector: 'app-truthcoin-markets',
   standalone: true,
   imports: [...FEATURE_PAGE_IMPORTS],
   styleUrls: ['../../components/module-page.scss', '../../l2/pages/l2-page.scss'],
@@ -57,7 +62,7 @@ export interface MarketDetail extends MarketItem {
     <app-l2-feature-head path="markets"></app-l2-feature-head>
     @if (view$ | async; as v) {
       @if (v === 'unavailable') {
-        <div class="alert alert-info">This sidechain has no markets: this page belongs to the Hivemind explorer.</div>
+        <div class="alert alert-info">This sidechain has no markets: this page belongs to the Truthcoin explorer.</div>
       } @else {
         <app-l2-state [state]="v" what="Markets" [height]="400"></app-l2-state>
         @if (v.data; as d) {
@@ -91,7 +96,7 @@ export interface MarketDetail extends MarketItem {
     }
   </div>`,
 })
-export class HivemindMarketsPage implements OnInit {
+export class TruthcoinMarketsPage implements OnInit {
   view$: Observable<Loaded<{ items: MarketItem[] }> | 'unavailable'>;
   state = 'all';
 
@@ -126,7 +131,7 @@ export class HivemindMarketsPage implements OnInit {
 
 /** /markets/:id: one market: outcomes and prices, price history, decisions, resolution, trades */
 @Component({
-  selector: 'app-hivemind-market',
+  selector: 'app-truthcoin-market',
   standalone: true,
   imports: [...FEATURE_PAGE_IMPORTS],
   styleUrls: ['../../components/module-page.scss', '../../l2/pages/l2-page.scss'],
@@ -198,7 +203,7 @@ export class HivemindMarketsPage implements OnInit {
         <h2>Trades</h2>
         <div class="box">
           <table class="table table-borderless table-sm">
-            <thead><tr><th>Block</th><th>Time</th><th>Outcome</th><th class="text-end">Shares</th><th class="text-end">Limit</th><th class="text-end">Sats in</th><th>Trader</th><th>Transaction</th></tr></thead>
+            <thead><tr><th>Block</th><th>Time</th><th>Outcome</th><th class="text-end">Shares</th><th class="text-end">Limit</th><th class="text-end">Market</th><th>Trader</th><th>Transaction</th></tr></thead>
             <tbody>
               @for (t of m.tradeList; track t.txid) {
                 <tr>
@@ -207,20 +212,20 @@ export class HivemindMarketsPage implements OnInit {
                   <td class="small">{{ outcomeLabel(m, t.outcome) }}</td>
                   <td class="text-end" [class.pos]="t.shares > 0" [class.neg]="t.shares < 0">{{ t.shares > 0 ? 'buy ' : 'sell ' }}{{ abs(t.shares) | number }}</td>
                   <td class="text-end"><app-l2-amount [sats]="t.limitSats"></app-l2-amount></td>
-                  <td class="text-end"><app-l2-amount [sats]="t.input"></app-l2-amount></td>
+                  <td class="text-end">@if (t.applied === false) {<span class="muted">skipped</span>} @else {<app-l2-amount [sats]="t.cost === null ? null : -t.cost" [signed]="true"></app-l2-amount>}</td>
                   <td>@if (t.trader) {<a [routerLink]="['/address', t.trader]" class="mono">{{ shortId(t.trader, 6) }}</a>}</td>
                   <td><a [routerLink]="['/tx', t.txid]" class="mono">{{ shortId(t.txid) }}</a></td>
                 </tr>
               } @empty {<tr><td colspan="8" class="empty">No trades in the index.</td></tr>}
             </tbody>
           </table>
-          <div class="muted small">Limit: the most a buy pays, the least a sell takes. Sats in: what the transaction's inputs brought (a trade has no outputs: the market's state pays out).</div>
+          <div class="muted small">Limit: the most a buy pays (with the 1,000 sat miner fee), the least a sell takes. Market: sats the trader paid into the market (−) or received from it (+); the rest of a trade's inputs comes back as change, less the miner fee.</div>
         </div>
       }
     }
   </div>`,
 })
-export class HivemindMarketPage implements OnInit {
+export class TruthcoinMarketPage implements OnInit {
   id = '';
   title: string | null = 'Market';
   view$: Observable<Loaded<MarketDetail>>;

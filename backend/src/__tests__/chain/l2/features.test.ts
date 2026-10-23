@@ -1,7 +1,7 @@
 import { candidateName, nameHash, IndexTx, IndexUtxo } from '../../../chain/modules/l2-views';
 import { auctionCurve, buildView, poolId } from '../../../chain/modules/bitassets/views';
 import { buildNames } from '../../../chain/modules/bitnames/routes';
-import { buildMarkets } from '../../../chain/modules/hivemind/routes';
+import { buildMarkets } from '../../../chain/modules/truthcoin/routes';
 import { buildShielded } from '../../../chain/modules/zside/routes';
 import { buildRichlist } from '../../../chain/modules/thunder/routes';
 import { buildSwaps, swapView } from '../../../chain/modules/coinshift/routes';
@@ -114,7 +114,7 @@ describe('BitNames', () => {
   });
 });
 
-describe('Hivemind', () => {
+describe('Truthcoin', () => {
   test('trades by market, signed shares', () => {
     const v = buildMarkets([
       tx(1, [['t', sats(5000)]], [], { type: 'Trade', market_id: [2, 15, 20, 140, 175, 56], outcome_index: 1, shares: 100, trader: 't', limit_sats: 4000 }),

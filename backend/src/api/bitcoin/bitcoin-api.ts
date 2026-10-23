@@ -447,9 +447,9 @@ class BitcoinApi implements AbstractBitcoinApi {
 
   /**
    * Chains Explorer: a sidechain tx from the Core view of its index (chain/l2/core.ts) as Esplora's: the prevouts and
-   * the fee as given (an input the index cannot resolve, as a Hivemind market's, has no prevout; a tx may have no
-   * inputs), and the chain's own fields kept: tx data / shielded / peg (mainTxid, m6id), input deposit / kind,
-   * output content / withdrawal / memo
+   * the fee as given (an input the index cannot resolve has no prevout; a tx may have no inputs; a Truthcoin market
+   * tx's fee is its miner fee), and the chain's own fields kept: tx data / shielded / peg (mainTxid, m6id) / market,
+   * input deposit / kind, output content / withdrawal / memo
    */
   private convertFacadeTransaction(transaction: IBitcoinApi.Transaction): IEsploraApi.Transaction {
     const t = transaction as any;
@@ -499,7 +499,7 @@ class BitcoinApi implements AbstractBitcoinApi {
       vout: t.vout.map(out),
       status: { confirmed: false },
     };
-    for (const k of ['data', 'shielded', 'peg', 'mainTxid', 'm6id']) {
+    for (const k of ['data', 'shielded', 'peg', 'mainTxid', 'm6id', 'market']) {
       if (t[k] !== undefined) {
         tx[k] = t[k];
       }

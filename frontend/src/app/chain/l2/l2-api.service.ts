@@ -6,7 +6,7 @@ import { ChainInfo } from '@app/chain/chain.interfaces';
 import { L2Feature } from '@app/chain/chain-module';
 import { MODULE } from '@app/chain/profiles';
 import {
-  L2Address, L2Block, L2BlockSummary, L2Deposit, L2Error, L2SearchResult, L2Summary, L2Tx, L2Withdrawal, Loaded,
+  L2Address, L2Block, L2BlockSummary, L2Deposit, L2Error, L2Positions, L2SearchResult, L2Summary, L2Tx, L2Withdrawal, Loaded,
 } from '@app/chain/l2/l2.interfaces';
 
 /** A failed request as the pages show it: the backend's { error } text, and whether the index is still being built */
@@ -73,6 +73,11 @@ export class L2ApiService {
 
   address$(address: string, before: number | null, limit = 25): Observable<L2Address> {
     return this.api.get('l2/address/' + encodeURIComponent(address), { before, limit });
+  }
+
+  /** an address's market positions and Votecoin (chains with the markets feature: Truthcoin) */
+  positions$(address: string): Observable<L2Positions> {
+    return this.api.get('l2/address/' + encodeURIComponent(address) + '/positions');
   }
 
   deposits$(before: number | null, limit = 25): Observable<L2Deposit[]> {

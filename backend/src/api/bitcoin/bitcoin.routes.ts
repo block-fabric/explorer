@@ -101,6 +101,8 @@ class BitcoinRoutes {
           .get(config.MEMPOOL.API_URL_PREFIX + 'block-height/:height', this.getBlockHeight)
           .get(config.MEMPOOL.API_URL_PREFIX + 'address/:address', this.getAddress)
           .get(config.MEMPOOL.API_URL_PREFIX + 'address/:address/txs', this.getAddressTransactions)
+          // Chains Explorer: esplora's unconfirmed txs of an address (chain/address-index.ts: the backend's mempool)
+          .get(config.MEMPOOL.API_URL_PREFIX + 'address/:address/txs/mempool', this.getAddressMempoolTransactions)
           .get(config.MEMPOOL.API_URL_PREFIX + 'address/:address/txs/summary', this.getAddressTransactionSummary)
           .get(config.MEMPOOL.API_URL_PREFIX + 'address/:address/utxo', this.getAddressUtxo)
           .get(config.MEMPOOL.API_URL_PREFIX + 'scripthash/:scripthash', this.getScriptHash)
@@ -780,6 +782,29 @@ class BitcoinRoutes {
       }
       if (e instanceof Error && e.message && (e.message.indexOf('too long') > 0 || e.message.indexOf('confirmed status') > 0)) {
         handleError(req, res, 413, e.message);
+        return;
+      }
+      handleError(req, res, 500, 'Failed to get address transactions');
+    }
+  }
+
+  /** Chains Explorer: GET address/:address/txs/mempool, as esplora: the address's unconfirmed txs, newest first */
+  private async getAddressMempoolTransactions(req: Request, res: Response): Promise<void> {
+    if (config.MEMPOOL.BACKEND === 'none' && !addressIndex.enabled) {
+      handleError(req, res, 405, 'Address lookups cannot be used with bitcoind as backend.');
+      return;
+    }
+    if (!ADDRESS_REGEX.test(req.params.address)) {
+      handleError(req, res, 400, `Invalid address`);
+      return;
+    }
+    try {
+      // the address's txs start with its mempool txs (at most 50), then its confirmed ones
+      const transactions = await bitcoinApi.$getAddressTransactions(req.params.address, '');
+      res.json(transactions.filter(t => !t.status?.confirmed));
+    } catch (e) {
+      if (e instanceof Error && e.message === 'Invalid Bitcoin address') {
+        res.status(400).send(e.message);
         return;
       }
       handleError(req, res, 500, 'Failed to get address transactions');

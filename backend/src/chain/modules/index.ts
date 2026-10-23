@@ -3,7 +3,7 @@ import ecash from './ecash';
 import thunder from './thunder';
 import bitnames from './bitnames';
 import bitassets from './bitassets';
-import hivemind from './hivemind';
+import truthcoin from './truthcoin';
 import zside from './zside';
 import coinshift from './coinshift';
 
@@ -17,7 +17,7 @@ export const MODULES: ChainModule[] = [
   bitnames,
   bitassets,
   thunder,
-  hivemind,
+  truthcoin,
   zside,
   coinshift,
 ];

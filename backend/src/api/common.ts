@@ -1132,6 +1132,15 @@ export class Common {
       throw Object.assign(new Error('Non-hex request body'), { code: -2 });
     }
 
+    // Chains Explorer: a sidechain explorer's full backend (CHAIN.L2_ROLE 'full') posts the chain's own serialized tx
+    // (not a Bitcoin tx) to the Core facade's sendrawtransaction, which hands it to the sidechain node (chain/l2/submit.ts)
+    if (config.CHAIN?.L2_ROLE === 'full') {
+      if (matches[1].length > 2 * 32 * 1024) {
+        throw Object.assign(new Error('Transaction too large'), { code: -3 });
+      }
+      return matches[1].toLowerCase();
+    }
+
     // Guaranteed to be a hex string of multiple of 2
     // Guaranteed to be lower case
     // Guaranteed to pass validation (see function below)

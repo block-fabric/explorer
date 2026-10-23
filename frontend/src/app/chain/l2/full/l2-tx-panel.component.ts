@@ -5,17 +5,19 @@ import { L2ApiService, l2Error } from '@app/chain/l2/l2-api.service';
 import { L2Input, L2Output, L2Tx, Loaded } from '@app/chain/l2/l2.interfaces';
 import { L2_PAGE_IMPORTS, shortId } from '@app/chain/l2/l2-common';
 import { L2TxAssetsComponent, hasAssets } from '@app/chain/l2/features/asset-badge';
+import { L2TxMarketComponent } from '@app/chain/l2/features/market';
 
 /**
  * The transaction page's sidechain panel (CHAIN_UI 'full'), under upstream's transaction header: what upstream's
  * Bitcoin-shaped view cannot say (GET /api/v1/l2/tx/:txid): the inputs that are deposits from eCash (with their eCash
  * deposit transaction), what the outputs hold besides sats (withdrawals to eCash addresses, names, assets with their
- * ticker, market funds, swaps), the assets moved, the TxData decoded, zSide's shielded bundle, and the signers.
+ * ticker, market funds, swaps), the assets moved, a market tx's trade (Truthcoin: what it paid into the market or
+ * received from it, the miner fee, the payouts), the TxData decoded, zSide's shielded bundle, and the signers.
  */
 @Component({
   selector: 'app-l2-tx-panel',
   standalone: true,
-  imports: [...L2_PAGE_IMPORTS, L2TxAssetsComponent],
+  imports: [...L2_PAGE_IMPORTS, L2TxAssetsComponent, L2TxMarketComponent],
   styleUrls: ['./l2-panel.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -23,6 +25,12 @@ import { L2TxAssetsComponent, hasAssets } from '@app/chain/l2/features/asset-bad
     @if (v.data; as tx) {
       <div class="title-row"><h2 class="p-title">On {{ profile.name }}</h2><span class="p-sub">deposits, output contents, data and signers, from the sidechain index</span></div>
       <div class="box p-box">
+        @if (tx.market) {
+          <section>
+            <h5 class="p-h5 mt-0">Market</h5>
+            <app-l2-tx-market [tx]="tx"></app-l2-tx-market>
+          </section>
+        }
         @if (deposits(tx).length) {
           <section>
             <h5 class="p-h5 mt-0">Deposits from <app-sidechain-label chain="ecash" name="eCash"></app-sidechain-label></h5>

@@ -88,7 +88,7 @@ case "${CHAIN_PROFILE:-ecash}" in
   thunder) __CHAIN_NAME__=Thunder ;;
   bitnames) __CHAIN_NAME__=BitNames ;;
   bitassets) __CHAIN_NAME__=BitAssets ;;
-  hivemind) __CHAIN_NAME__=Hivemind ;;
+  truthcoin) __CHAIN_NAME__=Truthcoin ;;
   zside) __CHAIN_NAME__=zSide ;;
   coinshift) __CHAIN_NAME__=Coinshift ;;
   *) __CHAIN_NAME__=eCash ;;
@@ -109,7 +109,7 @@ if [ -z "$(find /var/www/mempool -path "*/resources/previews/${__CHAIN_PREVIEW__
 fi
 for f in $(find /var/www/mempool -name index.html); do
   # (with the name and network suffix of an earlier start matched too, so that a restart does not add another)
-  sed -i -E -e "s/(eCash|Thunder|BitNames|BitAssets|Hivemind|zSide|Coinshift) Explorer( \((Betanet|Testnet)\))?/${__CHAIN_NAME__} Explorer${__NETWORK_SUFFIX__}/g" \
+  sed -i -E -e "s/(eCash|Thunder|BitNames|BitAssets|Truthcoin|Hivemind|zSide|Coinshift) Explorer( \((Betanet|Testnet)\))?/${__CHAIN_NAME__} Explorer${__NETWORK_SUFFIX__}/g" \
     -e "s#resources/previews/chain-[a-z0-9]+\.png#resources/previews/${__CHAIN_PREVIEW__}#g" "$f"
   if [ -n "$__CHAIN_DESC__" ]; then
     sed -i -E -e "s#content=\"Explore [^\"]*\"#content=\"${__CHAIN_DESC__}\"#g" "$f"

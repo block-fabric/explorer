@@ -57,6 +57,7 @@ import { PROFILE, l2Role } from './chain/profile';
 import l2Routes from './chain/l2/routes';
 import l2Index from './chain/l2/index';
 import { CoreFacade } from './chain/l2/facade';
+import { MAX_SUBMIT_BYTES } from './chain/l2/submit';
 
 class Server {
   private wss: WebSocket.Server | undefined;
@@ -302,11 +303,21 @@ class Server {
     this.app
       .use((req: Request, res: Response, next: NextFunction) => {
         res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
         next();
       })
-      .use(express.json({ limit: '1mb' }));
+      // the only bodies are POST l2/tx's: a signed tx, hex text or JSON (chain/l2/submit.ts)
+      .use(express.text({ type: ['text/plain'], limit: MAX_SUBMIT_BYTES + 1024 }))
+      .use(express.json({ limit: MAX_SUBMIT_BYTES + 1024 }));
     l2Routes.initRoutes(this.app);
+    // a body too large or not JSON: a JSON error, not express's page
+    this.app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+      if (!err) {
+        return next();
+      }
+      res.status(err.status === 413 ? 413 : 400).json({ error: err.status === 413 ? 'Transaction too large' : 'Malformed request body' });
+    });
     if (config.CHAIN.L2_RPC_PORT) {
       new CoreFacade(l2Index).listen(config.CHAIN.L2_RPC_PORT); // for the 'full' backend of this sidechain
     }

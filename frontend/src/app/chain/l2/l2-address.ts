@@ -1,5 +1,5 @@
 /**
- * Sidechain addresses (the Thunder family of sidechains: Thunder, BitNames, BitAssets, Hivemind, zSide, Coinshift):
+ * Sidechain addresses (the Thunder family of sidechains: Thunder, BitNames, BitAssets, Truthcoin, zSide, Coinshift):
  * 20 raw bytes (the hash of a verifying key) in base58 with Bitcoin's alphabet, with no version byte and no checksum,
  * e.g. "2z9GMfc3GeFxu7xaJyigxxxxxxx". With no checksum, an address is valid when it is in the alphabet and decodes to
  * exactly 20 bytes: 20 to 28 characters (a leading '1' per leading zero byte).

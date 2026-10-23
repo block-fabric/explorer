@@ -1,5 +1,5 @@
 import { blake3 } from '@noble/hashes/blake3';
-import { Content, Input, Output, Shielded } from '../l2/types';
+import { Content, Input, MarketView, Output, Shielded } from '../l2/types';
 import { NAME_CANDIDATES } from './name-candidates';
 
 /**
@@ -20,6 +20,8 @@ export interface IndexTx {
   data: any;
   shielded: Shielded | null;
   signers: (string | null)[];
+  /** a market tx (Truthcoin) */
+  market?: MarketView | null;
 }
 
 export interface IndexUtxo {

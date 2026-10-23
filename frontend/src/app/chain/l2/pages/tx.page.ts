@@ -6,12 +6,13 @@ import { L2ApiService, loaded } from '@app/chain/l2/l2-api.service';
 import { L2Tx, Loaded } from '@app/chain/l2/l2.interfaces';
 import { L2_PAGE_IMPORTS, shortId } from '@app/chain/l2/l2-common';
 import { L2TxAssetsComponent, hasAssets } from '@app/chain/l2/features/asset-badge';
+import { L2TxMarketComponent } from '@app/chain/l2/features/market';
 
-/** /tx/:txid: status, inputs and outputs, fee, TxData, zSide's shielded bundle, signers */
+/** /tx/:txid: status, inputs and outputs, fee, a market tx's trade (Truthcoin), TxData, zSide's shielded bundle, signers */
 @Component({
   selector: 'app-l2-tx',
   standalone: true,
-  imports: [...L2_PAGE_IMPORTS, L2TxAssetsComponent],
+  imports: [...L2_PAGE_IMPORTS, L2TxAssetsComponent, L2TxMarketComponent],
   styleUrls: ['../../components/module-page.scss', './l2-page.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -35,7 +36,10 @@ import { L2TxAssetsComponent, hasAssets } from '@app/chain/l2/features/asset-bad
                 <tr><th>Time</th><td><app-timestamp [unixTime]="$any(tx.status).time"></app-timestamp></td></tr>
               }
               @if (tx.status.confirmed) {<tr><th>Position</th><td>#{{ tx.index }} in its block</td></tr>}
-              <tr><th>Fee</th><td><app-l2-amount [sats]="tx.fee"></app-l2-amount></td></tr>
+              <tr><th>{{ tx.market ? 'Miner fee' : 'Fee' }}</th><td><app-l2-amount [sats]="tx.fee"></app-l2-amount></td></tr>
+              @if (tx.market && tx.market.cost !== null && tx.market.applied) {
+                <tr><th>{{ tx.market.cost < 0 ? 'From the market' : 'Into the market' }}</th><td><app-l2-amount [sats]="tx.market.cost < 0 ? -tx.market.cost : tx.market.cost"></app-l2-amount></td></tr>
+              }
               <tr><th>Size</th><td>@if (tx.size !== null && tx.size !== undefined) {<span>{{ tx.size | number }} bytes</span>} @else {<span class="muted">–</span>}</td></tr>
               <tr><th>Inputs / outputs</th><td>{{ tx.inputs.length }} / {{ tx.outputs.length }}</td></tr>
             </tbody></table>
@@ -52,6 +56,11 @@ import { L2TxAssetsComponent, hasAssets } from '@app/chain/l2/features/asset-bad
             </tbody></table>
           </div>
         </div>
+
+        @if (tx.market) {
+          <h2>Market</h2>
+          <div class="box"><app-l2-tx-market [tx]="tx"></app-l2-tx-market></div>
+        }
 
         <h2>Inputs and outputs</h2>
         <div class="tx-card"><app-l2-tx-io [tx]="tx"></app-l2-tx-io></div>

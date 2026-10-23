@@ -11,7 +11,8 @@ import { featureRoutes } from './routes';
 const zside: ChainModule = {
   profile: { id: 'zside', kind: 'l2', name: 'zSide', unit: 'sats', slot: 98, mainchain: false, subsidy: false },
   l2: {
-    txids: 'zside', blockIndex: false, inputPairs: true, withdrawalBundleRpc: true, mempool: false, txInfo: false, fill: false,
+    txids: 'zside', blockIndex: false, inputPairs: true, withdrawalBundleRpc: true, mempool: false, fill: false,
+    submit: { json: 'submit_transaction' },
     depositRule: 'bare', features: ['shielded'],
     content: thunderContent,
     shielded: tx => tx.orchard_bundle

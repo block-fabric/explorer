@@ -31,7 +31,7 @@ export const L2_FEATURE_PAGES: L2FeaturePage[] = [
   { path: 'pools', title: 'AMM pools', feature: 'assets', api: 'pools', item: 'Pool', detail: false,
     about: 'The AMM pools seen in the index, with their state (get_amm_pool_state)' },
   { path: 'markets', title: 'Markets', feature: 'markets', api: 'markets', item: 'Market', detail: true,
-    about: 'Hivemind\'s prediction markets (the node\'s market_list)' },
+    about: 'Truthcoin\'s prediction markets (the node\'s market_list)' },
   { path: 'decisions', title: 'Decisions', feature: 'markets', api: 'decisions', item: 'Decision', detail: true,
     about: 'The oracle\'s decisions past "created": claimed, voting and resolved, with the markets that use them' },
   { path: 'votes', title: 'Votes', feature: 'markets', api: 'votes', item: 'Vote', detail: false,

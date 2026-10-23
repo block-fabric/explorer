@@ -7,7 +7,7 @@ import { Loaded } from '@app/chain/l2/l2.interfaces';
 import { shortId } from '@app/chain/l2/l2-common';
 import { FEATURE_PAGE_IMPORTS, featureData$ } from '@app/chain/l2/features/feature-kit';
 
-// GET /api/v1/l2/feature/decisions[/:id], feature/votes (chains/L2-API.md): Hivemind's oracle, from the node's public reads
+// GET /api/v1/l2/feature/decisions[/:id], feature/votes (chains/L2-API.md): Truthcoin's oracle, from the node's public reads
 export interface DecisionItem {
   decision_id_hex: string;
   period_index: number;
@@ -32,7 +32,7 @@ export interface VotesView {
 
 /** /decisions: the oracle's decisions past "created" (claimed, voting, resolved) and the count of open slots */
 @Component({
-  selector: 'app-hivemind-decisions',
+  selector: 'app-truthcoin-decisions',
   standalone: true,
   imports: [...FEATURE_PAGE_IMPORTS],
   styleUrls: ['../../components/module-page.scss', '../../l2/pages/l2-page.scss'],
@@ -42,7 +42,7 @@ export interface VotesView {
     <app-l2-feature-head path="decisions"></app-l2-feature-head>
     @if (view$ | async; as v) {
       @if (v === 'unavailable') {
-        <div class="alert alert-info">This sidechain has no oracle: this page belongs to the Hivemind explorer.</div>
+        <div class="alert alert-info">This sidechain has no oracle: this page belongs to the Truthcoin explorer.</div>
       } @else {
         <app-l2-state [state]="v" what="Decisions" [height]="300"></app-l2-state>
         @if (v.data; as d) {
@@ -76,7 +76,7 @@ export interface VotesView {
     }
   </div>`,
 })
-export class HivemindDecisionsPage implements OnInit {
+export class TruthcoinDecisionsPage implements OnInit {
   view$: Observable<Loaded<{ status: DecisionStatus; counts: Record<string, number>; items: DecisionItem[] }> | 'unavailable'>;
 
   constructor(private api: L2ApiService, private seo: SeoService) {}
@@ -94,7 +94,7 @@ export class HivemindDecisionsPage implements OnInit {
 
 /** /decisions/:id: one decision, its votes and the markets that use it */
 @Component({
-  selector: 'app-hivemind-decision',
+  selector: 'app-truthcoin-decision',
   standalone: true,
   imports: [...FEATURE_PAGE_IMPORTS],
   styleUrls: ['../../components/module-page.scss', '../../l2/pages/l2-page.scss'],
@@ -138,7 +138,7 @@ export class HivemindDecisionsPage implements OnInit {
     }
   </div>`,
 })
-export class HivemindDecisionPage implements OnInit {
+export class TruthcoinDecisionPage implements OnInit {
   id = '';
   title: string | null = 'Decision';
   view$: Observable<Loaded<DecisionDetail>>;
@@ -163,7 +163,7 @@ export class HivemindDecisionPage implements OnInit {
 
 /** /votes: the current voting period, the Votecoin holders and the decision slots' pricing */
 @Component({
-  selector: 'app-hivemind-votes',
+  selector: 'app-truthcoin-votes',
   standalone: true,
   imports: [...FEATURE_PAGE_IMPORTS],
   styleUrls: ['../../components/module-page.scss', '../../l2/pages/l2-page.scss'],
@@ -173,7 +173,7 @@ export class HivemindDecisionPage implements OnInit {
     <app-l2-feature-head path="votes"></app-l2-feature-head>
     @if (view$ | async; as v) {
       @if (v === 'unavailable') {
-        <div class="alert alert-info">This sidechain has no oracle: this page belongs to the Hivemind explorer.</div>
+        <div class="alert alert-info">This sidechain has no oracle: this page belongs to the Truthcoin explorer.</div>
       } @else {
         <app-l2-state [state]="v" what="Votes" [height]="300"></app-l2-state>
         @if (v.data; as d) {
@@ -242,7 +242,7 @@ export class HivemindDecisionPage implements OnInit {
     }
   </div>`,
 })
-export class HivemindVotesPage implements OnInit {
+export class TruthcoinVotesPage implements OnInit {
   view$: Observable<Loaded<VotesView> | 'unavailable'>;
   shortId = shortId;
 
