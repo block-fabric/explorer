@@ -62,6 +62,5 @@ export function l2FeatureNav(features: string[], firstOnly = false): NavItem[] {
 /** The core pages of a sidechain explorer */
 export const L2_NAV: NavItem[] = [
   { path: '/blocks', title: 'Blocks', icon: 'nav-cubes' },
-  { path: '/deposits', title: 'Deposits and withdrawals', icon: 'nav-drivechain' },
-  { path: '/bmm', title: 'BMM', icon: 'nav-drivechain' },
+  { path: '/bmm', title: 'Drivechain: BMM, deposits and withdrawals', icon: 'nav-drivechain' },
 ];

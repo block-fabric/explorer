@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
+import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subject, Subscription, catchError, merge, of, switchMap, timer } from 'rxjs';
 import { NgxEchartsDirective, provideEchartsCore } from 'ngx-echarts';
@@ -9,11 +9,13 @@ import { axisStyle, baseChart, cockpitCharts } from '@app/chain/pages/cockpit/co
 import { L2ApiService, l2Error } from '@app/chain/l2/l2-api.service';
 import { L2Error } from '@app/chain/l2/l2.interfaces';
 import { L2_PAGE_IMPORTS, shortId } from '@app/chain/l2/l2-common';
+import { L2TransfersPage } from '@app/chain/l2/pages/transfers.page';
 
 /**
  * /bmm: this sidechain on eCash, from the eCash explorer's drivechain index (GET /api/v1/l2/bmm/*): the eCash blocks
  * that carried its blocks and the bids paid for them (blind merged mining), BMM coverage and gaps, competition for the
- * slot, the escrow over time, deposits and withdrawals, and the withdrawal bundles on their way to payout. The charts
+ * slot, the escrow over time, deposits and withdrawals (with their full lists, the #peg section: /deposits and
+ * /withdrawals open the page there), and the withdrawal bundles on their way to payout. The charts
  * are the eCash explorer's cockpit's (pages/cockpit/cockpit-charts.ts), for this slot only.
  */
 
@@ -40,19 +42,22 @@ export function reverseHex(h: string): string {
 @Component({
   selector: 'app-l2-bmm',
   standalone: true,
-  imports: [...L2_PAGE_IMPORTS, NgxEchartsDirective],
+  imports: [...L2_PAGE_IMPORTS, NgxEchartsDirective, L2TransfersPage],
   providers: [provideEchartsCore({ echarts: () => import('@app/graphs/echarts').then(m => m.echarts) })],
   templateUrl: './bmm.page.html',
   styleUrls: ['../../pages/cockpit/cockpit.component.scss', './l2-page.scss', './bmm.page.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class L2BmmPage implements OnInit, OnDestroy {
+export class L2BmmPage implements OnInit, AfterViewInit, OnDestroy {
   profile = PROFILE;
   slot = PROFILE.slot as number;
   windows = WINDOWS;
   feeds = FEEDS;
   window = 1440;
   feed = 'bmm';
+  /** the peg list's first tab; set when the page was opened as /deposits or /withdrawals */
+  pegKind: 'deposits' | 'withdrawals' = 'deposits';
+  private pegFirst = false;
   feedBefore: number | null = null;
   feedPage = FEED_PAGE;
   shortId = shortId;
@@ -78,7 +83,12 @@ export class L2BmmPage implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    this.seo.setTitle(`${PROFILE.name}: BMM on eCash`);
+    this.seo.setTitle(`${PROFILE.name}: drivechain on eCash`);
+    const peg = this.route.snapshot.data['peg'];
+    if (peg === 'deposits' || peg === 'withdrawals') {
+      this.pegKind = peg;
+      this.pegFirst = true;
+    }
     const q = this.route.snapshot.queryParamMap;
     if (q.get('window') !== null && /^\d+$/.test(q.get('window') as string)) { this.window = Number(q.get('window')); }
     if (q.get('feed') && FEEDS.some(f => f.id === q.get('feed'))) { this.feed = q.get('feed') as string; }
@@ -109,6 +119,12 @@ export class L2BmmPage implements OnInit, OnDestroy {
       this.feedItems = items;
       this.cd.markForCheck();
     }));
+  }
+
+  ngAfterViewInit(): void {
+    if (this.pegFirst) {
+      setTimeout(() => document.getElementById('peg')?.scrollIntoView({ block: 'start' }));
+    }
   }
 
   ngOnDestroy(): void {

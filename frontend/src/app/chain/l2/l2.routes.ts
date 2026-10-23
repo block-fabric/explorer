@@ -19,8 +19,8 @@ export const L2_ROUTES: Routes = [
       { path: 'block/:id', loadComponent: () => import('@app/chain/l2/pages/block.page').then(m => m.L2BlockPage) },
       { path: 'tx/:txid', loadComponent: () => import('@app/chain/l2/pages/tx.page').then(m => m.L2TxPage) },
       { path: 'address/:address', loadComponent: () => import('@app/chain/l2/pages/address.page').then(m => m.L2AddressPage) },
-      { path: 'deposits', data: { kind: 'deposits' }, loadComponent: () => import('@app/chain/l2/pages/transfers.page').then(m => m.L2TransfersPage) },
-      { path: 'withdrawals', data: { kind: 'withdrawals' }, loadComponent: () => import('@app/chain/l2/pages/transfers.page').then(m => m.L2TransfersPage) },
+      { path: 'deposits', data: { peg: 'deposits' }, loadComponent: () => import('@app/chain/l2/pages/bmm.page').then(m => m.L2BmmPage) },
+      { path: 'withdrawals', data: { peg: 'withdrawals' }, loadComponent: () => import('@app/chain/l2/pages/bmm.page').then(m => m.L2BmmPage) },
       // BMM and the peg on eCash, from the eCash explorer's drivechain index (GET /api/v1/l2/bmm/*)
       { path: 'bmm', loadComponent: () => import('@app/chain/l2/pages/bmm.page').then(m => m.L2BmmPage) },
       // the chain's own feature pages (its module's routes, chain/modules/<chain>/), ahead of the generic ones they replace

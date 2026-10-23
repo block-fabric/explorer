@@ -27,14 +27,15 @@ import { L2_FEATURE_PAGES } from '@app/chain/l2/l2-nav';
 
 /**
  * eCash Explorer: a sidechain explorer on upstream's UI (CHAIN_UI 'full'): its own pages, from the lean page set
- * (chain/l2/pages): BMM on eCash, deposits and withdrawals, and its feature pages (the module's own first)
+ * (chain/l2/pages): the drivechain page (BMM on eCash, with deposits and withdrawals; /deposits and /withdrawals open it
+ * at that section), and its feature pages (the module's own first)
  */
 const featureList = () => import('@app/chain/l2/pages/feature.page').then(m => m.L2FeaturePageComponent);
 const featureItem = () => import('@app/chain/l2/pages/feature.page').then(m => m.L2FeatureItemPage);
 const L2_FULL_ROUTES: Routes = L2_FULL ? [
   { path: 'bmm', loadComponent: () => import('@app/chain/l2/pages/bmm.page').then(m => m.L2BmmPage) },
-  { path: 'deposits', data: { kind: 'deposits' }, loadComponent: () => import('@app/chain/l2/pages/transfers.page').then(m => m.L2TransfersPage) },
-  { path: 'withdrawals', data: { kind: 'withdrawals' }, loadComponent: () => import('@app/chain/l2/pages/transfers.page').then(m => m.L2TransfersPage) },
+  { path: 'deposits', data: { peg: 'deposits' }, loadComponent: () => import('@app/chain/l2/pages/bmm.page').then(m => m.L2BmmPage) },
+  { path: 'withdrawals', data: { peg: 'withdrawals' }, loadComponent: () => import('@app/chain/l2/pages/bmm.page').then(m => m.L2BmmPage) },
   ...L2_FEATURE_PAGES
     .filter(p => !(MODULE.routes ?? []).some(r => r.path === p.path))
     .flatMap(p => [

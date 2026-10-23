@@ -1,6 +1,6 @@
-import { ChangeDetectionStrategy, Component, OnInit } from '@angular/core';
+import { ChangeDetectionStrategy, Component, Input, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
-import { Observable, map, switchMap } from 'rxjs';
+import { BehaviorSubject, Observable, map, switchMap } from 'rxjs';
 import { SeoService } from '@app/services/seo.service';
 import { PROFILE } from '@app/chain/profiles';
 import { L2ApiService, loaded } from '@app/chain/l2/l2-api.service';
@@ -9,7 +9,11 @@ import { L2_PAGE_IMPORTS, shortId } from '@app/chain/l2/l2-common';
 
 const PAGE = 25;
 
-/** /deposits and /withdrawals (route data kind), ?before=<height>: the peg's two directions, newest first */
+/**
+ * The peg's two directions, newest first: deposits into this sidechain and withdrawals out of it. Shown inside the
+ * drivechain page (/bmm, `embedded`: tabs and paging kept in the component); as a page of its own it reads the route
+ * data `kind` and ?before=<height>.
+ */
 @Component({
   selector: 'app-l2-transfers',
   standalone: true,
@@ -17,14 +21,21 @@ const PAGE = 25;
   styleUrls: ['../../components/module-page.scss', './l2-page.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-  <div class="container-xl mp">
-    <h1><app-svg-images name="nav-drivechain" width="28" height="28" class="cmark"></app-svg-images> {{ kind === 'deposits' ? 'Deposits' : 'Withdrawals' }}</h1>
+  <div [class.container-xl]="!embedded" [class.mp]="!embedded">
+    @if (!embedded) {
+      <h1><app-svg-images name="nav-drivechain" width="28" height="28" class="cmark"></app-svg-images> {{ kind === 'deposits' ? 'Deposits' : 'Withdrawals' }}</h1>
+    }
     <div class="sub">{{ kind === 'deposits'
       ? 'eCash sent into ' + profile.name + '\\'s escrow, credited on the sidechain when the next block connects'
       : 'Coins leaving ' + profile.name + ' for eCash: gathered in a withdrawal bundle, which eCash miners vote on before it is paid' }}</div>
     <div class="tabs">
-      <a class="btn-tab" [class.on]="kind === 'deposits'" [routerLink]="['/deposits']">Deposits</a>
-      <a class="btn-tab" [class.on]="kind === 'withdrawals'" [routerLink]="['/withdrawals']">Withdrawals</a>
+      @if (embedded) {
+        <button class="btn-tab" [class.on]="kind === 'deposits'" (click)="show('deposits', null)">Deposits</button>
+        <button class="btn-tab" [class.on]="kind === 'withdrawals'" (click)="show('withdrawals', null)">Withdrawals</button>
+      } @else {
+        <a class="btn-tab" [class.on]="kind === 'deposits'" [routerLink]="['/deposits']">Deposits</a>
+        <a class="btn-tab" [class.on]="kind === 'withdrawals'" [routerLink]="['/withdrawals']">Withdrawals</a>
+      }
     </div>
     @if (view$ | async; as v) {
       <app-l2-state [state]="v" [what]="kind === 'deposits' ? 'Deposits' : 'Withdrawals'" [height]="400"></app-l2-state>
@@ -73,20 +84,29 @@ const PAGE = 25;
           }
         </div>
         <div class="pager">
-          @if (before !== null) {<a class="btn btn-sm btn-secondary" [routerLink]="['/' + kind]">Newest</a>}
-          @if (rows.length === page) {
-            <a class="btn btn-sm btn-secondary" [routerLink]="['/' + kind]" [queryParams]="{ before: $any(rows[rows.length - 1]).height }">Older &rarr;</a>
+          @if (embedded) {
+            @if (before !== null) {<button class="btn btn-sm btn-secondary" (click)="show(kind, null)">Newest</button>}
+            @if (rows.length === page) {
+              <button class="btn btn-sm btn-secondary" (click)="show(kind, $any(rows[rows.length - 1]).height)">Older &rarr;</button>
+            }
+          } @else {
+            @if (before !== null) {<a class="btn btn-sm btn-secondary" [routerLink]="['/' + kind]">Newest</a>}
+            @if (rows.length === page) {
+              <a class="btn btn-sm btn-secondary" [routerLink]="['/' + kind]" [queryParams]="{ before: $any(rows[rows.length - 1]).height }">Older &rarr;</a>
+            }
           }
         </div>
       }
     }
   </div>`,
-  styles: [`.tabs a.btn-tab { padding: 6px 12px; color: var(--transparent-fg); border-bottom: 2px solid transparent; text-decoration: none; }
-    .tabs a.btn-tab.on { color: var(--fg); border-bottom-color: var(--chain-accent, var(--title-fg)); }`],
+  styles: [`.tabs .btn-tab { padding: 6px 12px; color: var(--transparent-fg); border: 0; border-bottom: 2px solid transparent; background: none; text-decoration: none; }
+    .tabs .btn-tab.on { color: var(--fg); border-bottom-color: var(--chain-accent, var(--title-fg)); }`],
 })
 export class L2TransfersPage implements OnInit {
+  /** inside another page: tabs and paging stay in the component, not the URL */
+  @Input() embedded = false;
+  @Input() kind: 'deposits' | 'withdrawals' = 'deposits';
   profile = PROFILE;
-  kind: 'deposits' | 'withdrawals' = 'deposits';
   before: number | null = null;
   page = PAGE;
   view$: Observable<Loaded<(L2Deposit | L2Withdrawal)[]>>;
@@ -94,7 +114,18 @@ export class L2TransfersPage implements OnInit {
 
   constructor(private api: L2ApiService, private route: ActivatedRoute, private seo: SeoService) {}
 
+  private state$ = new BehaviorSubject<{ kind: 'deposits' | 'withdrawals'; before: number | null }>({ kind: 'deposits', before: null });
+
   ngOnInit(): void {
+    if (this.embedded) {
+      this.state$.next({ kind: this.kind, before: null });
+      this.view$ = this.state$.pipe(switchMap(s => {
+        this.kind = s.kind;
+        this.before = s.before;
+        return this.load(s.kind, s.before);
+      }));
+      return;
+    }
     this.kind = this.route.snapshot.data['kind'] === 'withdrawals' ? 'withdrawals' : 'deposits';
     this.seo.setTitle(this.kind === 'deposits' ? 'Deposits' : 'Withdrawals');
     this.view$ = this.route.queryParamMap.pipe(
@@ -103,9 +134,16 @@ export class L2TransfersPage implements OnInit {
         this.before = b !== null && /^\d+$/.test(b) ? Number(b) : null;
         return this.before;
       }),
-      switchMap(before => loaded<(L2Deposit | L2Withdrawal)[]>(this.kind === 'deposits'
-        ? this.api.deposits$(before, PAGE) : this.api.withdrawals$(before, PAGE))),
+      switchMap(before => this.load(this.kind, before)),
     );
+  }
+
+  show(kind: 'deposits' | 'withdrawals', before: number | null): void {
+    this.state$.next({ kind, before });
+  }
+
+  private load(kind: 'deposits' | 'withdrawals', before: number | null): Observable<Loaded<(L2Deposit | L2Withdrawal)[]>> {
+    return loaded<(L2Deposit | L2Withdrawal)[]>(kind === 'deposits' ? this.api.deposits$(before, PAGE) : this.api.withdrawals$(before, PAGE));
   }
 
   deposits(rows: any[]): L2Deposit[] {
