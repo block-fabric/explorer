@@ -97,9 +97,9 @@ export class ChainCockpitComponent implements OnInit, OnDestroy {
     { key: 'name', label: 'Sidechain', sort: r => (r.name ?? '').toLowerCase() },
     { key: 'hash', label: 'Bundle' },
     { key: 'votes', label: 'Votes', sort: r => r.score },
-    { key: 'blocksleft', label: 'Blocks left', align: 'right', sort: true },
+    { key: 'blocksleft', label: 'Blocks left', align: 'right', sort: true, hide: 'lg' },
     { key: 'height', label: 'Proposed at', align: 'right', sort: true, hide: 'md' },
-    { key: 'state', label: 'Status', align: 'right', nowrap: true },
+    { key: 'state', label: 'Status', align: 'right' },
   ];
   bundleFilters: CxFilter[] = [{ options: [
     { label: 'payable', test: b => !!b.payable },
@@ -149,7 +149,7 @@ export class ChainCockpitComponent implements OnInit, OnDestroy {
     { key: 'sidechain', label: 'Sidechain', sort: (e: any) => e.slot },
     { key: 'a', label: a },
     { key: 'b', label: b, align: 'right', sort: sortB ?? undefined, nowrap: true },
-    { key: 'tx', label: 'Transaction', align: 'right' },
+    { key: 'tx', label: 'Transaction', align: 'right', hide: 'lg' },
   ]]));
   feedFilters = FEED_FILTERS;
   matchEvent = (e: any, q: string) => String(e.height).includes(q)

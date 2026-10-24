@@ -334,11 +334,11 @@ class FlushRoutes {
     const key = `fees:${range}:${page}:${size}:${feesOnly}`;
     this.send(res, await this.nodeJson(key, 15000, 'node', /** @asyncUnsafe: cached() passes its errors on */ async () => {
       const since = Math.floor(Date.now() / 1000) - FEE_RANGES[range];
-      const where = 'blockTimestamp >= FROM_UNIXTIME(?)';
+      const where = 'stale = 0 AND blockTimestamp >= FROM_UNIXTIME(?)';
       const [[totals]]: any = await DB.query(
         `SELECT COUNT(*) AS blocks, COALESCE(SUM(fees), 0) AS fees, COALESCE(SUM(fees > 0), 0) AS withFees,
            MIN(height) AS fromHeight, MAX(height) AS toHeight FROM blocks WHERE ${where}`, [since]);
-      const [[indexed]]: any = await DB.query('SELECT MIN(height) AS height, UNIX_TIMESTAMP(MIN(blockTimestamp)) AS time FROM blocks');
+      const [[indexed]]: any = await DB.query('SELECT MIN(height) AS height, UNIX_TIMESTAMP(MIN(blockTimestamp)) AS time FROM blocks WHERE stale = 0');
       const [rows]: any = await DB.query(
         `SELECT height, hash, UNIX_TIMESTAMP(blockTimestamp) AS time, fees, tx_count AS txs FROM blocks
            WHERE ${where}${feesOnly ? ' AND fees > 0' : ''} ORDER BY height DESC LIMIT ? OFFSET ?`, [since, size, page * size]);

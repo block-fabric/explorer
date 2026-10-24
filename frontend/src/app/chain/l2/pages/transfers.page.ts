@@ -51,7 +51,7 @@ const PAGE = 25;
                     <td>@if (x.time) {<app-timestamp [unixTime]="x.time" [hideTimeSince]="true"></app-timestamp>} @else {<span class="muted">–</span>}</td>
                     <td><app-l2-main-link kind="tx" [id]="x.mainTxid" [short]="true"></app-l2-main-link></td>
                     <td><app-l2-outpoint [op]="x.outpoint"></app-l2-outpoint></td>
-                    <td>@if (x.burned) {<span class="pill" title="The deposit's destination could not be read: credited to the burn address">burned</span>} @else {<a [routerLink]="['/address', x.address]" class="mono">{{ x.address }}</a>}</td>
+                    <td>@if (x.burned) {<span class="pill" title="The deposit's destination could not be read: credited to the burn address">burned</span>} @else {<a [routerLink]="['/address', x.address]" class="mono" [title]="x.address">{{ shortId(x.address, 8) }}</a>}</td>
                     <td class="text-end"><app-l2-amount [sats]="x.amount"></app-l2-amount></td>
                     <td><app-l2-spent [spent]="x.spent"></app-l2-spent></td>
                   </tr>

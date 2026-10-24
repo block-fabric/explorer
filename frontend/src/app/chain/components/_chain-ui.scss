@@ -113,7 +113,8 @@ h2, .cp-h2 { font-weight: 500; letter-spacing: -0.02em; }
 .muted { color: var(--cx-ink-3); }
 
 // long values: key/value cards and plain tables break hashes and addresses rather than scroll
-.kv td { overflow-wrap: anywhere; }
+.kv td { overflow-wrap: anywhere; white-space: normal !important; }
+.kv td .muted, .kv td span { white-space: normal; }
 .kv .mono, .kv td.mono, .table td .mono, .table td.mono { word-break: break-all; }
 .table td { overflow-wrap: break-word; }
 
