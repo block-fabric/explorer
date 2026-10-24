@@ -262,7 +262,7 @@
           <app-chain-table [rows]="d.live.bundles" [columns]="bundleCols" [filters]="d.live.bundles.length > 1 ? bundleFilters : null" [pageSize]="10"
               [trackBy]="trackHash" empty="No withdrawal bundle is pending.">
             <ng-template cxCell="name" let-b><app-sidechain-label [slot]="b.slot" [name]="b.name"></app-sidechain-label></ng-template>
-            <ng-template cxCell="hash" let-b><span class="mono" [title]="b.hash"><app-truncate [text]="b.hash" [lastChars]="8" [maxWidth]="150"></app-truncate></span></ng-template>
+            <ng-template cxCell="hash" let-b><span class="mono" [title]="b.hash">{{ b.hash.slice(0, 8) }}…{{ b.hash.slice(-6) }}</span></ng-template>
             <ng-template cxCell="votes" let-b>
               <div class="vote-cell" [style.--sc]="colorOf(b.slot)">
                 <div class="vote-l"><b>{{ b.score | number }}</b><span class="muted ms-1">/ {{ b.threshold | number }}</span></div>

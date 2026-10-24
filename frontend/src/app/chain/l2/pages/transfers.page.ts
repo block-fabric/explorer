@@ -48,7 +48,7 @@ const PAGE = 25;
                 @for (x of deposits(rows); track $index) {
                   <tr>
                     <td><a [routerLink]="['/block', x.hash]">{{ x.height | number }}</a></td>
-                    <td>@if (x.time) {<app-timestamp [unixTime]="x.time" [hideTimeSince]="true"></app-timestamp>} @else {<span class="muted">–</span>}</td>
+                    <td>@if (x.time) {<app-time kind="since" [time]="x.time" [fastRender]="true"></app-time>} @else {<span class="muted">–</span>}</td>
                     <td><app-l2-main-link kind="tx" [id]="x.mainTxid" [short]="true"></app-l2-main-link></td>
                     <td><app-l2-outpoint [op]="x.outpoint"></app-l2-outpoint></td>
                     <td>@if (x.burned) {<span class="pill" title="The deposit's destination could not be read: credited to the burn address">burned</span>} @else {<a [routerLink]="['/address', x.address]" class="mono" [title]="x.address">{{ shortId(x.address, 8) }}</a>}</td>
@@ -67,7 +67,7 @@ const PAGE = 25;
                 @for (w of withdrawals(rows); track $index) {
                   <tr>
                     <td><a [routerLink]="['/block', w.height]">{{ w.height | number }}</a></td>
-                    <td>@if (w.time) {<app-timestamp [unixTime]="w.time" [hideTimeSince]="true"></app-timestamp>} @else {<span class="muted">–</span>}</td>
+                    <td>@if (w.time) {<app-time kind="since" [time]="w.time" [fastRender]="true"></app-time>} @else {<span class="muted">–</span>}</td>
                     <td><a [routerLink]="['/tx', w.txid]" class="mono" [title]="w.txid + ':' + w.vout">{{ shortId(w.txid) }}:{{ w.vout }}</a></td>
                     <td><a [routerLink]="['/address', w.address]" class="mono" [title]="w.address">{{ shortId(w.address, 6) }}</a></td>
                     <td><app-l2-main-link kind="address" [id]="w.mainAddress" [short]="true"></app-l2-main-link></td>
