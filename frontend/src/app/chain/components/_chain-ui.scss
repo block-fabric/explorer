@@ -16,6 +16,7 @@
 
 // headings
 h2, .cp-h2 { font-weight: 500; letter-spacing: -0.02em; }
+.cp-h2 { margin-top: 30px; }
 
 // figures: big, tight, tabular; labels small and quiet
 .kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-bottom: 10px; }

@@ -140,7 +140,7 @@
           </div>
           <div class="kpi">
             <div class="k-label">BMM cost per transaction</div>
-            <div class="k-value">@if (e.txs) { {{ (e.bids / e.txs) | number:'1.0-0' }} <span class="k-small">sats</span>} @else {–}</div>
+            <div class="k-value">@if (e.txs) { {{ (e.bids / e.txs) | number:(e.bids / e.txs < 10 ? '1.0-2' : '1.0-0') }} <span class="k-small">sats</span>} @else {–}</div>
             <div class="k-sub">{{ e.txs | number }} transactions in these blocks</div>
           </div>
         </div>

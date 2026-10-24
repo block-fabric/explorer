@@ -382,7 +382,7 @@ export class L2BmmPage implements OnInit, AfterViewInit, OnDestroy {
         series: [
           { name: 'fees earned', type: 'bar', stack: 'e', itemStyle: { color: '#3bd16f' }, data: asc.map(r => r.fees) },
           { name: 'bid paid', type: 'bar', stack: 'e', itemStyle: { color: this.color }, data: asc.map(r => -(r.bid ?? 0)) },
-          { name: 'running margin', type: 'line', yAxisIndex: 1, showSymbol: false, lineStyle: { width: 1.5, color: '#ffffffaa' }, data: running },
+          { name: 'running margin', type: 'line', yAxisIndex: 1, showSymbol: false, itemStyle: { color: '#ffffffaa' }, lineStyle: { width: 1.5, color: '#ffffffaa' }, data: running },
         ],
       }),
     };
