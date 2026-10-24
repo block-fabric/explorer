@@ -99,8 +99,42 @@ import { FreebankApiService } from '@app/chain/modules/freebank/freebank-api.ser
         </span>
       </div>
     </ng-container>
+
+    <!-- the blocks list's drivechain columns: the sidechains carried, the bids, the peg, the bundle votes -->
+    <ng-container *ngIf="!l2 && !flush && mark?.summary as s">
+      <span *ngIf="mode === 'bmm'" class="col bmm" [title]="stripeTitle">
+        <span *ngFor="let a of s.bmm" class="sc" [style.color]="colorOf(a.slot)"><app-svg-images name="chain-mark" [fill]="markId(a.slot, a.name)" [width]="px" [height]="px"></app-svg-images></span>
+        <span *ngIf="s.bmm.length" class="n">{{ s.bmm.length }}</span>
+        <span *ngIf="!s.bmm.length" class="none">–</span>
+      </span>
+      <span *ngIf="mode === 'bids'" class="col" [title]="bidsTitle(s)">
+        <ng-container *ngIf="s.bids; else noBid">{{ s.bids | number }}<span class="u">sats</span></ng-container>
+        <ng-template #noBid><span class="none">–</span></ng-template>
+        <span *ngIf="s.bmmRequests > s.bmm.length" class="beaten" title="BMM requests in this block that another request for their slot beat">{{ s.bmmRequests - s.bmm.length }} beaten</span>
+      </span>
+      <span *ngIf="mode === 'peg'" class="col">
+        <span *ngIf="s.deposits" class="dep" [title]="s.deposits + ' deposit(s) into sidechains: ' + (s.depositAmount / 1e8) + ' ECX'">↓ {{ s.depositAmount / 1e8 | number:'1.0-4' }}</span>
+        <span *ngIf="s.withdrawals" class="wd" [title]="s.withdrawals + ' withdrawal(s) out of sidechains: ' + (s.withdrawalAmount / 1e8) + ' ECX'">↑ {{ s.withdrawalAmount / 1e8 | number:'1.0-4' }}</span>
+        <span *ngIf="s.bundlesProposed || s.bundlesClosed" class="bn" [title]="(s.bundlesProposed ? s.bundlesProposed + ' bundle(s) proposed' : '') + (s.bundlesProposed && s.bundlesClosed ? ', ' : '') + (s.bundlesClosed ? s.bundlesClosed + ' bundle(s) closed' : '')">◆</span>
+        <span *ngIf="!s.deposits && !s.withdrawals && !s.bundlesProposed && !s.bundlesClosed" class="none">–</span>
+      </span>
+      <span *ngIf="mode === 'votes'" class="col" [title]="votesTitle(s)">
+        <ng-container *ngIf="voteCount(s, 'upvote') || voteCount(s, 'downvote'); else noVote">
+          <span *ngIf="voteCount(s, 'upvote')" class="up">▲{{ voteCount(s, 'upvote') }}</span>
+          <span *ngIf="voteCount(s, 'downvote')" class="down">▼{{ voteCount(s, 'downvote') }}</span>
+        </ng-container>
+        <ng-template #noVote><span class="none">–</span></ng-template>
+        <span *ngIf="s.proposals || s.acks" class="pr" [title]="(s.proposals ? s.proposals + ' sidechain proposal(s)' : '') + (s.proposals && s.acks ? ', ' : '') + (s.acks ? s.acks + ' ack(s)' : '')">✦</span>
+      </span>
+    </ng-container>
   `,
   styles: [`
+    .col { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; font-size: 0.86em; font-variant-numeric: tabular-nums; }
+    .col.bmm { gap: 2px; } .col .n { margin-left: 4px; color: var(--transparent-fg); font-size: 0.9em; }
+    .col .u { margin-left: 3px; color: var(--transparent-fg); font-size: 0.85em; }
+    .col .beaten { margin-left: 6px; font-size: 0.78em; color: #ff9b9b; }
+    .col .dep { color: #3bd16f; } .col .wd { color: #ff6b6b; } .col .bn { color: #ffd166; }
+    .col .up { color: #3bd16f; } .col .down { color: #ff6b6b; } .col .pr { color: #a585ff; }
     :host { display: block; }
     .miner-badge { background: color-mix(in srgb, var(--chain-accent, #E6A849) 25%, transparent); color: var(--fg); font-size: 0.85em; }
     .stripe { display: flex; gap: 1px; height: 4px; margin: 4px 8px 0; border-radius: 2px; overflow: hidden; }
@@ -133,7 +167,8 @@ import { FreebankApiService } from '@app/chain/modules/freebank/freebank-api.ser
 })
 export class ChainBlockMarksComponent implements OnChanges, OnDestroy {
   @Input() hash: string;
-  @Input() mode: 'stripe' | 'below' | 'inline' | 'miner' = 'below';
+  /** stripe, below, inline, miner: the ribbon's and the lists' marks; bmm, bids, peg, votes: one column each of the blocks list */
+  @Input() mode: 'stripe' | 'below' | 'inline' | 'miner' | 'bmm' | 'bids' | 'peg' | 'votes' = 'below';
   @Input() size: string | number = 13;
   get px(): string { return String(this.size); }
 
@@ -235,6 +270,19 @@ export class ChainBlockMarksComponent implements OnChanges, OnDestroy {
 
   ngOnDestroy(): void {
     this.sub?.unsubscribe();
+  }
+
+  bidsTitle(s: any): string {
+    return s.bmm.map((a: any) => `${a.name}${a.bid != null ? ` ${a.bid} sats` : ''}`).join(', ') || 'No BMM bid in this block';
+  }
+
+  voteCount(s: any, vote: string): number {
+    return (s.votes ?? []).filter((v: any) => v.vote === vote).length;
+  }
+
+  votesTitle(s: any): string {
+    const cast = (s.votes ?? []).filter((v: any) => v.vote !== 'abstain');
+    return cast.length ? 'Bundle votes: ' + cast.map((v: any) => `${v.vote} ${v.name}`).join(', ') : 'No bundle vote in this block (abstained)';
   }
 
   colorOf(slot: number): string {

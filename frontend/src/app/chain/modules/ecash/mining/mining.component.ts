@@ -31,6 +31,10 @@ export class ChainMiningComponent implements OnInit, OnDestroy {
   error: string | null = null;
   charts: Record<string, any> = {};
   chartInitOptions = { renderer: 'svg' };
+  /** the pool dominance chart's legend (the page's own), the pools hidden there, and the chart */
+  domLegend: { name: string; color: string }[] = [];
+  domHidden = new Set<string>();
+  dominanceChart: any = null;
   private reload$ = new Subject<void>();
   private sub: Subscription;
 
@@ -89,6 +93,16 @@ export class ChainMiningComponent implements OnInit, OnDestroy {
 
   hideLogo(event: Event): void {
     (event.target as HTMLElement).style.display = 'none';
+  }
+
+  /** the pool dominance chart's own legend: a pool's band shown or hidden (the chart's legend action) */
+  toggleDominance(name: string): void {
+    this.dominanceChart?.dispatchAction({ type: 'legendToggleSelect', name });
+    if (this.domHidden.has(name)) {
+      this.domHidden.delete(name);
+    } else {
+      this.domHidden.add(name);
+    }
   }
 
   hashrate(h: number): string {
@@ -231,13 +245,15 @@ export class ChainMiningComponent implements OnInit, OnDestroy {
     const tags = [...d.topTags, ...(s.some(b => b.pools.Other) ? ['Other'] : [])];
 
     this.charts.dominance = {
-      animation: false, backgroundColor: 'transparent', grid: { left: 44, right: 12, top: 48, bottom: 28 },
-      // one scrolling legend line above the plot: the pools' names never cover it
-      legend: { type: 'scroll', top: 0, left: 8, right: 8, textStyle: { color: '#ffffffcc', fontSize: 11 }, icon: 'roundRect', itemWidth: 10, itemHeight: 10, pageIconColor: '#ffffffcc', pageIconInactiveColor: '#ffffff33', pageIconSize: 10, pageTextStyle: { color: '#ffffff99', fontSize: 10 } },
+      animation: false, backgroundColor: 'transparent', grid: { left: 44, right: 12, top: 22, bottom: 28 },
+      // the legend is the page's own (three rows above the chart, .dom-legend); the chart keeps one, hidden, for toggling
+      legend: { show: false, selected: Object.fromEntries([...this.domHidden].map(n => [n, false])) },
       tooltip: this.tooltip({ valueFormatter: (v: number) => (v ?? 0).toFixed(1) + '%' }), xAxis, yAxis: yv('%', { max: 100 }),
       series: tags.map(t => ({ name: this.nameOf(t), type: 'line', stack: 'dom', symbol: 'none', areaStyle: { opacity: 0.8, color: this.colorOf(t) }, lineStyle: { width: 0 }, itemStyle: { color: this.colorOf(t) },
         data: s.map(b => b.blocks ? 100 * (b.pools[t] ?? 0) / b.blocks : 0) })),
     };
+    this.domLegend = tags.map(t => ({ name: this.nameOf(t), color: this.colorOf(t) }));
+    this.domHidden = new Set([...this.domHidden].filter(n => this.domLegend.some(l => l.name === n)));
 
     this.charts.hashrate = {
       animation: false, backgroundColor: 'transparent', grid: { left: 60, right: 60, top: 30, bottom: 28 },

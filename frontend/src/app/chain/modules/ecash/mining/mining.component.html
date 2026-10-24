@@ -15,9 +15,9 @@
   <ng-container *ngIf="data as d">
     <div class="kpis">
       <div class="kpi">
-        <div class="k-label">Hashrate</div>
-        <div class="k-value">{{ hashrate(d.totals.hashrate) }}</div>
-        <div class="k-sub">from the work of the blocks · node: {{ hashrate(d.node?.networkhashps) }}</div>
+        <div class="k-label">Net hashrate</div>
+        <div class="k-value">{{ hashrate(d.node?.networkhashps ?? d.totals.hashrate) }}</div>
+        <div class="k-sub">the network's, as the node estimates it · the window's blocks: {{ hashrate(d.totals.hashrate) }}</div>
       </div>
       <div class="kpi">
         <div class="k-label">Difficulty</div>
@@ -35,16 +35,6 @@
         <div class="k-sub">median {{ d.totals.medianBlockTime | number:'1.0-0' }} s · target 600 s</div>
       </div>
       <div class="kpi">
-        <div class="k-label">Pools</div>
-        <div class="k-value">{{ d.totals.pools }}</div>
-        <div class="k-sub">{{ d.pools[0]?.name || d.pools[0]?.tag }} {{ pct(d.pools[0]?.share, 0) }} of blocks</div>
-      </div>
-      <div class="kpi">
-        <div class="k-label">DATUM</div>
-        <div class="k-value">{{ pct(d.totals.datumShare, 0) }}</div>
-        <div class="k-sub">of blocks · {{ d.totals.datumMiners }} miner{{ d.totals.datumMiners === 1 ? '' : 's' }} building their own templates</div>
-      </div>
-      <div class="kpi">
         <div class="k-label">Halving</div>
         <div class="k-value">{{ d.halving.blocksLeft | number }}</div>
         <div class="k-sub">blocks to {{ d.halving.nextHalving | number }} · ~{{ d.halving.eta * 1000 | date:'MMM d, y' }}</div>
@@ -58,7 +48,14 @@
       </div>
       <div class="box">
         <h5>Pool dominance <small>share of blocks over the window</small></h5>
-        <div class="chart" *browserOnly echarts [initOpts]="chartInitOptions" [options]="charts.dominance"></div>
+        <!-- the pools, three rows deep and scrolling sideways; a name shows or hides its band -->
+        <div class="dom-legend">
+          @for (l of domLegend; track l.name) {
+            <button type="button" class="dom-lg" [class.off]="domHidden.has(l.name)" (click)="toggleDominance(l.name)"
+              [title]="(domHidden.has(l.name) ? 'Show ' : 'Hide ') + l.name"><i [style.background]="l.color"></i>{{ l.name }}</button>
+          }
+        </div>
+        <div class="chart" *browserOnly echarts [initOpts]="chartInitOptions" [options]="charts.dominance" (chartInit)="dominanceChart = $event"></div>
         <h5 class="mt-3">Fees paid to miners</h5>
         <div class="chart short" *browserOnly echarts [initOpts]="chartInitOptions" [options]="charts.fees"></div>
       </div>

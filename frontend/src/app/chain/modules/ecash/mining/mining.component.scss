@@ -36,5 +36,18 @@ h5 small { color: var(--cx-ink-3); font-size: 0.75rem; font-weight: normal; marg
   .prog-l { display: flex; justify-content: space-between; align-items: baseline; }
   small { font-size: 0.74rem; } }
 
+// the pool dominance legend: three rows deep, scrolling sideways
+.dom-legend {
+  display: grid; grid-auto-flow: column; grid-template-rows: repeat(3, auto); grid-auto-columns: max-content; gap: 2px 16px;
+  overflow-x: auto; padding: 2px 2px 6px; margin-bottom: 4px;
+}
+.dom-lg {
+  display: inline-flex; align-items: center; gap: 6px; background: none; border: none; padding: 1px 2px; font-size: 0.74rem;
+  color: var(--cx-ink-2, #ffffffcc); cursor: pointer; white-space: nowrap; text-align: left;
+  i { width: 9px; height: 9px; border-radius: 3px; flex: none; }
+  &:hover { color: var(--fg); }
+  &.off { opacity: 0.4; text-decoration: line-through; }
+}
+
 // the shared look (last, so it wins)
 @import '../../../components/chain-ui';

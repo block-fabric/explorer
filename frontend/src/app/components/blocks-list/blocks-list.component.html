@@ -25,6 +25,12 @@
         <th *ngIf="isMempoolModule" class="txs text-end" i18n="dashboard.txs" [ngClass]="{'widget': widget, 'legacy': !isMempoolModule}"
           i18n-ngbTooltip="dashboard.txs" ngbTooltip="TXs" placement="bottom" #txs [disableTooltip]="!isEllipsisActive(txs)">TXs</th>
         <th *ngIf="!isMempoolModule" class="txs text-end" i18n="dashboard.txs" [ngClass]="{'widget': widget, 'legacy': !isMempoolModule}">Transactions</th>
+        <ng-container *ngIf="drivechain && !widget">
+          <th class="dc dc-bmm" title="The sidechain blocks this block carried (blind merged mining)">BMM</th>
+          <th class="dc text-end" title="The BMM bids this block's miner earned">Bids</th>
+          <th class="dc" title="Deposits into and withdrawals out of the sidechains, in ECX; ◆ a withdrawal bundle proposed or closed">Peg</th>
+          <th class="dc" title="Withdrawal bundle votes (▲ upvote, ▼ alarm); ✦ a sidechain proposal or ack">Votes</th>
+        </ng-container>
         <th class="size" i18n="latest-blocks.size" *ngIf="!widget" [class]="isMempoolModule ? '' : 'legacy'">Size</th>
       </thead>
       <tbody *ngIf="blocks$ | async as blocks; else skeleton" [style]="isLoading ? 'opacity: 0.75' : ''">
@@ -77,6 +83,12 @@
           <td class="txs text-end" [ngClass]="{'widget': widget, 'legacy': !isMempoolModule}">
             {{ block.tx_count | number }}
           </td>
+          <ng-container *ngIf="drivechain && !widget">
+            <td class="dc dc-bmm"><app-chain-block-marks [hash]="block.id" mode="bmm" [size]="14"></app-chain-block-marks></td>
+            <td class="dc text-end"><app-chain-block-marks [hash]="block.id" mode="bids"></app-chain-block-marks></td>
+            <td class="dc"><app-chain-block-marks [hash]="block.id" mode="peg"></app-chain-block-marks></td>
+            <td class="dc"><app-chain-block-marks [hash]="block.id" mode="votes"></app-chain-block-marks></td>
+          </ng-container>
           <td class="size" *ngIf="!widget" [class]="isMempoolModule ? '' : 'legacy'">
             <div class="progress">
               <div class="progress-bar progress-mempool" role="progressbar"
@@ -113,6 +125,7 @@
             <td class="txs text-end" [ngClass]="{'widget': widget, 'legacy': !isMempoolModule}">
               <span class="skeleton-loader" style="max-width: 75px"></span>
             </td>
+            <td *ngIf="drivechain && !widget" class="dc" colspan="4"><span class="skeleton-loader"></span></td>
             <td class="size" *ngIf="!widget" [class]="isMempoolModule ? '' : 'legacy'">
               <span class="skeleton-loader"></span>
             </td>
