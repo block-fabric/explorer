@@ -63,9 +63,9 @@ h5 small, .card-box h3 small { color: var(--cx-ink-3); font-size: 0.75rem; font-
 .cov-row { --sc: var(--accent); display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .cov-name { width: 90px; flex-shrink: 0; font-size: 0.78rem; color: var(--sc); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cov-meta .cov-name { color: var(--cx-ink-3); }
-.cov-cells { display: flex; gap: 2px; }
+.cov-cells { display: flex; gap: 2px; flex: 1; min-width: 0; }
 .cov-cell {
-  display: block; width: 7px; height: 16px; border-radius: 2px; background: #ffffff0d;
+  display: block; flex: 1 1 0; min-width: 2px; max-width: 10px; height: 16px; border-radius: 2px; background: #ffffff0d;
   &.on { background: var(--sc); }
   &.ev.dep { background: #3bd16f; }
   &.ev.wd { background: #ff6b6b; }

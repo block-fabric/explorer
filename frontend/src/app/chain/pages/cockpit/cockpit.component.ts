@@ -111,16 +111,16 @@ export class ChainCockpitComponent implements OnInit, OnDestroy {
     { key: 'name', label: 'Sidechain', sort: r => (r.name ?? '').toLowerCase() },
     { key: 'accepts', label: 'BMM blocks', align: 'right', sort: true },
     { key: 'coverage', label: 'Coverage', align: 'right', sort: true },
-    { key: 'requests', label: 'Requests', align: 'right', sort: true },
-    { key: 'rejected', label: 'Rejected', align: 'right', sort: true },
+    { key: 'requests', label: 'Requests', align: 'right', sort: true, hide: 'lg' },
+    { key: 'rejected', label: 'Rejected', align: 'right', sort: true, hide: 'lg' },
     { key: 'bidMedian', label: 'Median bid', align: 'right', sort: true },
-    { key: 'bidMax', label: 'Max bid', align: 'right', sort: true },
+    { key: 'bidMax', label: 'Max bid', align: 'right', sort: true, hide: 'md' },
     { key: 'bids', label: 'Bids total', align: 'right', sort: true },
     { key: 'deposits', label: 'Deposits', align: 'right', sort: r => r.depositAmount, nowrap: true },
     { key: 'withdrawals', label: 'Withdrawals', align: 'right', sort: r => r.withdrawalAmount, nowrap: true },
     { key: 'netFlow', label: 'Net', align: 'right', sort: true },
-    { key: 'votes', label: '▲ / ▼ / –', align: 'right', sort: r => r.upvotes, nowrap: true, title: 'upvotes / downvotes / abstains' },
-    { key: 'bundles', label: 'Bundles P/✓/✗', align: 'right', sort: r => r.bundlesProposed, nowrap: true, title: 'proposed / paid / failed' },
+    { key: 'votes', label: '▲ / ▼ / –', align: 'right', sort: r => r.upvotes, nowrap: true, title: 'upvotes / downvotes / abstains', hide: 'lg' },
+    { key: 'bundles', label: 'Bundles P/✓/✗', align: 'right', sort: r => r.bundlesProposed, nowrap: true, title: 'proposed / paid / failed', hide: 'lg' },
   ];
 
   minerCols: CxColumn[] = [
@@ -145,7 +145,7 @@ export class ChainCockpitComponent implements OnInit, OnDestroy {
 
   feedCols: Record<string, CxColumn[]> = Object.fromEntries(Object.entries(FEED_COLS).map(([id, [a, b, sortB]]) => [id, [
     { key: 'height', label: 'Height', sort: true },
-    { key: 'age', label: 'Age', sort: (e: any) => e.time, nowrap: true },
+    { key: 'age', label: 'Age', sort: (e: any) => e.time, nowrap: true, hide: 'md' },
     { key: 'sidechain', label: 'Sidechain', sort: (e: any) => e.slot },
     { key: 'a', label: a },
     { key: 'b', label: b, align: 'right', sort: sortB ?? undefined, nowrap: true },

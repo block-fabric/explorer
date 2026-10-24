@@ -7,6 +7,7 @@ import { PROFILE, SIDECHAIN_PROFILES } from '../../profile';
 import { NETWORK, NETWORKS } from '../../networks';
 import * as bitcoin from 'bitcoinjs-lib';
 import bitcoinClient from '../../../api/bitcoin/bitcoin-client';
+import DB from '../../../database';
 import { ArgsError, RPC_METHODS, logoAsset, logoMime, marketPath, marketQuery, parseRpcArgs } from './allowlist';
 import { BoundedCache } from './cache';
 import { AddressContext, decodeMarkers, hasAssetMarker } from './markers';
@@ -22,6 +23,8 @@ import { AddressContext, decodeMarkers, hasAssetMarker } from './markers';
 //   GET flush/tx/:txid           what a transaction does on Flush: its asset operation, peg and stake markers
 //   GET flush/block/:hash        a block's stake fields (getblock's PosBlockFields)
 //   GET flush/blocks?hashes=     the same for up to 30 blocks at once (block strips)
+//   GET flush/block-fees?range=&page=&size=&fees=   the blocks of a range (24h, 48h, 7d, 30d) and their fees, a page at a
+//                                time, with the range's totals by block kind (the indexed blocks table)
 //   GET flush/market/<path>      an allowlisted GET of the public DEX API's /api/v1/<path> (CHAIN.FLUSH.PUBLIC_API):
 //                                its JSON as is, or a logo (launches/{id}/logo, assets/{id}/logo) as a PNG or JPEG
 
@@ -68,6 +71,13 @@ const MAX_LOGO = 64 * 1024;
 const TTL_JSON = 5000;
 const TTL_LOGO = 300000;
 
+/** flush/block-fees: the ranges it reads (seconds back from now), its page sizes, the block kinds a request may ask the node */
+const FEE_RANGES: Record<string, number> = { '24h': 86400, '48h': 172800, '7d': 604800, '30d': 2592000 };
+const FEE_PAGE_MAX = 100;
+const FEE_KIND_LOOKUPS = 60;
+/** the blocks with fees whose kinds make the range's totals */
+const FEE_KINDS_MAX = 500;
+
 interface Answer { type: string; body: string | Buffer; length: number }
 
 class FlushRoutes {
@@ -75,6 +85,8 @@ class FlushRoutes {
   private inflight = new Map<string, Promise<Answer>>();
   private busy = { node: 0, quote: 0, market: 0 };
   private addressCtx: { at: number; ctx: AddressContext } | null = null;
+  /** a block's kind (pos, bmm) never changes: kept by hash, bounded */
+  private kinds = new Map<string, string | null>();
 
   public initRoutes(app: Application): void {
     const prefix = config.MEMPOOL.API_URL_PREFIX;
@@ -85,6 +97,7 @@ class FlushRoutes {
       .get(prefix + 'flush/tx/:txid', this.wrap(this.$getTx))
       .get(prefix + 'flush/block/:hash', this.wrap(this.$getBlock))
       .get(prefix + 'flush/blocks', this.wrap(this.$getBlocks))
+      .get(prefix + 'flush/block-fees', this.wrap(this.$getBlockFees))
       .get(prefix + 'flush/market/*', this.wrap(this.$getMarket));
   }
 
@@ -291,10 +304,101 @@ class FlushRoutes {
     res.json(out);
   };
 
+  /**
+   * GET flush/block-fees?range=48h&page=0&size=25[&fees=1]: the indexed blocks of the last 24h/48h/7d/30d, newest first, a
+   * page at a time (only those with fees: fees=1), each with its kind (block of stake or BMM block), and the range's
+   * totals: blocks, blocks with fees, fees by kind. Kinds come from the node, kept once known; a request asks it for at
+   * most FEE_KIND_LOOKUPS, so the totals say how many fee blocks' kinds they lack until a later request fills them in.
+   */
+  /** @asyncUnsafe: wrap() answers its errors */
+  private $getBlockFees = async (req: Request, res: Response): Promise<void> => {
+    const range = String(req.query.range ?? '48h');
+    const int = (v: unknown, def: number, min: number, max: number): number => {
+      if (v === undefined || v === '') {
+        return def;
+      }
+      if (!/^\d{1,6}$/.test(String(v))) {
+        throw new FlushError(400, 'Invalid request');
+      }
+      return Math.max(min, Math.min(max, Number(v)));
+    };
+    if (!FEE_RANGES[range]) {
+      throw new FlushError(400, 'Range: 24h, 48h, 7d or 30d');
+    }
+    if (!config.DATABASE.ENABLED) {
+      throw new FlushError(404, 'This explorer keeps no block index');
+    }
+    const size = int(req.query.size, 25, 1, FEE_PAGE_MAX);
+    const page = int(req.query.page, 0, 0, 100000);
+    const feesOnly = req.query.fees === '1';
+    const key = `fees:${range}:${page}:${size}:${feesOnly}`;
+    this.send(res, await this.nodeJson(key, 15000, 'node', /** @asyncUnsafe: cached() passes its errors on */ async () => {
+      const since = Math.floor(Date.now() / 1000) - FEE_RANGES[range];
+      const where = 'blockTimestamp >= FROM_UNIXTIME(?)';
+      const [[totals]]: any = await DB.query(
+        `SELECT COUNT(*) AS blocks, COALESCE(SUM(fees), 0) AS fees, COALESCE(SUM(fees > 0), 0) AS withFees,
+           MIN(height) AS fromHeight, MAX(height) AS toHeight FROM blocks WHERE ${where}`, [since]);
+      const [[indexed]]: any = await DB.query('SELECT MIN(height) AS height, UNIX_TIMESTAMP(MIN(blockTimestamp)) AS time FROM blocks');
+      const [rows]: any = await DB.query(
+        `SELECT height, hash, UNIX_TIMESTAMP(blockTimestamp) AS time, fees, tx_count AS txs FROM blocks
+           WHERE ${where}${feesOnly ? ' AND fees > 0' : ''} ORDER BY height DESC LIMIT ? OFFSET ?`, [since, size, page * size]);
+      const [feeBlocks]: any = await DB.query(
+        `SELECT hash, fees FROM blocks WHERE ${where} AND fees > 0 ORDER BY height DESC LIMIT ?`, [since, FEE_KINDS_MAX]);
+      // kinds: this page's blocks first, then the fee blocks for the totals, a bounded number asked of the node
+      let lookups = FEE_KIND_LOOKUPS;
+      /** @asyncSafe: an unknown kind is undefined */
+      const kindOf = async (hash: string): Promise<string | null | undefined> => {
+        if (this.kinds.has(hash)) {
+          return this.kinds.get(hash);
+        }
+        if (lookups <= 0) {
+          return undefined;
+        }
+        lookups--;
+        try {
+          const f = JSON.parse(String((await this.blockFields(hash)).body));
+          if (this.kinds.size > 200000) {
+            this.kinds.clear();
+          }
+          this.kinds.set(hash, f.kind ?? null);
+          return f.kind ?? null;
+        } catch (e) {
+          return undefined;
+        }
+      };
+      const out: unknown[] = [];
+      for (const r of rows) {
+        out.push({ height: r.height, hash: r.hash, time: Number(r.time), fees: Number(r.fees), txs: Math.max(0, Number(r.txs) - 1), kind: await kindOf(r.hash) ?? null });
+      }
+      const byKind = { pos: 0, bmm: 0, unknown: 0 };
+      let unknownBlocks = 0;
+      for (const b of feeBlocks) {
+        const k = await kindOf(b.hash);
+        if (k === 'bmm' || k === 'pos') {
+          byKind[k] += Number(b.fees);
+        } else {
+          byKind.unknown += Number(b.fees);
+          unknownBlocks++;
+        }
+      }
+      const withFees = Number(totals.withFees);
+      return {
+        range, page, size, feesOnly,
+        total: feesOnly ? withFees : Number(totals.blocks),
+        totals: {
+          blocks: Number(totals.blocks), withFees, fees: Number(totals.fees), fromHeight: totals.fromHeight, toHeight: totals.toHeight,
+          byKind, unknownBlocks, beyondKinds: Math.max(0, withFees - feeBlocks.length),
+        },
+        indexedFrom: { height: indexed.height, time: indexed.time !== null ? Number(indexed.time) : null },
+        blocks: out,
+      };
+    }), 15);
+  };
+
   /** A block's stake fields, from getblock (verbosity 1; src/rpc/pos.cpp PushPosBlockInfo), cached */
   /** @asyncUnsafe: cached() passes its errors on */
   private blockFields(hash: string): Promise<Answer> {
-    return this.nodeJson('block:' + hash, 5000, 'node', async () => {
+    return this.nodeJson('block:' + hash, 5000, 'node', /** @asyncUnsafe: cached() passes its errors on */ async () => {
       const b = await this.node('getblock', hash, 1);
       return {
         hash, height: b.height, kind: b.kind ?? null, slot: b.slot ?? null, proposer: b.proposer ?? null, mainheight: b.mainheight ?? null,

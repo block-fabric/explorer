@@ -66,7 +66,7 @@ EXPLORERS = [
         'enabled': True, 'api_port': 18957, 'rpc_host': SIDECHAIN_HOST, 'rpc_port': 38994, 'secret': 'betanet-flush',
         'public_api': f'http://{SIDECHAIN_HOST}:38996', 'public_api_host': 'flush.markets',
         # 15-second blocks: a week of them indexed into MariaDB
-        'indexing_blocks': 40320, 'weight': 4000000, 'mem': '512m', 'heap_mb': 384,
+        'indexing_blocks': 140000, 'weight': 4000000, 'mem': '512m', 'heap_mb': 384,
     },
     # FreeBank (kind freebank, slot 130): upstream mempool on the FreeBank node's Core RPC (freebankd, a Core 0.16 base,
     # -txindex). freebankd has no rpcwhitelist: on the lab node a method filter in front of it (port 38130, firewalled to

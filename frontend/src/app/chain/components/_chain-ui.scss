@@ -111,3 +111,43 @@ h2, .cp-h2 { font-weight: 500; letter-spacing: -0.02em; }
 .hint, .note, .sub, .cp-sub, .cp-h2-sub { color: var(--cx-ink-3); }
 
 .muted { color: var(--cx-ink-3); }
+
+// long values: key/value cards and plain tables break hashes and addresses rather than scroll
+.kv td { overflow-wrap: anywhere; }
+.kv .mono, .kv td.mono, .table td .mono, .table td.mono { word-break: break-all; }
+.table td { overflow-wrap: break-word; }
+
+// depth: a glow of the chain's colour behind the page head, lit plates with a soft drop shadow, banded card heads,
+// an accent tick on section titles, a lift on hover
+.mp, .cockpit { position: relative; isolation: isolate; }
+.mp::before, .cockpit::before {
+  content: ''; position: absolute; z-index: -1; pointer-events: none; left: -10%; right: -10%; top: -60px; height: 460px;
+  background:
+    radial-gradient(45% 80% at 18% 0%, color-mix(in srgb, var(--cx-accent) 13%, transparent), transparent 70%),
+    radial-gradient(35% 60% at 85% 10%, color-mix(in srgb, var(--cx-accent) 6%, transparent), transparent 70%);
+}
+.box, .card-box, .chart-box, .table-box, .tx-card {
+  background: linear-gradient(180deg, #ffffff07 0%, transparent 140px), var(--cx-plate);
+  box-shadow: inset 0 1px 0 #ffffff0f, 0 1px 2px #00000059, 0 22px 44px -28px #000000e6;
+}
+.kpi {
+  background:
+    radial-gradient(110% 90% at 100% 0%, color-mix(in srgb, var(--cx-accent) 11%, transparent), transparent 55%),
+    linear-gradient(180deg, #ffffff08, transparent 60%), var(--cx-plate);
+  box-shadow: inset 0 1px 0 #ffffff12, 0 1px 2px #00000059, 0 18px 36px -24px #000000e6;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+  &:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 #ffffff17, 0 2px 4px #00000059, 0 24px 44px -24px #000000f2; }
+}
+.card-box h3, .chart-box h5 {
+  margin: -14px -18px 14px !important; padding: 12px 18px 11px !important; border-radius: var(--cx-radius) var(--cx-radius) 0 0;
+  background: linear-gradient(180deg, #ffffff08, #ffffff02); border-bottom: 1px solid var(--cx-rule) !important;
+}
+.mp > h2, .cp-h2, .cp-sec > h2 {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px;
+  &::before {
+    content: ''; align-self: center; width: 3px; height: 0.95em; border-radius: 2px; flex: none;
+    background: var(--cx-accent); box-shadow: 0 0 12px color-mix(in srgb, var(--cx-accent) 70%, transparent);
+  }
+}
+.table > tbody > tr:hover > td:first-child { box-shadow: inset 2px 0 0 var(--cx-accent); }
+.chip.on, .cp-chip.on, .pill.on { box-shadow: 0 0 14px -4px color-mix(in srgb, var(--sc, var(--cx-accent)) 70%, transparent); }

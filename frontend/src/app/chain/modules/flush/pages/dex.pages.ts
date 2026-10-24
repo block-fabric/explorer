@@ -427,8 +427,8 @@ export class FlushTreasuryPage implements OnInit {
   balanceCols: CxColumn<TreasuryBalance>[] = [
     { key: 'asset', label: 'Asset', sort: b => b.asset },
     { key: 'balance', label: 'Held', align: 'right', sort: b => b.balance, nowrap: true },
-    { key: 'from_swaps', label: 'From swaps', align: 'right', sort: b => b.from_swaps, nowrap: true },
-    { key: 'from_launches', label: 'From launches', align: 'right', sort: b => b.from_launches, nowrap: true },
+    { key: 'from_swaps', label: 'From swaps', align: 'right', sort: b => b.from_swaps, nowrap: true, hide: 'md' },
+    { key: 'from_launches', label: 'From launches', align: 'right', sort: b => b.from_launches, nowrap: true, hide: 'md' },
     { key: 'security_held', label: 'Security held', align: 'right', sort: b => b.security_held, nowrap: true, hide: 'md' },
   ];
   view$: Observable<FlushLoaded<FlushTreasury>>;
