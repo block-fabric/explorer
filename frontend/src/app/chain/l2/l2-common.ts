@@ -7,6 +7,7 @@ import { StateService } from '@app/services/state.service';
 import { L2ApiService } from '@app/chain/l2/l2-api.service';
 import { L2Content, L2OutPoint, L2Spent, L2TxSummary, Loaded } from '@app/chain/l2/l2.interfaces';
 import { L2AssetComponent } from '@app/chain/l2/features/asset-badge';
+import { ChainTableComponent, CxCellDirective } from '@app/chain/components/chain-table/chain-table.component';
 
 /*
  * The building blocks of the sidechain explorers' pages. Everything from the chain is shown through Angular
@@ -26,7 +27,7 @@ export function shortId(s: string | null | undefined, keep = 8): string {
   imports: [CommonModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [`.u { opacity: 0.6; font-size: 0.85em; } .pos { color: #3bd16f; } .neg { color: #ff6b6b; } :host { white-space: nowrap; } :host(.wrap) { white-space: normal; overflow-wrap: anywhere; }`],
-  template: `@if (sats === null || sats === undefined) {<span class="u">–</span>} @else {<span [class.pos]="signed && sats > 0" [class.neg]="signed && sats < 0" [attr.title]="compact && abs >= compactFrom ? (abs | number) + ' sats' : null">{{ signed && sats > 0 ? '+' : (sats < 0 ? '−' : '') }}@if ((mode$ | async) === 'btc') {<span>{{ abs / 100000000 | number:(compact ? '1.0-2' : '1.0-8') }}</span> <span class="u">ECX</span>} @else if (compact && abs >= compactFrom) {<span>{{ abs / 100000000 | number:'1.0-2' }}</span> <span class="u">ECX</span>} @else {<span>{{ abs | number }}</span> <span class="u">sats</span>}</span>}`,
+  template: `@if (sats === null || sats === undefined) {<span class="u">–</span>} @else {<span [class.pos]="signed && sats > 0" [class.neg]="signed && sats < 0" [attr.title]="compact && abs >= compactFrom ? (abs | number) + ' sats' : null">{{ signed && sats > 0 ? '+' : (sats < 0 ? '−' : '') }}@if ((mode$ | async) === 'btc') {<span>{{ abs / 100000000 | number:(compact ? '1.0-2' : '1.0-8') }}</span><span class="u ms-1">ECX</span>} @else if (compact && abs >= compactFrom) {<span>{{ abs / 100000000 | number:'1.0-2' }}</span><span class="u ms-1">ECX</span>} @else {<span>{{ abs | number }}</span><span class="u ms-1">sats</span>}</span>}`,
 })
 export class L2AmountComponent {
   @Input() sats: number | null | undefined;
@@ -321,9 +322,9 @@ export function humanize(k: string): string {
         }
         @default {
           <span class="pill a">{{ typeName(c.type) }}</span>
-          @if (c.amount !== undefined && c.amount !== null) {<span>{{ c.amount | number }}</span> }
+          @if (c.amount !== undefined && c.amount !== null) {<span class="me-1">{{ c.amount | number }}</span>}
           @if (c.name) {
-            @if (c.type === 'bitname') {<app-l2-asset [id]="c.name" kind="name"></app-l2-asset> } @else {<span class="mono">{{ c.name }}</span> }
+            @if (c.type === 'bitname') {<app-l2-asset class="me-1" [id]="c.name" kind="name"></app-l2-asset>} @else {<span class="mono me-1">{{ c.name }}</span>}
           }
           @if (c.assetId) {
             @if (c.type === 'dutchAuctionReceipt') {<span class="muted">auction </span><a [routerLink]="['/auctions', c.assetId]" class="mono" [title]="c.assetId">{{ shortId(c.assetId) }}</a>}
@@ -405,5 +406,5 @@ export const L2_COMMON = [
   L2ContentComponent, L2TxIoComponent,
 ] as const;
 
-/** the pages' imports */
-export const L2_PAGE_IMPORTS = [CommonModule, RouterModule, SharedModule, ...L2_COMMON];
+/** the pages' imports (with the explorers' data table) */
+export const L2_PAGE_IMPORTS = [CommonModule, RouterModule, SharedModule, ...L2_COMMON, ChainTableComponent, CxCellDirective];

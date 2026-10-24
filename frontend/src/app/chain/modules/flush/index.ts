@@ -15,6 +15,7 @@ const dex = () => import('./pages/dex.pages');
 const launch = () => import('./pages/launch.pages');
 const asset = () => import('./pages/asset.pages');
 const stake = () => import('./pages/stake.pages');
+const fees = () => import('./pages/fees.pages');
 const peg = () => import('./pages/peg.pages');
 
 const flush: ChainFrontendModule = {
@@ -52,6 +53,7 @@ const flush: ChainFrontendModule = {
     { path: '/assets', title: 'Assets', icon: 'nav-assets' },
     { path: '/launches', title: 'Launches', icon: 'nav-launch' },
     { path: '/stake', title: 'Stake: validators, leader schedule, anchors', icon: 'nav-stake' },
+    { path: '/fees', title: 'Fees: where every fee goes', icon: 'nav-gold' },
     { path: '/peg', title: 'Drivechain: the peg and BMM on eCash', icon: 'nav-drivechain' },
   ],
   footerNav: [
@@ -80,6 +82,7 @@ const flush: ChainFrontendModule = {
     { path: 'oracle/:id', loadComponent: page(asset, 'FlushOraclePage') },
     { path: 'stake', loadComponent: page(stake, 'FlushStakePage') },
     { path: 'validator/:key', loadComponent: page(stake, 'FlushValidatorPage') },
+    { path: 'fees', loadComponent: page(fees, 'FlushFeesPage') },
     { path: 'peg', loadComponent: page(peg, 'FlushPegPage') },
     { path: 'bmm', loadComponent: page(peg, 'FlushBmmPage') },
   ],

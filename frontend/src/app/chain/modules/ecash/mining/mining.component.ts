@@ -4,6 +4,7 @@ import { Subject, Subscription, catchError, merge, of, switchMap, timer } from '
 import { ChainApiService } from '@app/chain/chain-api.service';
 import { PROFILE } from '@app/chain/profiles';
 import { escapeHtml } from '@app/chain/escape-html';
+import { CxColumn, CxFilter } from '@app/chain/components/chain-table/chain-table.component';
 import { SeoService } from '@app/services/seo.service';
 import { StateService } from '@app/services/state.service';
 
@@ -32,6 +33,22 @@ export class ChainMiningComponent implements OnInit, OnDestroy {
   chartInitOptions = { renderer: 'svg' };
   private reload$ = new Subject<void>();
   private sub: Subscription;
+
+  /** the pools table: a DATUM pool's miners are lines inside its row, so sorting keeps them under their pool */
+  poolCols: CxColumn[] = [
+    { key: 'name', label: 'Pool', sort: p => (p.name || p.tag || '').toLowerCase() },
+    { key: 'blocks', label: 'Blocks', align: 'right', sort: true },
+    { key: 'share', label: 'Share', sort: true, nowrap: true },
+    { key: 'hashrate', label: 'Hashrate', align: 'right', sort: true, nowrap: true },
+    { key: 'fees', label: 'Fees', align: 'right', sort: true, hide: 'sm' },
+    { key: 'empty', label: 'Empty', align: 'right', sort: true, hide: 'md' },
+    { key: 'bmmPerBlock', label: 'Sidechains / block', align: 'right', sort: true, hide: 'md' },
+    { key: 'lastHeight', label: 'Last block', align: 'right', sort: true },
+  ];
+  poolFilters: CxFilter[] = [{ options: [{ label: 'DATUM', test: p => !!p.datum }, { label: 'pooled', test: p => !p.datum }] }];
+  matchPool = (p: any, q: string) => [p.name, p.tag, ...(p.miners ?? []).flatMap((m: any) => [m.name, m.tag])]
+    .some(x => typeof x === 'string' && x.toLowerCase().includes(q));
+  trackTag = (p: any) => p.tag;
 
   constructor(private api: ChainApiService, private cd: ChangeDetectorRef, private route: ActivatedRoute, private router: Router,
     private seo: SeoService, public stateService: StateService) {}

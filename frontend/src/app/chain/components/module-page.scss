@@ -25,3 +25,6 @@ table { margin: 0; font-size: 0.85rem; th { color: var(--transparent-fg); font-w
 .pill.on { background: color-mix(in srgb, var(--chain-accent, #b5f27e) 30%, transparent); }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+
+// the shared look (last, so it wins)
+@import 'chain-ui';

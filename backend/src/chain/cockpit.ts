@@ -35,6 +35,9 @@ export interface CockpitSlotStats {
   bidMedian: number;
   bidMax: number;
   bidMin: number;
+  /** the 10th and 90th percentile bids (sats) */
+  bidP10: number;
+  bidP90: number;
   deposits: number;
   depositAmount: number;
   withdrawals: number;
@@ -70,6 +73,13 @@ const median = (xs: number[]): number => {
   return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2);
 };
 
+/** the value at this fraction of the sorted list (nearest rank), 0 for none */
+const percentile = (xs: number[], p: number): number => {
+  if (!xs.length) { return 0; }
+  const s = [...xs].sort((a, b) => a - b);
+  return s[Math.min(s.length - 1, Math.max(0, Math.ceil(p * s.length) - 1))];
+};
+
 const cache = new Map<string, { tip: number; at: number; value: any }>();
 
 export function cockpit(window: number, slot: number | null, escrowNow: Record<number, number>): any {
@@ -97,7 +107,7 @@ function compute(tip: number, window: number, slotFilter: number | null, escrowN
       slots.set(slot, {
         slot, name: sidechains.find(s => s.slot === slot)?.title ?? name, profile: profileBySlot(slot)?.id ?? null,
         accepts: 0, coverage: 0, lastAcceptHeight: null, lastBid: null, lastBidHeight: null, lastBidTime: null, longestGap: 0, requests: 0, rejected: 0, contested: 0,
-        bids: 0, bidAvg: 0, bidMedian: 0, bidMax: 0, bidMin: 0, deposits: 0, depositAmount: 0, withdrawals: 0,
+        bids: 0, bidAvg: 0, bidMedian: 0, bidMax: 0, bidMin: 0, bidP10: 0, bidP90: 0, deposits: 0, depositAmount: 0, withdrawals: 0,
         withdrawalAmount: 0, netFlow: 0, upvotes: 0, downvotes: 0, abstains: 0, bundlesProposed: 0, bundlesPaid: 0,
         bundlesFailed: 0, _bids: [], _gap: 0,
       });
@@ -233,6 +243,8 @@ function compute(tip: number, window: number, slotFilter: number | null, escrowN
     s.bidMedian = median(s._bids);
     s.bidMax = s._bids.length ? Math.max(...s._bids) : 0;
     s.bidMin = s._bids.length ? Math.min(...s._bids) : 0;
+    s.bidP10 = percentile(s._bids, 0.1);
+    s.bidP90 = percentile(s._bids, 0.9);
     s.netFlow = s.depositAmount - s.withdrawalAmount;
     const { _bids, _gap, ...rest } = s;
     return rest;

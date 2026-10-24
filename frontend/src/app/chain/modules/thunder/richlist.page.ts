@@ -1,10 +1,11 @@
 import { ChangeDetectionStrategy, Component, OnInit } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, map } from 'rxjs';
 import { SeoService } from '@app/services/seo.service';
 import { L2ApiService } from '@app/chain/l2/l2-api.service';
 import { Loaded } from '@app/chain/l2/l2.interfaces';
 import { shortId } from '@app/chain/l2/l2-common';
 import { ChartSeries, FEATURE_PAGE_IMPORTS, featureData$ } from '@app/chain/l2/features/feature-kit';
+import { CxColumn } from '@app/chain/components/chain-table/chain-table.component';
 
 // GET /api/v1/l2/feature/richlist (chains/L2-API.md)
 export interface RichlistView {
@@ -21,6 +22,8 @@ export interface RichlistView {
   height: number;
 }
 
+type Holder = RichlistView['items'][number] & { rank?: number };
+
 /** /richlist: the addresses holding the most sats, and the payments over the chain's blocks */
 @Component({
   selector: 'app-thunder-richlist',
@@ -28,6 +31,7 @@ export interface RichlistView {
   imports: [...FEATURE_PAGE_IMPORTS],
   styleUrls: ['../../components/module-page.scss', '../../l2/pages/l2-page.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  styles: [`.share-cell { display: flex; align-items: center; gap: 8px; min-width: 140px; .bar { flex: 1; } }`],
   template: `
   <div class="container-xl mp">
     <app-l2-feature-head path="richlist"></app-l2-feature-head>
@@ -46,46 +50,33 @@ export interface RichlistView {
           </div>
 
           <h2>Payments per {{ d.bucket | number }} blocks</h2>
-          <div class="box"><app-l2-chart [series]="txSeries(d)" kind="bar" [height]="140"></app-l2-chart></div>
-          <div class="box"><app-l2-chart [series]="volumeSeries(d)" kind="bar" [height]="140" unit="sats"></app-l2-chart></div>
+          <div class="chart-box"><app-l2-chart [series]="txSeries(d)" kind="bar" [height]="140"></app-l2-chart></div>
+          <div class="chart-box mt-2"><app-l2-chart [series]="volumeSeries(d)" kind="bar" [height]="140" unit="sats"></app-l2-chart></div>
 
           <h2>Top addresses</h2>
           <div class="box">
-            <table class="table table-borderless table-sm">
-              <thead><tr><th>#</th><th>Address</th><th class="text-end">Balance</th><th>Share</th><th class="text-end">Unspent</th><th class="text-end">Txs</th><th>Active</th></tr></thead>
-              <tbody>
-                @for (a of d.items; track a.address; let i = $index) {
-                  <tr>
-                    <td class="muted">{{ i + 1 }}</td>
-                    <td><a [routerLink]="['/address', a.address]" class="mono">{{ a.address }}</a></td>
-                    <td class="text-end"><app-l2-amount [sats]="a.balance"></app-l2-amount></td>
-                    <td style="min-width: 140px"><div class="bar"><div class="fill" [style.width.%]="(a.share ?? 0) * 100"></div></div> <span class="muted small">{{ (a.share ?? 0) * 100 | number:'1.0-2' }}%</span></td>
-                    <td class="text-end">{{ a.utxos | number }}</td>
-                    <td class="text-end">{{ a.txs | number }}</td>
-                    <td class="small">@if (a.first !== null) {<a [routerLink]="['/block', a.first]">{{ a.first | number }}</a> – <a [routerLink]="['/block', a.last]">{{ a.last | number }}</a>}</td>
-                  </tr>
-                } @empty {<tr><td colspan="7" class="empty">No funded addresses.</td></tr>}
-              </tbody>
-            </table>
+            <app-chain-table [rows]="d.items" [columns]="addressCols" [search]="addressMatches" searchPlaceholder="Address…" sort="balance"
+                empty="No funded addresses." [trackBy]="addressKey">
+              <ng-template cxCell="rank" let-a><span class="muted">{{ a.rank }}</span></ng-template>
+              <ng-template cxCell="address" let-a><a [routerLink]="['/address', a.address]" class="mono">{{ a.address }}</a></ng-template>
+              <ng-template cxCell="balance" let-a><app-l2-amount [sats]="a.balance"></app-l2-amount></ng-template>
+              <ng-template cxCell="share" let-a><div class="share-cell"><div class="bar"><div class="fill" [style.width.%]="(a.share ?? 0) * 100"></div></div><span class="muted small">{{ (a.share ?? 0) * 100 | number:'1.0-2' }}%</span></div></ng-template>
+              <ng-template cxCell="utxos" let-a>{{ a.utxos | number }}</ng-template>
+              <ng-template cxCell="txs" let-a>{{ a.txs | number }}</ng-template>
+              <ng-template cxCell="active" let-a><span class="small">@if (a.first !== null) {<a [routerLink]="['/block', a.first]">{{ a.first | number }}</a><span class="mx-1">–</span><a [routerLink]="['/block', a.last]">{{ a.last | number }}</a>}</span></ng-template>
+            </app-chain-table>
           </div>
 
           <h2>Largest payments</h2>
           <div class="box">
-            <table class="table table-borderless table-sm">
-              <thead><tr><th>Block</th><th>Time</th><th class="text-end">Paid</th><th class="text-end">Fee</th><th class="text-end">Inputs / outputs</th><th>Transaction</th></tr></thead>
-              <tbody>
-                @for (t of d.largest; track t.txid) {
-                  <tr>
-                    <td><a [routerLink]="['/block', t.height]">{{ t.height | number }}</a></td>
-                    <td>@if (t.time) {<app-timestamp [unixTime]="t.time" [hideTimeSince]="true"></app-timestamp>} @else {<span class="muted">–</span>}</td>
-                    <td class="text-end"><app-l2-amount [sats]="t.amount"></app-l2-amount></td>
-                    <td class="text-end"><app-l2-amount [sats]="t.fee"></app-l2-amount></td>
-                    <td class="text-end">{{ t.inputs }} / {{ t.outputs }}</td>
-                    <td><a [routerLink]="['/tx', t.txid]" class="mono" [title]="t.txid">{{ shortId(t.txid) }}</a></td>
-                  </tr>
-                } @empty {<tr><td colspan="6" class="empty">No payments yet.</td></tr>}
-              </tbody>
-            </table>
+            <app-chain-table [rows]="d.largest" [columns]="paymentCols" [search]="txMatches" searchPlaceholder="Transaction…" sort="amount" empty="No payments yet.">
+              <ng-template cxCell="height" let-t><a [routerLink]="['/block', t.height]">{{ t.height | number }}</a></ng-template>
+              <ng-template cxCell="time" let-t>@if (t.time) {<app-timestamp [unixTime]="t.time" [hideTimeSince]="true"></app-timestamp>} @else {<span class="muted">–</span>}</ng-template>
+              <ng-template cxCell="amount" let-t><app-l2-amount [sats]="t.amount"></app-l2-amount></ng-template>
+              <ng-template cxCell="fee" let-t><app-l2-amount [sats]="t.fee"></app-l2-amount></ng-template>
+              <ng-template cxCell="io" let-t>{{ t.inputs }} / {{ t.outputs }}</ng-template>
+              <ng-template cxCell="txid" let-t><a [routerLink]="['/tx', t.txid]" class="mono" [title]="t.txid">{{ shortId(t.txid) }}</a></ng-template>
+            </app-chain-table>
           </div>
           <p class="note">From the explorer's index at block {{ d.height | number }}. A payment's amount is what went to addresses other than
             the spenders' own; change sent to a new address counts as paid, as the chain cannot tell it apart.</p>
@@ -97,12 +88,35 @@ export interface RichlistView {
 export class ThunderRichlistPage implements OnInit {
   view$: Observable<Loaded<RichlistView> | 'unavailable'>;
   shortId = shortId;
+  addressCols: CxColumn<Holder>[] = [
+    { key: 'rank', label: '#', sort: a => a.rank },
+    { key: 'address', label: 'Address' },
+    { key: 'balance', label: 'Balance', align: 'right', sort: true, nowrap: true },
+    { key: 'share', label: 'Share', sort: true, hide: 'md' },
+    { key: 'utxos', label: 'Unspent', align: 'right', sort: true, hide: 'md' },
+    { key: 'txs', label: 'Txs', align: 'right', sort: true },
+    { key: 'active', label: 'Active', sort: a => a.last, hide: 'lg', nowrap: true },
+  ];
+  addressMatches = (a: Holder, q: string) => a.address.toLowerCase().includes(q);
+  addressKey = (a: Holder) => a.address;
+  paymentCols: CxColumn<RichlistView['largest'][number]>[] = [
+    { key: 'height', label: 'Block', sort: true },
+    { key: 'time', label: 'Time', sort: true, hide: 'md' },
+    { key: 'amount', label: 'Paid', align: 'right', sort: true, nowrap: true },
+    { key: 'fee', label: 'Fee', align: 'right', sort: true },
+    { key: 'io', label: 'Inputs / outputs', align: 'right', sort: t => t.inputs + t.outputs, hide: 'md' },
+    { key: 'txid', label: 'Transaction' },
+  ];
+  txMatches = (t: { txid: string }, q: string) => t.txid.toLowerCase().includes(q);
 
   constructor(private api: L2ApiService, private seo: SeoService) {}
 
   ngOnInit(): void {
     this.seo.setTitle('Top addresses');
-    this.view$ = featureData$(this.api, 'richlist', () => this.api.feature$<RichlistView>('richlist'));
+    // each holder keeps its rank by balance, whatever the table's order
+    this.view$ = featureData$(this.api, 'richlist', () => this.api.feature$<RichlistView>('richlist').pipe(
+      map(d => ({ ...d, items: d.items.map((a, i) => ({ ...a, rank: i + 1 })) })),
+    ));
   }
 
   round(n: number | null): number | null {

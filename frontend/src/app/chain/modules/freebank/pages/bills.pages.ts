@@ -7,13 +7,15 @@ import { FreebankApiService, FbLoaded, fbLoaded } from '../freebank-api.service'
 import { FreebankLiveService } from '../freebank-live.service';
 import { CREDIT_TABS, FB_PAGE_IMPORTS } from '../freebank-kit';
 import { FbActivityComponent } from './activity.pages';
-import { Bill, House, LoanBook } from '../freebank.interfaces';
+import { Bill, BillEndorsement, House, LoanBook } from '../freebank.interfaces';
 import * as F from '../freebank-format';
+import { CxColumn } from '@app/chain/components/chain-table/chain-table.component';
+
+type Endorsement = BillEndorsement & { n: number };
 
 const STYLES = ['../../../components/module-page.scss', '../../../l2/pages/l2-page.scss', '../freebank-page.scss'];
-const PAGE = 100;
 
-/** /bills: the bills of exchange (listbills), by status (?status=a|r|d|x), newest first, a hundred a page */
+/** /bills: the bills of exchange (listbills), newest first, by status in the table's chips */
 @Component({
   selector: 'app-freebank-bills-page',
   standalone: true,
@@ -26,21 +28,14 @@ const PAGE = 100;
     @if (view$ | async; as v) {
       <app-fb-state [state]="v" what="The bills" [height]="300"></app-fb-state>
       @if (v.data; as d) {
-        <div class="filters">
-          <div class="chips">
-            @for (s of statuses; track s.key) {
-              <button class="chip" [class.on]="s.key === d.status" (click)="setStatus(s.key)">{{ s.label }} <span class="muted">{{ d.counts[s.key] ?? 0 }}</span></button>
-            }
-          </div>
-          <span class="hint">{{ fx.ecx(d.face, 4) }} ECX of face in this list · tip {{ d.tip | number }}</span>
+        <div class="kpis">
+          <div class="kpi"><div class="l">Bills</div><div class="v">{{ d.bills.length | number }}</div><div class="s">{{ fx.ecx(d.face, 4) }} ECX of face in all · tip {{ d.tip | number }}</div></div>
+          <div class="kpi"><div class="l">Active</div><div class="v">{{ d.counts['a'] ?? 0 | number }}</div><div class="s">{{ fx.ecx(d.faces['a'] ?? 0, 4) }} ECX of face</div></div>
+          <div class="kpi"><div class="l">Retired</div><div class="v">{{ d.counts['r'] ?? 0 | number }}</div><div class="s">{{ fx.ecx(d.faces['r'] ?? 0, 4) }} ECX paid at maturity</div></div>
+          <div class="kpi"><div class="l">Defaulted</div><div class="v" [class.neg]="!!d.counts['d']">{{ d.counts['d'] ?? 0 | number }}</div><div class="s">{{ d.counts['x'] ?? 0 | number }} disputed</div></div>
         </div>
         <div class="box">
-          <app-fb-bills [bills]="d.page" [tip]="d.tip" empty="No bill with this status."></app-fb-bills>
-          <div class="pager">
-            <span class="hint">{{ d.list.length | number }} bills</span>
-            @if (d.from > 0) {<button class="btn btn-sm btn-secondary" (click)="go(d.from - pageSize)">← Newer</button>}
-            @if (d.from + pageSize < d.list.length) {<button class="btn btn-sm btn-secondary" (click)="go(d.from + pageSize)">Older →</button>}
-          </div>
+          <app-fb-bills [bills]="d.bills" [tip]="d.tip" [statusFilter]="true" empty="No bill on the chain yet."></app-fb-bills>
         </div>
         <p class="note mt-2">Status on chain (freebank bill.h): active (issued or endorsed), retired (paid), defaulted, disputed (reserved for the dispute module).</p>
       }
@@ -50,32 +45,22 @@ const PAGE = 100;
 export class FreebankBillsPage implements OnInit {
   tabs = CREDIT_TABS;
   fx = F;
-  pageSize = PAGE;
-  statuses = [{ key: 'all', label: 'All' }, ...Object.entries(F.BILL_STATUS).map(([key, label]) => ({ key, label }))];
-  view$: Observable<FbLoaded<{ list: Bill[]; page: Bill[]; from: number; status: string; counts: Record<string, number>; face: number; tip: number | null }>>;
+  view$: Observable<FbLoaded<{ bills: Bill[]; counts: Record<string, number>; faces: Record<string, number>; face: number; tip: number | null }>>;
 
-  constructor(private route: ActivatedRoute, private router: Router, private api: FreebankApiService, private live: FreebankLiveService, private seo: SeoService) {}
+  constructor(private api: FreebankApiService, private live: FreebankLiveService, private seo: SeoService) {}
 
   ngOnInit(): void {
     this.seo.setTitle(`${PROFILE.name}: bills of exchange`);
-    const bills$ = this.api.rpc$<Bill[]>('listbills').pipe(shareReplay(1));
-    this.view$ = this.route.queryParamMap.pipe(switchMap(q => fbLoaded(combineLatest([bills$, this.live.tip$]).pipe(map(([bills, tip]) => {
-      const status = F.BILL_STATUS[q.get('status') ?? ''] ? String(q.get('status')) : 'all';
+    this.view$ = fbLoaded(combineLatest([this.api.rpc$<Bill[]>('listbills'), this.live.tip$]).pipe(map(([bills, tip]) => {
       const all = [...(bills ?? [])].sort((a, b) => b.id - a.id);
-      const counts: Record<string, number> = { all: all.length };
-      all.forEach(b => counts[b.status] = (counts[b.status] ?? 0) + 1);
-      const list = status === 'all' ? all : all.filter(b => b.status === status);
-      const from = Math.max(0, Math.min(Number(q.get('from')) || 0, Math.max(0, list.length - 1)));
-      return { list, page: list.slice(from, from + PAGE), from, status, counts, face: list.reduce((s, b) => s + (Number(b.amount) || 0), 0), tip };
-    })))));
-  }
-
-  setStatus(s: string): void {
-    this.router.navigate([], { relativeTo: this.route, queryParams: { status: s === 'all' ? null : s, from: null }, queryParamsHandling: 'merge' });
-  }
-
-  go(from: number): void {
-    this.router.navigate([], { relativeTo: this.route, queryParams: { from: from > 0 ? from : null }, queryParamsHandling: 'merge' });
+      const counts: Record<string, number> = {};
+      const faces: Record<string, number> = {};
+      all.forEach(b => {
+        counts[b.status] = (counts[b.status] ?? 0) + 1;
+        faces[b.status] = (faces[b.status] ?? 0) + (Number(b.amount) || 0);
+      });
+      return { bills: all, counts, faces, face: all.reduce((s, b) => s + (Number(b.amount) || 0), 0), tip };
+    })));
   }
 }
 
@@ -126,12 +111,14 @@ export class FreebankBillsPage implements OnInit {
         </div>
         <h2>Endorsements <span class="hint">{{ b.endorsements?.length ?? 0 }}, oldest first</span></h2>
         <div class="box">
-          <table class="table table-borderless table-sm"><thead><tr><th>#</th><th>From</th><th></th><th>To</th><th>At block</th></tr></thead><tbody>
-            @for (e of b.endorsements; track $index) {
-              <tr><td class="muted">{{ $index + 1 }}</td><td class="mono" [title]="e.from">{{ fx.shortId(e.from, 8) }}</td><td class="muted">→</td>
-                <td class="mono" [title]="e.to">{{ fx.shortId(e.to, 8) }}</td><td><a [routerLink]="['/block', e.at_height]">{{ e.at_height | number }}</a></td></tr>
-            } @empty {<tr><td colspan="5" class="empty">Not endorsed: the holder is the one it was issued to.</td></tr>}
-          </tbody></table>
+          <app-chain-table [rows]="endorsements(b)" [columns]="endorseCols" [search]="endorseMatches" searchPlaceholder="Key…" sort="n" [asc]="true"
+            empty="Not endorsed: the holder is the one it was issued to.">
+            <ng-template cxCell="n" let-e><span class="muted">{{ e.n }}</span></ng-template>
+            <ng-template cxCell="from" let-e><span class="mono" [title]="e.from">{{ fx.shortId(e.from, 8) }}</span></ng-template>
+            <ng-template cxCell="arrow" let-e><span class="muted">→</span></ng-template>
+            <ng-template cxCell="to" let-e><span class="mono" [title]="e.to">{{ fx.shortId(e.to, 8) }}</span></ng-template>
+            <ng-template cxCell="at" let-e><a [routerLink]="['/block', e.at_height]">{{ e.at_height | number }}</a></ng-template>
+          </app-chain-table>
         </div>
         <h2>History <span class="hint">what happened to it after its issue, newest first</span></h2>
         <app-fb-activity [bill]="b.id" [limit]="25" empty="Nothing since its issue."></app-fb-activity>
@@ -142,6 +129,12 @@ export class FreebankBillsPage implements OnInit {
 export class FreebankBillPage implements OnInit {
   tabs = CREDIT_TABS;
   fx = F;
+  endorseCols: CxColumn<Endorsement>[] = [
+    { key: 'n', label: '#', sort: e => e.n }, { key: 'from', label: 'From' }, { key: 'arrow', label: '' }, { key: 'to', label: 'To' },
+    { key: 'at', label: 'At block', sort: e => e.at_height },
+  ];
+  endorseMatches = (e: Endorsement, q: string) => e.from.toLowerCase().includes(q) || e.to.toLowerCase().includes(q);
+  private numbered = new WeakMap<Bill, Endorsement[]>();
   id = '';
   bill$: Observable<FbLoaded<Bill>>;
   tip$: Observable<number | null>;
@@ -156,6 +149,16 @@ export class FreebankBillPage implements OnInit {
       return /^\d{1,9}$/.test(id) ? fbLoaded(this.api.rpc$<Bill>('getbill', Number(id)))
         : of({ loading: false, error: { status: 400, message: 'Not a valid id' } } as FbLoaded<Bill>);
     }));
+  }
+
+  /** its endorsements, numbered in order (once per bill, so the table keeps its rows) */
+  endorsements(b: Bill): Endorsement[] {
+    let list = this.numbered.get(b);
+    if (!list) {
+      list = (b.endorsements ?? []).map((e, i) => ({ ...e, n: i + 1 }));
+      this.numbered.set(b, list);
+    }
+    return list;
   }
 }
 
@@ -175,7 +178,7 @@ export class FreebankBillPage implements OnInit {
         <div class="filters">
           <div class="chips">
             <button class="chip" [class.on]="!d.house" (click)="setHouse(null)">All houses</button>
-            @for (h of d.houses; track h.id) {<button class="chip" [class.on]="d.house === h.id" (click)="setHouse(h.id)">#{{ h.id }} <span class="muted">{{ fx.sats(h.loanbookface) }}</span></button>}
+            @for (h of d.houses; track h.id) {<button class="chip" [class.on]="d.house === h.id" (click)="setHouse(h.id)">#{{ h.id }}<b>{{ fx.sats(h.loanbookface) }}</b></button>}
           </div>
         </div>
         <div class="kpis">
@@ -184,7 +187,7 @@ export class FreebankBillPage implements OnInit {
           @if (d.book.wtd_avg_maturity) {<div class="kpi"><div class="l">Average maturity</div><div class="v">{{ d.book.wtd_avg_maturity | number }}</div><div class="s">block, weighted by face</div></div>}
           @if (d.book.face_matches === false) {<div class="kpi"><div class="l">House's count</div><div class="v neg">{{ fx.sats(d.book.recorded_face) }}</div><div class="s">does not match the bills</div></div>}
         </div>
-        <div class="box"><app-fb-bills [bills]="d.book.bills" [tip]="d.tip" empty="No bill held by a house."></app-fb-bills></div>
+        <div class="box"><app-fb-bills [bills]="d.book.bills" [tip]="d.tip" sort="maturity" [asc]="true" empty="No bill held by a house."></app-fb-bills></div>
       }
     }
   </div>`,

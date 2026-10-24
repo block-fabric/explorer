@@ -8,10 +8,10 @@
   </div>
   <div class="box dc-box">
     <div *ngIf="loading" class="skeleton-loader"></div>
-    <div *ngIf="!loading && error && !block" class="text-muted">{{ error }}</div>
+    <div *ngIf="!loading && error && !block" class="muted">{{ error }}</div>
 
     <ng-container *ngIf="block">
-      <p *ngIf="isEmpty" class="text-muted mb-0">This block committed to no sidechain block, moved nothing in or out of the sidechains and cast no vote.</p>
+      <p *ngIf="isEmpty" class="muted mb-0">This block committed to no sidechain block, moved nothing in or out of the sidechains and cast no vote.</p>
 
       <!-- M7 + M8: blind merged mining -->
       <section *ngIf="block.bmm.length">
@@ -25,7 +25,7 @@
               <td class="mono">
                 <span [title]="a.sideBlock"><app-truncate [text]="a.sideBlock" [lastChars]="8"></app-truncate></span>
               </td>
-              <td class="text-right"><ng-container *ngIf="a.bid !== undefined && a.bid !== null; else noBid"><app-amount [satoshis]="a.bid" digitsInfo="1.0-8" [noFiat]="true"></app-amount></ng-container><ng-template #noBid><span class="text-muted">no bid</span></ng-template></td>
+              <td class="text-right"><ng-container *ngIf="a.bid !== undefined && a.bid !== null; else noBid"><app-amount [satoshis]="a.bid" digitsInfo="1.0-8" [noFiat]="true"></app-amount></ng-container><ng-template #noBid><span class="muted">no bid</span></ng-template></td>
               <td class="mono d-none d-md-table-cell"><a *ngIf="a.requestTxid" [routerLink]="['/tx' | relativeUrl, a.requestTxid]"><app-truncate [text]="a.requestTxid" [lastChars]="8"></app-truncate></a></td>
             </tr>
           </tbody>
@@ -71,7 +71,7 @@
           <tbody>
             <tr *ngFor="let w of block.withdrawals">
               <td><app-sidechain-label [slot]="w.slot" [name]="w.name" [title]="w.name + ' (slot ' + w.slot + ')'"></app-sidechain-label></td>
-              <td class="mono" [title]="w.bundle"><app-truncate [text]="w.bundle" [lastChars]="8"></app-truncate> <span class="text-muted">· {{ w.payouts.length }} payout{{ w.payouts.length === 1 ? '' : 's' }}</span></td>
+              <td class="mono" [title]="w.bundle"><app-truncate [text]="w.bundle" [lastChars]="8"></app-truncate> <span class="muted">· {{ w.payouts.length }} payout{{ w.payouts.length === 1 ? '' : 's' }}</span></td>
               <td class="text-right"><app-amount [satoshis]="w.amount" digitsInfo="1.2-8" [noFiat]="true"></app-amount></td>
               <td class="mono"><a [routerLink]="['/tx' | relativeUrl, w.txid]"><app-truncate [text]="w.txid" [lastChars]="8"></app-truncate></a></td>
             </tr>
@@ -104,12 +104,12 @@
           <tbody>
             <tr *ngFor="let b of block.bundlesProposed">
               <td><app-sidechain-label [slot]="b.slot" [name]="b.name" [title]="b.name + ' (slot ' + b.slot + ')'"></app-sidechain-label></td>
-              <td><span class="badge badge-secondary">proposed</span></td>
+              <td><span class="pill">proposed</span></td>
               <td class="mono" [title]="b.hash"><app-truncate [text]="b.hash" [lastChars]="8"></app-truncate></td>
             </tr>
             <tr *ngFor="let b of block.bundlesClosed">
               <td><app-sidechain-label [slot]="b.slot" [name]="b.name" [title]="b.name + ' (slot ' + b.slot + ')'"></app-sidechain-label></td>
-              <td><span class="badge" [class.badge-success]="b.paid" [class.badge-danger]="!b.paid">{{ b.paid ? 'paid' : 'failed' }}</span></td>
+              <td><span class="pill" [class.ok]="b.paid" [class.bad]="!b.paid">{{ b.paid ? 'paid' : 'failed' }}</span></td>
               <td class="mono" [title]="b.hash"><app-truncate [text]="b.hash" [lastChars]="8"></app-truncate></td>
             </tr>
           </tbody>
@@ -123,13 +123,13 @@
           <tbody>
             <tr *ngFor="let p of block.proposals">
               <td>Slot {{ p.slot }}</td>
-              <td><span class="badge badge-secondary">proposed</span></td>
-              <td><b><app-sidechain-label [slot]="p.slot" [name]="p.title || '(undeclared)'"></app-sidechain-label></b> <span class="text-muted small">{{ p.description }}</span></td>
+              <td><span class="pill">proposed</span></td>
+              <td><b><app-sidechain-label [slot]="p.slot" [name]="p.title || '(undeclared)'"></app-sidechain-label></b> <span class="muted small">{{ p.description }}</span></td>
               <td class="mono" [title]="p.hash"><app-truncate [text]="p.hash" [lastChars]="8"></app-truncate></td>
             </tr>
             <tr *ngFor="let a of block.acks">
               <td>Slot {{ a.slot }}</td>
-              <td><span class="badge badge-info">ack</span></td>
+              <td><span class="pill on">ack</span></td>
               <td>@if (a.title) {<app-sidechain-label [slot]="a.slot" [name]="a.title"></app-sidechain-label>}</td>
               <td class="mono" [title]="a.hash"><app-truncate [text]="a.hash" [lastChars]="8"></app-truncate></td>
             </tr>

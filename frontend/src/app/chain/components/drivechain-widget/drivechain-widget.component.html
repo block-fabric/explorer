@@ -30,7 +30,7 @@
             <div class="li" *ngFor="let s of d.live.sidechains; trackBy: trackSlot">
               <a *ngIf="s.explorer; else plainName" [href]="s.explorer" class="nm"><app-sidechain-label [slot]="s.slot" [name]="s.title"></app-sidechain-label></a>
               <ng-template #plainName><span class="nm"><app-sidechain-label [slot]="s.slot" [name]="s.title"></app-sidechain-label></span></ng-template>
-              <span class="bar"><span class="fill" [style.width.%]="d.live.escrowTotal ? 100 * s.escrow / d.live.escrowTotal : 0" [style.background]="colorOf(s.slot)"></span></span>
+              <span class="bar" [style.--sc]="colorOf(s.slot)"><span class="fill" [style.width.%]="d.live.escrowTotal ? 100 * s.escrow / d.live.escrowTotal : 0"></span></span>
               <span class="num">{{ (s.escrow / 1e8) | number:'1.0-0' }}</span>
               <span class="flow" [class.pos]="stat(d, s.slot)?.netFlow > 0" [class.neg]="stat(d, s.slot)?.netFlow < 0">{{ stat(d, s.slot)?.netFlow > 0 ? '+' : '' }}{{ (stat(d, s.slot)?.netFlow || 0) / 1e8 | number:'1.0-1' }}</span>
             </div>
@@ -78,9 +78,10 @@
             <div class="b-top">
               <b><app-sidechain-label [slot]="b.slot" [name]="b.name"></app-sidechain-label></b>
               <span class="mono"><app-truncate [text]="b.hash" [lastChars]="8"></app-truncate></span>
-              <span class="ms-auto" *ngIf="b.payable">payable</span>
+              <span class="pill ok ms-auto" *ngIf="b.payable">payable</span>
             </div>
-            <div class="b-bar"><span class="b-fill" [style.width.%]="100 * progress(b)" [style.background]="canMake(b) ? colorOf(b.slot) : '#ff6b6b88'"></span><span class="b-txt">{{ b.score | number }} / {{ b.threshold | number }} votes</span></div>
+            <div class="b-lbl"><span><b>{{ b.score | number }}</b> / {{ b.threshold | number }} votes</span><span>{{ pct(progress(b), 0) }}</span></div>
+            <div class="b-bar" [style.--sc]="colorOf(b.slot)"><span class="b-fill" [style.width.%]="100 * progress(b)" [class.doomed]="!canMake(b)"></span></div>
             <div class="b-meta">{{ b.blocksleft | number }} blocks left · {{ b.payable ? 'reached the threshold' : canMake(b) ? 'needs ' + ((b.threshold - b.score) | number) + ' more votes' : 'cannot reach the threshold in time' }} · proposed at {{ b.height | number }}</div>
           </div>
           <div class="foot"><span>{{ d.totals.bundlesPaid }} paid · {{ d.totals.bundlesFailed }} failed in 144 blocks</span><span>{{ d.totals.upvotes | number }} upvotes · {{ d.totals.downvotes | number }} downvotes</span></div>
@@ -103,15 +104,17 @@
         <div class="list">
           <div class="li" *ngFor="let p of m.pools.slice(0, 5)">
             <span class="nm" [title]="(p.name || p.tag) + ' · coinbase tag ' + p.tag"><img *ngIf="p.logo" class="pool-logo" [src]="logoUrl(p.logo)" (error)="hideLogo($event)" alt="">{{ p.name || p.tag }}</span>
-            <span class="bar"><span class="fill" [style.width.%]="100 * p.share" [style.background]="profile.color"></span></span>
+            <span class="bar"><span class="fill" [style.width.%]="100 * p.share"></span></span>
             <span class="num">{{ pct(p.share, 0) }}</span>
             <span class="flow">{{ p.datum ? 'DATUM · ' + p.miners.length + (p.miners.length === 1 ? ' miner' : ' miners') : p.blocks + ' blocks' }}</span>
           </div>
         </div>
-        <div class="b-bar mt-2" *ngIf="m.retarget as r"><span class="b-fill" [style.width.%]="100 * r.progress" [style.background]="profile.color"></span>
-          <span class="b-txt">retarget: {{ r.blocksLeft | number }} blocks to {{ r.nextRetarget | number }} · ~{{ r.eta * 1000 | date:'MMM d, HH:mm' }}</span></div>
-        <div class="b-bar mt-2"><span class="b-fill" [style.width.%]="100 * m.halving.progress" [style.background]="profile.color"></span>
-          <span class="b-txt">halving: {{ m.halving.blocksLeft | number }} blocks to {{ m.halving.nextHalving | number }}</span></div>
+        <ng-container *ngIf="m.retarget as r">
+          <div class="b-lbl mt-2"><span>retarget: {{ r.blocksLeft | number }} blocks to {{ r.nextRetarget | number }} · ~{{ r.eta * 1000 | date:'MMM d, HH:mm' }}</span><span>{{ pct(r.progress, 0) }}</span></div>
+          <div class="b-bar"><span class="b-fill" [style.width.%]="100 * r.progress"></span></div>
+        </ng-container>
+        <div class="b-lbl mt-2"><span>halving: {{ m.halving.blocksLeft | number }} blocks to {{ m.halving.nextHalving | number }}</span><span>{{ pct(m.halving.progress, 0) }}</span></div>
+        <div class="b-bar"><span class="b-fill" [style.width.%]="100 * m.halving.progress"></span></div>
         <a class="more" [routerLink]="['/mining' | relativeUrl]">Mining →</a>
       </ng-container>
     </ng-container>

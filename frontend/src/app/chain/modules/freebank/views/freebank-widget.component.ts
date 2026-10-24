@@ -27,10 +27,8 @@ export type FreebankWidgetKind = 'freebank-chain' | 'freebank-credit' | 'freeban
     .kv { width: 100%; font-size: 0.85rem; margin: 0; td { padding: 3px 4px; vertical-align: middle; } td:first-child { color: var(--transparent-fg); } }
     .big-row { flex-wrap: wrap; }
     .rows { width: 100%; font-size: 0.85rem; td { padding: 3px 4px; vertical-align: middle; } }
-    .muted { color: var(--transparent-fg); } .mono { font-family: monospace; } .pos { color: #3bd16f; } .neg { color: #ff6b6b; }
-    .pill { display: inline-block; font-size: 0.7rem; padding: 0 7px; border-radius: 10px; background: #ffffff14; white-space: nowrap; }
-    .pill.ok { background: color-mix(in srgb, #3bd16f 30%, transparent); } .pill.warn { background: color-mix(in srgb, #f5b83d 30%, transparent); }
-    .pill.bad { background: color-mix(in srgb, #ff6b6b 30%, transparent); } .pill.on { background: color-mix(in srgb, var(--chain-accent) 30%, transparent); }
+    .muted { color: var(--transparent-fg); } .pos { color: #3bd16f; } .neg { color: #ff6b6b; }
+    .rows tr + tr td { border-top: 1px solid #ffffff0b; }
     @media (max-width: 480px) { .big-value { font-size: 1.1rem; } }
   `],
   template: `

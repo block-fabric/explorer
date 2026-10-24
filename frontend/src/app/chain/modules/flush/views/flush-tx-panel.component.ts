@@ -4,12 +4,16 @@ import { PROFILE } from '@app/chain/profiles';
 import { FlushApiService, FlushLoaded, flushLoaded } from '../flush-api.service';
 import { FLUSH_PAGE_IMPORTS } from '../flush-kit';
 import * as F from '../flush-format';
+import { CxColumn, CxFilter } from '@app/chain/components/chain-table/chain-table.component';
+
+/** an output of an asset transaction: what it carries */
+interface TxOutput { n: number; carries: string; id?: string; amount?: number }
 
 /** GET /api/v1/flush/tx/:txid (chains/FLUSH-API.md) */
 export interface FlushTxInfo {
   txid: string;
   confirmed: boolean;
-  asset: { operation: Record<string, any> | null; outputs: { n: number; carries: string; id?: string; amount?: number }[]; error: string | null } | null;
+  asset: { operation: Record<string, any> | null; outputs: TxOutput[]; error: string | null } | null;
   peg: any[] | null;
   stake: any[] | null;
 }
@@ -95,15 +99,11 @@ const POOL_KEYS = new Set(['pool']);
           }
           @if (a.outputs.length) {
             <h5 class="p-h5">Outputs</h5>
-            <table class="table table-borderless table-sm p-table mb-0">
-              <thead><tr><th>Output</th><th>Carries</th><th>What</th></tr></thead>
-              <tbody>
-                @for (o of a.outputs; track o.n) {
-                  <tr><td>#{{ o.n }}</td><td><span class="pill" [class.accent]="o.carries === 'asset'">{{ carries(o.carries) }}</span></td>
-                    <td>@if (o.id && o.carries !== 'reservation') {<app-flush-asset [id]="o.id" [units]="o.carries === 'asset' || o.carries === 'lp' ? o.amount : null"></app-flush-asset>} @else if (o.carries === 'result') {<span class="muted">what the order or operation pays out, at the end of its block</span>}</td></tr>
-                }
-              </tbody>
-            </table>
+            <app-chain-table [rows]="a.outputs" [columns]="outputCols" [filters]="outputFilters(a.outputs)" sort="n" [asc]="true" [pageSize]="25" [trackBy]="trackOutput">
+              <ng-template cxCell="n" let-o>#{{ o.n }}</ng-template>
+              <ng-template cxCell="carries" let-o><span class="pill" [class.on]="o.carries === 'asset'">{{ carries(o.carries) }}</span></ng-template>
+              <ng-template cxCell="what" let-o>@if (o.id && o.carries !== 'reservation') {<app-flush-asset [id]="o.id" [units]="o.carries === 'asset' || o.carries === 'lp' ? o.amount : null"></app-flush-asset>} @else if (o.carries === 'result') {<span class="muted">what the order or operation pays out, at the end of its block</span>}</ng-template>
+            </app-chain-table>
           }
         </div>
         }
@@ -166,6 +166,13 @@ export class FlushTxPanelComponent implements OnChanges {
   profile = PROFILE;
   fx = F;
   view$: Observable<FlushLoaded<FlushTxInfo>>;
+  outputCols: CxColumn<TxOutput>[] = [
+    { key: 'n', label: 'Output', sort: o => o.n },
+    { key: 'carries', label: 'Carries', sort: o => o.carries },
+    { key: 'what', label: 'What' },
+  ];
+  trackOutput = (o: TxOutput) => o.n;
+  private filtersFor: { outputs: TxOutput[]; filters: CxFilter<TxOutput>[] } | null = null;
 
   constructor(private api: FlushApiService) {}
 
@@ -178,6 +185,15 @@ export class FlushTxPanelComponent implements OnChanges {
   opTitle(op: Record<string, any> | null): string {
     const n = String(op?.name ?? '');
     return OPS[n] ?? (n && n !== 'operation' ? n.replace(/_/g, ' ') : 'Asset operation');
+  }
+
+  /** chips of what the outputs carry (kept per list of outputs, so the table keeps its choice) */
+  outputFilters(outputs: TxOutput[]): CxFilter<TxOutput>[] {
+    if (this.filtersFor?.outputs !== outputs) {
+      const kinds = [...new Set(outputs.map(o => o.carries))];
+      this.filtersFor = { outputs, filters: kinds.length > 1 ? [{ label: 'Carries', options: kinds.map(k => ({ label: this.carries(k), test: (o: TxOutput) => o.carries === k })) }] : [] };
+    }
+    return this.filtersFor.filters;
   }
 
   carries(c: string): string {

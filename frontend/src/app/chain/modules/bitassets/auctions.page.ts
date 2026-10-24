@@ -5,7 +5,8 @@ import { SeoService } from '@app/services/seo.service';
 import { L2ApiService } from '@app/chain/l2/l2-api.service';
 import { Loaded } from '@app/chain/l2/l2.interfaces';
 import { shortId } from '@app/chain/l2/l2-common';
-import { ChartSeries, FEATURE_PAGE_IMPORTS, featureData$ } from '@app/chain/l2/features/feature-kit';
+import { ChartSeries, FEATURE_PAGE_IMPORTS, featureData$, matchAny } from '@app/chain/l2/features/feature-kit';
+import { CxColumn, CxFilter } from '@app/chain/components/chain-table/chain-table.component';
 import { Ref } from './assets.page';
 
 // GET /api/v1/l2/feature/auctions[/:id] (chains/L2-API.md)
@@ -50,24 +51,16 @@ export interface AuctionDetail extends AuctionItem {
         <app-l2-state [state]="v" what="Auctions" [height]="300"></app-l2-state>
         @if (v.data; as d) {
           <div class="box">
-            <table class="table table-borderless table-sm">
-              <thead><tr><th>Auction</th><th>Offers</th><th>For</th><th>Status</th><th class="text-end">Price now</th><th>Blocks</th><th class="text-end">Bids</th></tr></thead>
-              <tbody>
-                @for (a of d.items; track a.id) {
-                  <tr>
-                    <td><a [routerLink]="['/auctions', a.id]" class="mono" [title]="a.id">{{ shortId(a.id) }}</a></td>
-                    <td>{{ a.remaining | number }} <app-l2-asset [id]="a.baseAsset"></app-l2-asset></td>
-                    <td><app-l2-asset [id]="a.quoteAsset"></app-l2-asset></td>
-                    <td><span class="status" [class.ok]="a.status === 'live'" [class.wait]="a.status === 'upcoming'">{{ a.status }}</span></td>
-                    <td class="text-end">@if (a.currentPrice !== null) {<span>{{ a.currentPrice | number }}</span>} @else {<span class="muted">–</span>}</td>
-                    <td>{{ a.startBlock | number }} – {{ a.endBlock | number }}</td>
-                    <td class="text-end">{{ a.bids | number }}</td>
-                  </tr>
-                } @empty {
-                  <tr><td colspan="7" class="empty">No Dutch auction on this sidechain yet.</td></tr>
-                }
-              </tbody>
-            </table>
+            <app-chain-table [rows]="d.items" [columns]="auctionCols" [filters]="statusFilters" [search]="auctionMatches" searchPlaceholder="Auction, asset…"
+                sort="startBlock" empty="No Dutch auction on this sidechain yet." [trackBy]="auctionKey">
+              <ng-template cxCell="id" let-a><a [routerLink]="['/auctions', a.id]" class="mono" [title]="a.id">{{ shortId(a.id) }}</a></ng-template>
+              <ng-template cxCell="remaining" let-a><span class="me-1">{{ a.remaining | number }}</span><app-l2-asset [id]="a.baseAsset"></app-l2-asset></ng-template>
+              <ng-template cxCell="quoteAsset" let-a><app-l2-asset [id]="a.quoteAsset"></app-l2-asset></ng-template>
+              <ng-template cxCell="status" let-a><span class="status" [class.ok]="a.status === 'live'" [class.wait]="a.status === 'upcoming'">{{ a.status }}</span></ng-template>
+              <ng-template cxCell="currentPrice" let-a>@if (a.currentPrice !== null) {<span>{{ a.currentPrice | number }}</span>} @else {<span class="muted">–</span>}</ng-template>
+              <ng-template cxCell="startBlock" let-a>{{ a.startBlock | number }} – {{ a.endBlock | number }}</ng-template>
+              <ng-template cxCell="bids" let-a>{{ a.bids | number }}</ng-template>
+            </app-chain-table>
           </div>
           <p class="note">A Dutch auction offers an amount of its base asset for a price in its quote asset that falls block by block from
             its initial to its final price; each bid buys part of what is left and resets the fall (node state: dutch_auctions). Block {{ d.height | number }} is the tip.</p>
@@ -79,6 +72,18 @@ export interface AuctionDetail extends AuctionItem {
 export class BitAssetsAuctionsPage implements OnInit {
   view$: Observable<Loaded<{ items: AuctionItem[]; height: number }> | 'unavailable'>;
   shortId = shortId;
+  auctionCols: CxColumn<AuctionItem>[] = [
+    { key: 'id', label: 'Auction' },
+    { key: 'remaining', label: 'Offers', sort: true },
+    { key: 'quoteAsset', label: 'For', hide: 'md' },
+    { key: 'status', label: 'Status', sort: true },
+    { key: 'currentPrice', label: 'Price now', align: 'right', sort: true },
+    { key: 'startBlock', label: 'Blocks', sort: true, nowrap: true, hide: 'md' },
+    { key: 'bids', label: 'Bids', align: 'right', sort: true },
+  ];
+  statusFilters: CxFilter<AuctionItem>[] = [{ options: (['live', 'upcoming', 'ended'] as const).map(st => ({ label: st, test: a => a.status === st })) }];
+  auctionKey = (a: AuctionItem) => a.id;
+  auctionMatches = matchAny<AuctionItem>(a => a.id, a => a.baseAsset, a => a.quoteAsset);
 
   constructor(private api: L2ApiService, private seo: SeoService) {}
 
@@ -108,7 +113,7 @@ export class BitAssetsAuctionsPage implements OnInit {
           <div class="kpi"><div class="l">Bids</div><div class="v">{{ a.bids | number }}</div><div class="s">{{ a.collects | number }} collected</div></div>
         </div>
         <h2>Price curve</h2>
-        <div class="box"><app-l2-chart [series]="curve(a)" [unit]="''" emptyText="No price curve."></app-l2-chart></div>
+        <div class="chart-box"><app-l2-chart [series]="curve(a)" [unit]="''" emptyText="No price curve."></app-l2-chart></div>
         <div class="grid2">
           <div>
             <h2>Parameters</h2>
@@ -123,38 +128,24 @@ export class BitAssetsAuctionsPage implements OnInit {
         </div>
         <h2>Bids</h2>
         <div class="box">
-          <table class="table table-borderless table-sm">
-            <thead><tr><th>Block</th><th>Time</th><th>Bidder</th><th class="text-end">Bid</th><th class="text-end">Quantity</th><th>Transaction</th></tr></thead>
-            <tbody>
-              @for (b of a.bidList; track b.txid) {
-                <tr>
-                  <td><a [routerLink]="['/block', b.height]">{{ b.height | number }}</a></td>
-                  <td>@if (b.time) {<app-timestamp [unixTime]="b.time" [hideTimeSince]="true"></app-timestamp>} @else {<span class="muted">–</span>}</td>
-                  <td>@if (b.bidder) {<a [routerLink]="['/address', b.bidder]" class="mono">{{ shortId(b.bidder, 6) }}</a>} @else {<span class="muted">–</span>}</td>
-                  <td class="text-end">{{ b.bidSize | number }}</td>
-                  <td class="text-end">{{ b.quantity | number }}</td>
-                  <td><a [routerLink]="['/tx', b.txid]" class="mono">{{ shortId(b.txid) }}</a></td>
-                </tr>
-              } @empty {<tr><td colspan="6" class="empty">No bids.</td></tr>}
-            </tbody>
-          </table>
+          <app-chain-table [rows]="a.bidList" [columns]="bidCols" [search]="bidMatches" searchPlaceholder="Bidder, tx…" sort="height" empty="No bids.">
+            <ng-template cxCell="height" let-b><a [routerLink]="['/block', b.height]">{{ b.height | number }}</a></ng-template>
+            <ng-template cxCell="time" let-b>@if (b.time) {<app-timestamp [unixTime]="b.time" [hideTimeSince]="true"></app-timestamp>} @else {<span class="muted">–</span>}</ng-template>
+            <ng-template cxCell="bidder" let-b>@if (b.bidder) {<a [routerLink]="['/address', b.bidder]" class="mono">{{ shortId(b.bidder, 6) }}</a>} @else {<span class="muted">–</span>}</ng-template>
+            <ng-template cxCell="bidSize" let-b>{{ b.bidSize | number }}</ng-template>
+            <ng-template cxCell="quantity" let-b>{{ b.quantity | number }}</ng-template>
+            <ng-template cxCell="txid" let-b><a [routerLink]="['/tx', b.txid]" class="mono">{{ shortId(b.txid) }}</a></ng-template>
+          </app-chain-table>
         </div>
         @if (a.collectList.length) {
           <h2>Collected</h2>
           <div class="box">
-            <table class="table table-borderless table-sm">
-              <thead><tr><th>Block</th><th class="text-end">Offered, left</th><th class="text-end">Received</th><th>Transaction</th></tr></thead>
-              <tbody>
-                @for (c of a.collectList; track c.txid) {
-                  <tr>
-                    <td><a [routerLink]="['/block', c.height]">{{ c.height | number }}</a></td>
-                    <td class="text-end">{{ c.amountOfferedRemaining | number }}</td>
-                    <td class="text-end">{{ c.amountReceived | number }}</td>
-                    <td><a [routerLink]="['/tx', c.txid]" class="mono">{{ shortId(c.txid) }}</a></td>
-                  </tr>
-                }
-              </tbody>
-            </table>
+            <app-chain-table [rows]="a.collectList" [columns]="collectCols" sort="height" [pageSize]="10" empty="None.">
+              <ng-template cxCell="height" let-c><a [routerLink]="['/block', c.height]">{{ c.height | number }}</a></ng-template>
+              <ng-template cxCell="amountOfferedRemaining" let-c>{{ c.amountOfferedRemaining | number }}</ng-template>
+              <ng-template cxCell="amountReceived" let-c>{{ c.amountReceived | number }}</ng-template>
+              <ng-template cxCell="txid" let-c><a [routerLink]="['/tx', c.txid]" class="mono">{{ shortId(c.txid) }}</a></ng-template>
+            </app-chain-table>
           </div>
         }
       }
@@ -165,6 +156,21 @@ export class BitAssetsAuctionPage implements OnInit {
   id = '';
   view$: Observable<Loaded<AuctionDetail>>;
   shortId = shortId;
+  bidCols: CxColumn<AuctionDetail['bidList'][number]>[] = [
+    { key: 'height', label: 'Block', sort: true },
+    { key: 'time', label: 'Time', sort: true, hide: 'md' },
+    { key: 'bidder', label: 'Bidder', sort: true },
+    { key: 'bidSize', label: 'Bid', align: 'right', sort: true },
+    { key: 'quantity', label: 'Quantity', align: 'right', sort: true },
+    { key: 'txid', label: 'Transaction' },
+  ];
+  bidMatches = matchAny<AuctionDetail['bidList'][number]>(b => b.bidder, b => b.txid);
+  collectCols: CxColumn<AuctionDetail['collectList'][number]>[] = [
+    { key: 'height', label: 'Block', sort: true },
+    { key: 'amountOfferedRemaining', label: 'Offered, left', align: 'right', sort: true },
+    { key: 'amountReceived', label: 'Received', align: 'right', sort: true },
+    { key: 'txid', label: 'Transaction' },
+  ];
 
   constructor(private api: L2ApiService, private route: ActivatedRoute, private seo: SeoService) {}
 

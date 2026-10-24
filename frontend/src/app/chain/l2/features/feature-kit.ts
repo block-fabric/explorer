@@ -9,6 +9,7 @@ import { Loaded } from '@app/chain/l2/l2.interfaces';
 import { L2_PAGE_IMPORTS } from '@app/chain/l2/l2-common';
 import { L2FeaturePage, L2_FEATURE_PAGES, featurePage } from '@app/chain/l2/l2-nav';
 import { L2AddressAssetsComponent, L2AssetComponent, L2TxAssetsComponent } from '@app/chain/l2/features/asset-badge';
+import { CxFilter } from '@app/chain/components/chain-table/chain-table.component';
 
 /*
  * The building blocks of the chains' own feature pages (chain/modules/<chain>/*.page.ts): the page head with its
@@ -33,7 +34,7 @@ import { L2AddressAssetsComponent, L2AssetComponent, L2TxAssetsComponent } from 
   template: `
     <h1><app-svg-images name="chain-mark" [fill]="profile.id" width="28" height="28" class="cmark"></app-svg-images> {{ title || page.title }}</h1>
     @if (id) {
-      <div class="sub"><span class="id">{{ id }}</span> <app-clipboard [text]="id"></app-clipboard> · <a [routerLink]="['/' + page.path]">all {{ page.title.toLowerCase() }}</a></div>
+      <div class="sub"><span class="id">{{ id }}</span><app-clipboard class="ms-1" [text]="id"></app-clipboard> · <a [routerLink]="['/' + page.path]">all {{ page.title.toLowerCase() }}</a></div>
     } @else {
       <div class="sub">{{ page.about }}</div>
     }
@@ -216,4 +217,30 @@ export const FEATURE_PAGE_IMPORTS = [
 /** "a few words": an activity or event kind for a table cell */
 export function kindLabel(k: string): string {
   return String(k ?? '').replace(/-/g, ' ');
+}
+
+const CHIPS = new WeakMap<object, Map<string, CxFilter<any>[]>>();
+
+/**
+ * A table's chip row: one chip per distinct value of `of(row)`, in the order met; none when every row has the same.
+ * Kept per rows array and name, so a template can call it on every check without resetting the table.
+ */
+export function chipsBy<T>(rows: T[], name: string, of: (row: T) => string, label: (v: string) => string = v => v): CxFilter<T>[] {
+  let byName = CHIPS.get(rows);
+  if (!byName) {
+    byName = new Map();
+    CHIPS.set(rows, byName);
+  }
+  let f = byName.get(name);
+  if (!f) {
+    const values = [...new Set(rows.map(of))];
+    f = values.length > 1 ? [{ label: name, options: values.map(v => ({ label: label(v), test: (r: T) => of(r) === v })) }] : [];
+    byName.set(name, f);
+  }
+  return f;
+}
+
+/** a search over a few of a row's fields (lower case) */
+export function matchAny<T>(...fields: ((row: T) => unknown)[]): (row: T, q: string) => boolean {
+  return (row, q) => fields.some(f => String(f(row) ?? '').toLowerCase().includes(q));
 }

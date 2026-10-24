@@ -5,7 +5,8 @@ import { SeoService } from '@app/services/seo.service';
 import { L2ApiService } from '@app/chain/l2/l2-api.service';
 import { Loaded } from '@app/chain/l2/l2.interfaces';
 import { shortId } from '@app/chain/l2/l2-common';
-import { ChartSeries, FEATURE_PAGE_IMPORTS, featureData$, kindLabel } from '@app/chain/l2/features/feature-kit';
+import { ChartSeries, FEATURE_PAGE_IMPORTS, chipsBy, featureData$, kindLabel, matchAny } from '@app/chain/l2/features/feature-kit';
+import { CxColumn, CxFilter } from '@app/chain/components/chain-table/chain-table.component';
 
 // GET /api/v1/l2/feature/assets[/:id] (chains/L2-API.md)
 export interface Ref { height: number; time: number | null; txid: string }
@@ -63,27 +64,18 @@ export interface AssetDetail extends AssetItem {
             <div class="kpi"><div class="l">Reservations</div><div class="v">{{ d.reservations.total | number }}</div><div class="s">{{ d.reservations.open | number }} not yet registered</div></div>
             <div class="kpi"><div class="l">Priced</div><div class="v">{{ priced(d.items) | number }}</div><div class="s">with an AMM pool against sats</div></div>
           </div>
-          <input type="search" class="form-control form-control-sm search" placeholder="Filter by name, hash or address" [value]="filter" (input)="filter = $any($event.target).value">
           <div class="box">
-            <table class="table table-borderless table-sm">
-              <thead><tr><th>#</th><th>Asset</th><th class="text-end">Supply</th><th class="text-end">Holders</th><th class="text-end">Price</th><th>Registered</th><th>Last activity</th><th class="text-end">Txs</th></tr></thead>
-              <tbody>
-                @for (a of filtered(d.items); track a.id) {
-                  <tr>
-                    <td class="muted">{{ a.seq }}</td>
-                    <td><app-l2-asset [id]="a.id"></app-l2-asset></td>
-                    <td class="text-end">{{ a.supply | number }}</td>
-                    <td class="text-end">{{ a.holders | number }}</td>
-                    <td class="text-end">@if (a.price !== null) {<span>{{ a.price | number:'1.0-4' }} <span class="muted">sats</span></span>} @else {<span class="muted">–</span>}</td>
-                    <td>@if (a.registered) {<a [routerLink]="['/block', a.registered.height]">{{ a.registered.height | number }}</a>} @else {<span class="muted">–</span>}</td>
-                    <td>@if (a.last?.time) {<app-timestamp [unixTime]="a.last!.time!" [hideTimeSince]="true"></app-timestamp>} @else if (a.last) {<a [routerLink]="['/block', a.last.height]">{{ a.last.height | number }}</a>} @else {<span class="muted">–</span>}</td>
-                    <td class="text-end">{{ a.txs | number }}</td>
-                  </tr>
-                } @empty {
-                  <tr><td colspan="8" class="empty">{{ filter ? 'Nothing matches the filter.' : 'No assets yet.' }}</td></tr>
-                }
-              </tbody>
-            </table>
+            <app-chain-table [rows]="d.items" [columns]="assetCols" [filters]="assetFilters" [search]="assetMatches" searchPlaceholder="Name, hash or address…"
+                sort="seq" [asc]="true" empty="No assets yet." [trackBy]="assetKey">
+              <ng-template cxCell="seq" let-a><span class="muted">{{ a.seq }}</span></ng-template>
+              <ng-template cxCell="asset" let-a><app-l2-asset [id]="a.id"></app-l2-asset></ng-template>
+              <ng-template cxCell="supply" let-a>{{ a.supply | number }}</ng-template>
+              <ng-template cxCell="holders" let-a>{{ a.holders | number }}</ng-template>
+              <ng-template cxCell="price" let-a>@if (a.price !== null) {<span>{{ a.price | number:'1.0-4' }}</span><span class="muted ms-1">sats</span>} @else {<span class="muted">–</span>}</ng-template>
+              <ng-template cxCell="registered" let-a>@if (a.registered) {<a [routerLink]="['/block', a.registered.height]">{{ a.registered.height | number }}</a>} @else {<span class="muted">–</span>}</ng-template>
+              <ng-template cxCell="last" let-a>@if (a.last?.time) {<app-timestamp [unixTime]="a.last!.time!" [hideTimeSince]="true"></app-timestamp>} @else if (a.last) {<a [routerLink]="['/block', a.last.height]">{{ a.last.height | number }}</a>} @else {<span class="muted">–</span>}</ng-template>
+              <ng-template cxCell="txs" let-a>{{ a.txs | number }}</ng-template>
+            </app-chain-table>
           </div>
           <p class="note">An asset's name shows when it hashes to the registered name hash (the chain keeps only the hash); else its short hash.
             Supply and holders are the unspent outputs in the explorer's index.</p>
@@ -94,7 +86,19 @@ export interface AssetDetail extends AssetItem {
 })
 export class BitAssetsAssetsPage implements OnInit {
   view$: Observable<Loaded<{ items: AssetItem[]; reservations: { total: number; open: number } }> | 'unavailable'>;
-  filter = '';
+  assetCols: CxColumn<AssetItem>[] = [
+    { key: 'seq', label: '#', sort: true },
+    { key: 'asset', label: 'Asset', sort: a => a.name ?? a.id },
+    { key: 'supply', label: 'Supply', align: 'right', sort: true },
+    { key: 'holders', label: 'Holders', align: 'right', sort: true },
+    { key: 'price', label: 'Price', align: 'right', sort: true, nowrap: true },
+    { key: 'registered', label: 'Registered', sort: a => a.registered?.height, hide: 'md' },
+    { key: 'last', label: 'Last activity', sort: a => a.last?.height, hide: 'md' },
+    { key: 'txs', label: 'Txs', align: 'right', sort: true },
+  ];
+  assetFilters: CxFilter<AssetItem>[] = [{ options: [{ label: 'priced', test: a => a.price !== null }, { label: 'no pool', test: a => a.price === null }] }];
+  assetKey = (a: AssetItem) => a.id;
+  assetMatches = matchAny<AssetItem>(a => a.id, a => a.name, a => a.controller);
 
   constructor(private api: L2ApiService, private seo: SeoService) {}
 
@@ -110,11 +114,6 @@ export class BitAssetsAssetsPage implements OnInit {
   priced(items: AssetItem[]): number {
     return items.filter(a => a.price !== null).length;
   }
-
-  filtered(items: AssetItem[]): AssetItem[] {
-    const q = this.filter.trim().toLowerCase();
-    return q ? items.filter(a => [a.id, a.name, a.controller].some(x => String(x ?? '').toLowerCase().includes(q))) : items;
-  }
 }
 
 /** /assets/:id: one BitAsset: supply, holders, price history, mints and activity */
@@ -124,6 +123,7 @@ export class BitAssetsAssetsPage implements OnInit {
   imports: [...FEATURE_PAGE_IMPORTS],
   styleUrls: ['../../components/module-page.scss', '../../l2/pages/l2-page.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  styles: [`.share-cell { display: flex; align-items: center; gap: 8px; min-width: 160px; .bar { flex: 1; } }`],
   template: `
   <div class="container-xl mp">
     <app-l2-feature-head path="assets" [id]="id" [title]="title"></app-l2-feature-head>
@@ -139,11 +139,11 @@ export class BitAssetsAssetsPage implements OnInit {
         <div class="grid2">
           <div class="box">
             <table class="kv"><tbody>
-              <tr><th>Name</th><td>@if (a.name) {<b>{{ a.name }}</b> <span class="muted">(hashes to the id)</span>} @else {<span class="muted">not revealed: the chain keeps the name's hash</span>}</td></tr>
+              <tr><th>Name</th><td>@if (a.name) {<b>{{ a.name }}</b><span class="muted ms-1">(hashes to the id)</span>} @else {<span class="muted">not revealed: the chain keeps the name's hash</span>}</td></tr>
               <tr><th>Sequence</th><td>{{ a.seq ?? '–' }}</td></tr>
               <tr><th>AssetId</th><td class="mono">{{ a.assetId }}</td></tr>
               <tr><th>Registered</th><td>@if (a.registered) {block <a [routerLink]="['/block', a.registered.height]">{{ a.registered.height | number }}</a>, tx <a [routerLink]="['/tx', a.registered.txid]" class="mono">{{ shortId(a.registered.txid) }}</a>} @else {<span class="muted">–</span>}</td></tr>
-              <tr><th>Controller</th><td>@if (a.controller) {<a [routerLink]="['/address', a.controller]" class="mono">{{ a.controller }}</a> <span class="muted">(holds the control coin: can mint and update)</span>} @else {<span class="muted">–</span>}</td></tr>
+              <tr><th>Controller</th><td>@if (a.controller) {<a [routerLink]="['/address', a.controller]" class="mono">{{ a.controller }}</a><span class="muted ms-1">(holds the control coin: can mint and update)</span>} @else {<span class="muted">–</span>}</td></tr>
               <tr><th>Pools</th><td>@for (p of a.pools; track p) {<div><app-l2-asset [id]="p"></app-l2-asset></div>} @empty {<span class="muted">none</span>}</td></tr>
             </tbody></table>
           </div>
@@ -152,45 +152,32 @@ export class BitAssetsAssetsPage implements OnInit {
 
         @if (a.priceHistory.length) {
           <h2>Price</h2>
-          <div class="box"><app-l2-chart [series]="priceSeries(a)" kind="step" unit="sats" [zero]="false"></app-l2-chart></div>
+          <div class="chart-box"><app-l2-chart [series]="priceSeries(a)" kind="step" unit="sats" [zero]="false"></app-l2-chart></div>
         }
 
         <h2>Holders</h2>
         <div class="box">
-          <table class="table table-borderless table-sm">
-            <thead><tr><th>Address</th><th class="text-end">Amount</th><th>Share</th></tr></thead>
-            <tbody>
-              @for (h of a.holderList; track h.address) {
-                <tr>
-                  <td><a [routerLink]="['/address', h.address]" class="mono">{{ h.address }}</a></td>
-                  <td class="text-end">{{ h.amount | number }}</td>
-                  <td style="min-width: 160px"><div class="bar"><div class="fill" [style.width.%]="(h.share ?? 0) * 100"></div></div> <span class="muted small">{{ (h.share ?? 0) * 100 | number:'1.0-2' }}%</span></td>
-                </tr>
-              } @empty {<tr><td colspan="3" class="empty">No holders.</td></tr>}
-            </tbody>
-          </table>
-          @if (a.holders > a.holderList.length) {<div class="muted small">The top {{ a.holderList.length }} of {{ a.holders | number }}.</div>}
+          <app-chain-table [rows]="a.holderList" [columns]="holderCols" [search]="holderMatches" searchPlaceholder="Address…" sort="amount" empty="No holders.">
+            <ng-template cxCell="address" let-h><a [routerLink]="['/address', h.address]" class="mono">{{ h.address }}</a></ng-template>
+            <ng-template cxCell="amount" let-h>{{ h.amount | number }}</ng-template>
+            <ng-template cxCell="share" let-h><div class="share-cell"><div class="bar"><div class="fill" [style.width.%]="(h.share ?? 0) * 100"></div></div><span class="muted small">{{ (h.share ?? 0) * 100 | number:'1.0-2' }}%</span></div></ng-template>
+          </app-chain-table>
+          @if (a.holders > a.holderList.length) {<div class="muted small mt-2">The top {{ a.holderList.length }} of {{ a.holders | number }}.</div>}
         </div>
 
         <h2>Activity</h2>
         <div class="box">
-          <table class="table table-borderless table-sm">
-            <thead><tr><th>Block</th><th>Time</th><th>Kind</th><th class="text-end">Amount</th><th>Against</th><th>Outputs</th><th>Transaction</th></tr></thead>
-            <tbody>
-              @for (r of a.activity; track r.txid + r.kind) {
-                <tr>
-                  <td><a [routerLink]="['/block', r.height]">{{ r.height | number }}</a></td>
-                  <td>@if (r.time) {<app-timestamp [unixTime]="r.time" [hideTimeSince]="true"></app-timestamp>} @else {<span class="muted">–</span>}</td>
-                  <td><span class="pill" [class.on]="r.kind !== 'transfer'">{{ kindLabel(r.kind) }}</span></td>
-                  <td class="text-end">{{ r.amount | number }}</td>
-                  <td>@if (r.counterAsset) {@if (r.counterAmount !== null) {<span>{{ r.counterAmount | number }} </span>}<app-l2-asset [id]="r.counterAsset"></app-l2-asset>} @else {<span class="muted">–</span>}</td>
-                  <td class="small">@for (o of r.outputs; track $index) {<div><a [routerLink]="['/address', o.address]" class="mono">{{ shortId(o.address, 6) }}</a> <span class="muted">{{ o.amount | number }}</span></div>}</td>
-                  <td><a [routerLink]="['/tx', r.txid]" class="mono" [title]="r.txid">{{ shortId(r.txid) }}</a></td>
-                </tr>
-              } @empty {<tr><td colspan="7" class="empty">No activity in the index.</td></tr>}
-            </tbody>
-          </table>
-          <div class="muted small">Outputs lists where the asset went, change included: the chain does not mark change.</div>
+          <app-chain-table [rows]="a.activity" [columns]="activityCols" [filters]="chipsBy(a.activity, 'Kind', kindOf, kindLabel)" [search]="activityMatches"
+              searchPlaceholder="Address, tx…" sort="height" empty="No activity in the index.">
+            <ng-template cxCell="height" let-r><a [routerLink]="['/block', r.height]">{{ r.height | number }}</a></ng-template>
+            <ng-template cxCell="time" let-r>@if (r.time) {<app-timestamp [unixTime]="r.time" [hideTimeSince]="true"></app-timestamp>} @else {<span class="muted">–</span>}</ng-template>
+            <ng-template cxCell="kind" let-r><span class="pill" [class.on]="r.kind !== 'transfer'">{{ kindLabel(r.kind) }}</span></ng-template>
+            <ng-template cxCell="amount" let-r>{{ r.amount | number }}</ng-template>
+            <ng-template cxCell="against" let-r>@if (r.counterAsset) {@if (r.counterAmount !== null) {<span class="me-1">{{ r.counterAmount | number }}</span>}<app-l2-asset [id]="r.counterAsset"></app-l2-asset>} @else {<span class="muted">–</span>}</ng-template>
+            <ng-template cxCell="outputs" let-r><span class="small">@for (o of r.outputs; track $index) {<div><a [routerLink]="['/address', o.address]" class="mono">{{ shortId(o.address, 6) }}</a><span class="muted ms-1">{{ o.amount | number }}</span></div>}</span></ng-template>
+            <ng-template cxCell="txid" let-r><a [routerLink]="['/tx', r.txid]" class="mono" [title]="r.txid">{{ shortId(r.txid) }}</a></ng-template>
+          </app-chain-table>
+          <div class="muted small mt-2">Outputs lists where the asset went, change included: the chain does not mark change.</div>
         </div>
       }
     }
@@ -202,6 +189,24 @@ export class BitAssetsAssetPage implements OnInit {
   view$: Observable<Loaded<AssetDetail>>;
   shortId = shortId;
   kindLabel = kindLabel;
+  chipsBy = chipsBy;
+  kindOf = (r: AssetActivity) => r.kind;
+  holderCols: CxColumn<AssetDetail['holderList'][number]>[] = [
+    { key: 'address', label: 'Address' },
+    { key: 'amount', label: 'Amount', align: 'right', sort: true },
+    { key: 'share', label: 'Share', sort: true, hide: 'md' },
+  ];
+  holderMatches = matchAny<{ address: string }>(h => h.address);
+  activityCols: CxColumn<AssetActivity>[] = [
+    { key: 'height', label: 'Block', sort: true },
+    { key: 'time', label: 'Time', sort: true, hide: 'md' },
+    { key: 'kind', label: 'Kind', sort: true },
+    { key: 'amount', label: 'Amount', align: 'right', sort: true },
+    { key: 'against', label: 'Against', sort: r => r.counterAmount, hide: 'md' },
+    { key: 'outputs', label: 'Outputs', sort: r => r.outputs.length, hide: 'lg' },
+    { key: 'txid', label: 'Transaction' },
+  ];
+  activityMatches = matchAny<AssetActivity>(r => r.txid, r => r.kind, r => r.outputs.map(o => o.address).join(' '));
 
   constructor(private api: L2ApiService, private route: ActivatedRoute, private seo: SeoService) {}
 

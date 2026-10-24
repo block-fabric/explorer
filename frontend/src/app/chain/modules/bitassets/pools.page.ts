@@ -5,7 +5,8 @@ import { SeoService } from '@app/services/seo.service';
 import { L2ApiService } from '@app/chain/l2/l2-api.service';
 import { Loaded } from '@app/chain/l2/l2.interfaces';
 import { shortId } from '@app/chain/l2/l2-common';
-import { ChartSeries, FEATURE_PAGE_IMPORTS, featureData$, kindLabel } from '@app/chain/l2/features/feature-kit';
+import { ChartSeries, FEATURE_PAGE_IMPORTS, chipsBy, featureData$, kindLabel, matchAny } from '@app/chain/l2/features/feature-kit';
+import { CxColumn } from '@app/chain/components/chain-table/chain-table.component';
 import { Ref } from './assets.page';
 
 // GET /api/v1/l2/feature/pools[/:id] (chains/L2-API.md)
@@ -59,24 +60,16 @@ const EVENT: Record<string, string> = { mint: 'add liquidity', burn: 'remove liq
         <app-l2-state [state]="v" what="Pools" [height]="300"></app-l2-state>
         @if (v.data; as d) {
           <div class="box">
-            <table class="table table-borderless table-sm">
-              <thead><tr><th>Pool</th><th class="text-end">Reserve 0</th><th class="text-end">Reserve 1</th><th class="text-end">Price</th><th class="text-end">LP tokens</th><th class="text-end">Swaps</th><th>Created</th></tr></thead>
-              <tbody>
-                @for (p of d.items; track p.id) {
-                  <tr>
-                    <td><a [routerLink]="['/pools', p.id]"><app-l2-asset [id]="p.asset0"></app-l2-asset> / <app-l2-asset [id]="p.asset1"></app-l2-asset></a></td>
-                    <td class="text-end">{{ reserve(p, 0) | number }}</td>
-                    <td class="text-end">{{ reserve(p, 1) | number }}</td>
-                    <td class="text-end">@if (p.price !== null) {<span>{{ p.price | number:'1.0-6' }}</span>} @else {<span class="muted">–</span>}</td>
-                    <td class="text-end">{{ (p.state?.outstanding_lp_tokens ?? p.replayed?.outstanding ?? 0) | number }}</td>
-                    <td class="text-end">{{ p.swaps | number }}</td>
-                    <td>@if (p.created) {<a [routerLink]="['/block', p.created.height]">{{ p.created.height | number }}</a>} @else {<span class="muted">–</span>}</td>
-                  </tr>
-                } @empty {
-                  <tr><td colspan="7" class="empty">No AMM pool has been created on this sidechain yet.</td></tr>
-                }
-              </tbody>
-            </table>
+            <app-chain-table [rows]="d.items" [columns]="poolCols" [search]="poolMatches" searchPlaceholder="Pool, asset…" sort="swaps"
+                empty="No AMM pool has been created on this sidechain yet." [trackBy]="poolKey">
+              <ng-template cxCell="pool" let-p><a [routerLink]="['/pools', p.id]"><app-l2-asset [id]="p.asset0"></app-l2-asset><span class="mx-1">/</span><app-l2-asset [id]="p.asset1"></app-l2-asset></a></ng-template>
+              <ng-template cxCell="r0" let-p>{{ reserve(p, 0) | number }}</ng-template>
+              <ng-template cxCell="r1" let-p>{{ reserve(p, 1) | number }}</ng-template>
+              <ng-template cxCell="price" let-p>@if (p.price !== null) {<span>{{ p.price | number:'1.0-6' }}</span>} @else {<span class="muted">–</span>}</ng-template>
+              <ng-template cxCell="lp" let-p>{{ lp(p) | number }}</ng-template>
+              <ng-template cxCell="swaps" let-p>{{ p.swaps | number }}</ng-template>
+              <ng-template cxCell="created" let-p>@if (p.created) {<a [routerLink]="['/block', p.created.height]">{{ p.created.height | number }}</a>} @else {<span class="muted">–</span>}</ng-template>
+            </app-chain-table>
           </div>
           <p class="note">Reserves and LP tokens are the node's pool state (get_amm_pool_state); the price is reserve 0 per unit of
             reserve 1, before the 0.3% swap fee. Swaps and history come from the index's AmmMint, AmmBurn and AmmSwap transactions.</p>
@@ -87,12 +80,27 @@ const EVENT: Record<string, string> = { mint: 'add liquidity', burn: 'remove liq
 })
 export class BitAssetsPoolsPage implements OnInit {
   view$: Observable<Loaded<{ items: PoolItem[] }> | 'unavailable'>;
+  poolCols: CxColumn<PoolItem>[] = [
+    { key: 'pool', label: 'Pool', sort: p => p.id },
+    { key: 'r0', label: 'Reserve 0', align: 'right', sort: p => this.reserve(p, 0) },
+    { key: 'r1', label: 'Reserve 1', align: 'right', sort: p => this.reserve(p, 1) },
+    { key: 'price', label: 'Price', align: 'right', sort: true },
+    { key: 'lp', label: 'LP tokens', align: 'right', sort: p => this.lp(p), hide: 'md' },
+    { key: 'swaps', label: 'Swaps', align: 'right', sort: true },
+    { key: 'created', label: 'Created', sort: p => p.created?.height, hide: 'md' },
+  ];
+  poolKey = (p: PoolItem) => p.id;
+  poolMatches = matchAny<PoolItem>(p => p.id, p => p.asset0, p => p.asset1);
 
   constructor(private api: L2ApiService, private seo: SeoService) {}
 
   ngOnInit(): void {
     this.seo.setTitle('AMM pools');
     this.view$ = featureData$(this.api, 'assets', () => this.api.feature$('pools'));
+  }
+
+  lp(p: PoolItem): number {
+    return Number(p.state?.outstanding_lp_tokens ?? p.replayed?.outstanding ?? 0);
   }
 
   reserve(p: PoolItem, k: 0 | 1): number {
@@ -125,29 +133,23 @@ export class BitAssetsPoolsPage implements OnInit {
         }
         @if (p.series.length > 1) {
           <h2>Price</h2>
-          <div class="box"><app-l2-chart [series]="priceSeries(p)" kind="step" [zero]="false"></app-l2-chart></div>
+          <div class="chart-box"><app-l2-chart [series]="priceSeries(p)" kind="step" [zero]="false"></app-l2-chart></div>
           <h2>Reserves</h2>
-          <div class="box"><app-l2-chart [series]="reserveSeries(p)" kind="step" [legend]="true"></app-l2-chart></div>
+          <div class="chart-box"><app-l2-chart [series]="reserveSeries(p)" kind="step" [legend]="true"></app-l2-chart></div>
         }
         <h2>History</h2>
         <div class="box">
-          <table class="table table-borderless table-sm">
-            <thead><tr><th>Block</th><th>Time</th><th>Event</th><th class="text-end">Reserve 0 change</th><th class="text-end">Reserve 1 change</th><th class="text-end">LP tokens</th><th class="text-end">Price after</th><th>Transaction</th></tr></thead>
-            <tbody>
-              @for (e of p.history; track e.txid) {
-                <tr>
-                  <td><a [routerLink]="['/block', e.height]">{{ e.height | number }}</a></td>
-                  <td>@if (e.time) {<app-timestamp [unixTime]="e.time" [hideTimeSince]="true"></app-timestamp>} @else {<span class="muted">–</span>}</td>
-                  <td><span class="pill on">{{ event(e.kind) }}</span></td>
-                  <td class="text-end" [class.pos]="e.amount0 > 0" [class.neg]="e.amount0 < 0">{{ e.amount0 | number }}</td>
-                  <td class="text-end" [class.pos]="e.amount1 > 0" [class.neg]="e.amount1 < 0">{{ e.amount1 | number }}</td>
-                  <td class="text-end">{{ e.lp ? (e.lp | number) : '' }}</td>
-                  <td class="text-end">@if (e.price !== null) {<span>{{ e.price | number:'1.0-6' }}</span>} @else {<span class="muted">–</span>}</td>
-                  <td><a [routerLink]="['/tx', e.txid]" class="mono" [title]="e.txid">{{ shortId(e.txid) }}</a></td>
-                </tr>
-              } @empty {<tr><td colspan="8" class="empty">No pool transactions in the index.</td></tr>}
-            </tbody>
-          </table>
+          <app-chain-table [rows]="p.history" [columns]="historyCols" [filters]="chipsBy(p.history, 'Event', kindOf, event)" [search]="historyMatches"
+              searchPlaceholder="Transaction…" sort="height" empty="No pool transactions in the index.">
+            <ng-template cxCell="height" let-e><a [routerLink]="['/block', e.height]">{{ e.height | number }}</a></ng-template>
+            <ng-template cxCell="time" let-e>@if (e.time) {<app-timestamp [unixTime]="e.time" [hideTimeSince]="true"></app-timestamp>} @else {<span class="muted">–</span>}</ng-template>
+            <ng-template cxCell="kind" let-e><span class="pill on">{{ event(e.kind) }}</span></ng-template>
+            <ng-template cxCell="amount0" let-e><span [class.pos]="e.amount0 > 0" [class.neg]="e.amount0 < 0">{{ e.amount0 | number }}</span></ng-template>
+            <ng-template cxCell="amount1" let-e><span [class.pos]="e.amount1 > 0" [class.neg]="e.amount1 < 0">{{ e.amount1 | number }}</span></ng-template>
+            <ng-template cxCell="lp" let-e>{{ e.lp ? (e.lp | number) : '' }}</ng-template>
+            <ng-template cxCell="price" let-e>@if (e.price !== null) {<span>{{ e.price | number:'1.0-6' }}</span>} @else {<span class="muted">–</span>}</ng-template>
+            <ng-template cxCell="txid" let-e><a [routerLink]="['/tx', e.txid]" class="mono" [title]="e.txid">{{ shortId(e.txid) }}</a></ng-template>
+          </app-chain-table>
         </div>
       }
     }
@@ -158,6 +160,19 @@ export class BitAssetsPoolPage implements OnInit {
   view$: Observable<Loaded<PoolDetail>>;
   shortId = shortId;
   kindLabel = kindLabel;
+  chipsBy = chipsBy;
+  kindOf = (e: PoolEvent) => e.kind;
+  historyCols: CxColumn<PoolEvent>[] = [
+    { key: 'height', label: 'Block', sort: true },
+    { key: 'time', label: 'Time', sort: true, hide: 'md' },
+    { key: 'kind', label: 'Event', sort: true },
+    { key: 'amount0', label: 'Reserve 0 change', align: 'right', sort: true },
+    { key: 'amount1', label: 'Reserve 1 change', align: 'right', sort: true },
+    { key: 'lp', label: 'LP tokens', align: 'right', sort: true, hide: 'md' },
+    { key: 'price', label: 'Price after', align: 'right', sort: true, hide: 'md' },
+    { key: 'txid', label: 'Transaction' },
+  ];
+  historyMatches = matchAny<PoolEvent>(e => e.txid);
 
   constructor(private api: L2ApiService, private route: ActivatedRoute, private seo: SeoService) {}
 

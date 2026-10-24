@@ -3,12 +3,15 @@ import { ActivatedRoute } from '@angular/router';
 import { Observable, combineLatest, map, switchMap, tap } from 'rxjs';
 import { SeoService } from '@app/services/seo.service';
 import { L2ApiService, loaded } from '@app/chain/l2/l2-api.service';
-import { L2Address, Loaded } from '@app/chain/l2/l2.interfaces';
-import { L2_PAGE_IMPORTS, shortId } from '@app/chain/l2/l2-common';
+import { L2Address, L2Tx, Loaded } from '@app/chain/l2/l2.interfaces';
+import { L2_PAGE_IMPORTS, humanize, shortId } from '@app/chain/l2/l2-common';
+import { CxColumn, CxFilter } from '@app/chain/components/chain-table/chain-table.component';
 import { L2AddressAssetsComponent, hasAssets } from '@app/chain/l2/features/asset-badge';
 import { L2PositionsComponent } from '@app/chain/l2/features/market';
 
 const PAGE = 25;
+
+type Utxo = L2Address['utxos'][number];
 
 /** /address/:address?before=<height>: balance, funded and spent, unconfirmed txs, market positions (Truthcoin), history with deltas, UTXOs */
 @Component({
@@ -20,7 +23,7 @@ const PAGE = 25;
   template: `
   <div class="container-xl mp">
     <h1>Address</h1>
-    <div class="sub"><span class="id">{{ address }}</span> <app-clipboard [text]="address"></app-clipboard></div>
+    <div class="sub"><span class="id">{{ address }}</span><app-clipboard class="ms-1" [text]="address"></app-clipboard></div>
     @if (view$ | async; as v) {
       <app-l2-state [state]="v" what="Address" [id]="address" [height]="300"></app-l2-state>
       @if (v.data; as a) {
@@ -36,19 +39,12 @@ const PAGE = 25;
         @if (a.mempool?.txs?.length) {
           <h2>Unconfirmed</h2>
           <div class="box">
-            <table class="table table-borderless table-sm">
-              <thead><tr><th>Transaction</th><th>Data</th><th class="text-end">Fee</th><th class="text-end">Change</th></tr></thead>
-              <tbody>
-                @for (t of a.mempool.txs; track t.txid) {
-                  <tr>
-                    <td><a [routerLink]="['/tx', t.txid]" class="mono" [title]="t.txid">{{ shortId(t.txid, 12) }}</a></td>
-                    <td>@if (t.data) {<span class="pill on">{{ t.data.type }}</span>} @else {<span class="muted">–</span>}</td>
-                    <td class="text-end"><app-l2-amount [sats]="t.fee"></app-l2-amount></td>
-                    <td class="text-end"><app-l2-amount [sats]="t.delta" [signed]="true"></app-l2-amount></td>
-                  </tr>
-                }
-              </tbody>
-            </table>
+            <app-chain-table [rows]="a.mempool.txs" [columns]="mempoolCols" [search]="txMatches" searchPlaceholder="Transaction…" sort="delta" [pageSize]="10" empty="None.">
+              <ng-template cxCell="txid" let-t><a [routerLink]="['/tx', t.txid]" class="mono" [title]="t.txid">{{ shortId(t.txid, 12) }}</a></ng-template>
+              <ng-template cxCell="data" let-t>@if (t.data) {<span class="pill on">{{ t.data.type }}</span>} @else {<span class="muted">–</span>}</ng-template>
+              <ng-template cxCell="fee" let-t><app-l2-amount [sats]="t.fee"></app-l2-amount></ng-template>
+              <ng-template cxCell="delta" let-t><app-l2-amount [sats]="t.delta" [signed]="true"></app-l2-amount></ng-template>
+            </app-chain-table>
             @if (hasMarketTx(a)) {<div class="note">A market tx counts its inputs only: what the market pays back shows once a block applies it.</div>}
           </div>
         }
@@ -90,20 +86,12 @@ const PAGE = 25;
 
         <h2>Unspent outputs</h2>
         <div class="box">
-          <table class="table table-borderless table-sm">
-            <thead><tr><th>Outpoint</th><th>Block</th><th>Content</th></tr></thead>
-            <tbody>
-              @for (u of a.utxos; track $index) {
-                <tr>
-                  <td><app-l2-outpoint [op]="u.outpoint"></app-l2-outpoint></td>
-                  <td><a [routerLink]="['/block', u.height]">{{ u.height | number }}</a></td>
-                  <td><app-l2-content [c]="u.content" [value]="u.value"></app-l2-content></td>
-                </tr>
-              } @empty {
-                <tr><td colspan="3" class="empty">No unspent outputs.</td></tr>
-              }
-            </tbody>
-          </table>
+          <app-chain-table [rows]="a.utxos" [columns]="utxoCols" [filters]="utxoFilters(a)" [search]="utxoMatches" searchPlaceholder="Outpoint, asset…"
+              sort="height" empty="No unspent outputs.">
+            <ng-template cxCell="outpoint" let-u><app-l2-outpoint [op]="u.outpoint"></app-l2-outpoint></ng-template>
+            <ng-template cxCell="height" let-u><a [routerLink]="['/block', u.height]">{{ u.height | number }}</a></ng-template>
+            <ng-template cxCell="content" let-u><app-l2-content [c]="u.content" [value]="u.value"></app-l2-content></ng-template>
+          </app-chain-table>
         </div>
       }
     }
@@ -117,6 +105,21 @@ export class L2AddressPage implements OnInit {
   /** the chain has markets (Truthcoin): an address has positions */
   markets$: Observable<boolean>;
   shortId = shortId;
+  mempoolCols: CxColumn<L2Tx & { delta: number }>[] = [
+    { key: 'txid', label: 'Transaction' },
+    { key: 'data', label: 'Data', sort: t => t.data?.type },
+    { key: 'fee', label: 'Fee', align: 'right', sort: true },
+    { key: 'delta', label: 'Change', align: 'right', sort: true },
+  ];
+  txMatches = (t: { txid: string }, q: string) => t.txid.toLowerCase().includes(q);
+  utxoCols: CxColumn<Utxo>[] = [
+    { key: 'outpoint', label: 'Outpoint' },
+    { key: 'height', label: 'Block', sort: true },
+    { key: 'content', label: 'Content', sort: u => u.value || u.content?.amount },
+  ];
+  utxoMatches = (u: Utxo, q: string) => [u.outpoint.txid, u.outpoint.label, u.content?.assetId, u.content?.name, u.content?.type]
+    .some(x => String(x ?? '').toLowerCase().includes(q));
+  private utxoFilterCache: { utxos: Utxo[]; filters: CxFilter<Utxo>[] } | null = null;
 
   constructor(private api: L2ApiService, private route: ActivatedRoute, private seo: SeoService) {
     this.markets$ = this.api.features$.pipe(map(f => f.includes('markets')));
@@ -129,6 +132,15 @@ export class L2AddressPage implements OnInit {
   /** the address holds assets or names (BitAssets, BitNames): their balances show */
   hasAssets(a: L2Address): boolean {
     return hasAssets(a.utxos.map(u => u.content));
+  }
+
+  /** chips by what the outputs hold, when they hold more than one kind (cached: a new array would reset the table) */
+  utxoFilters(a: L2Address): CxFilter<Utxo>[] {
+    if (this.utxoFilterCache?.utxos !== a.utxos) {
+      const types = [...new Set(a.utxos.map(u => u.content?.type ?? 'value'))];
+      this.utxoFilterCache = { utxos: a.utxos, filters: types.length > 1 ? [{ options: types.map(t => ({ label: humanize(t), test: (u: Utxo) => (u.content?.type ?? 'value') === t })) }] : [] };
+    }
+    return this.utxoFilterCache.filters;
   }
 
   ngOnInit(): void {

@@ -5,7 +5,8 @@ import { SeoService } from '@app/services/seo.service';
 import { L2ApiService } from '@app/chain/l2/l2-api.service';
 import { Loaded } from '@app/chain/l2/l2.interfaces';
 import { shortId } from '@app/chain/l2/l2-common';
-import { FEATURE_PAGE_IMPORTS, featureData$ } from '@app/chain/l2/features/feature-kit';
+import { FEATURE_PAGE_IMPORTS, chipsBy, featureData$, matchAny } from '@app/chain/l2/features/feature-kit';
+import { CxColumn, CxFilter } from '@app/chain/components/chain-table/chain-table.component';
 
 // GET /api/v1/l2/feature/swaps[/:id] (chains/L2-API.md): the node's list_swaps / get_swap_status, ids as hex
 export interface SwapItem {
@@ -65,23 +66,17 @@ export function swapState(s: any): string {
             <div class="kpi"><div class="l">Held for swaps</div><div class="v"><app-l2-amount [sats]="locked(d.items)"></app-l2-amount></div><div class="s">in SwapPending outputs</div></div>
           </div>
           <div class="box">
-            <table class="table table-borderless table-sm">
-              <thead><tr><th>Swap</th><th>Direction</th><th>State</th><th class="text-end">L2 amount</th><th class="text-end">L1 amount</th><th>L1 recipient</th><th>Created</th><th>Expires</th></tr></thead>
-              <tbody>
-                @for (s of d.items; track s.id) {
-                  <tr>
-                    <td><a [routerLink]="['/swaps', s.id]" class="mono" [title]="s.id">{{ shortId(s.id) }}</a></td>
-                    <td>{{ s.direction }} <span class="muted small">{{ s.parent_chain }}</span></td>
-                    <td><span class="status" [class.ok]="swapState(s.state) === 'Completed'" [class.wait]="swapState(s.state) === 'Pending'">{{ swapState(s.state) }}</span></td>
-                    <td class="text-end"><app-l2-amount [sats]="s.l2_amount"></app-l2-amount></td>
-                    <td class="text-end">{{ s.l1_amount | number }} <span class="muted small">{{ s.parent_chain }} sats</span></td>
-                    <td class="mono small">{{ s.l1_recipient_address ?? '–' }}</td>
-                    <td><a [routerLink]="['/block', s.created_at_height]">{{ s.created_at_height | number }}</a></td>
-                    <td>{{ s.expires_at_height !== null ? (s.expires_at_height | number) : '–' }}</td>
-                  </tr>
-                } @empty {<tr><td colspan="8" class="empty">No swaps.</td></tr>}
-              </tbody>
-            </table>
+            <app-chain-table [rows]="d.items" [columns]="swapCols" [filters]="swapFilters(d.items)" [search]="swapMatches" searchPlaceholder="Swap, address, txid…"
+                sort="created" empty="No swaps." [trackBy]="swapKey">
+              <ng-template cxCell="id" let-s><a [routerLink]="['/swaps', s.id]" class="mono" [title]="s.id">{{ shortId(s.id) }}</a></ng-template>
+              <ng-template cxCell="direction" let-s><span>{{ s.direction }}</span><span class="muted small ms-1">{{ s.parent_chain }}</span></ng-template>
+              <ng-template cxCell="state" let-s><span class="status" [class.ok]="swapState(s.state) === 'Completed'" [class.wait]="swapState(s.state) === 'Pending'">{{ swapState(s.state) }}</span></ng-template>
+              <ng-template cxCell="l2" let-s><app-l2-amount [sats]="s.l2_amount"></app-l2-amount></ng-template>
+              <ng-template cxCell="l1" let-s><span>{{ s.l1_amount | number }}</span><span class="muted small ms-1">{{ s.parent_chain }} sats</span></ng-template>
+              <ng-template cxCell="l1r" let-s><span class="mono small">{{ s.l1_recipient_address ?? '–' }}</span></ng-template>
+              <ng-template cxCell="created" let-s><a [routerLink]="['/block', s.created_at_height]">{{ s.created_at_height | number }}</a></ng-template>
+              <ng-template cxCell="expires" let-s>{{ s.expires_at_height !== null ? (s.expires_at_height | number) : '–' }}</ng-template>
+            </app-chain-table>
           </div>
         }
       }
@@ -92,6 +87,28 @@ export class CoinshiftSwapsPage implements OnInit {
   view$: Observable<Loaded<{ items: SwapItem[]; note: string }> | 'unavailable'>;
   shortId = shortId;
   swapState = swapState;
+  swapCols: CxColumn<SwapItem>[] = [
+    { key: 'id', label: 'Swap' },
+    { key: 'direction', label: 'Direction', sort: true },
+    { key: 'state', label: 'State', sort: s => swapState(s.state) },
+    { key: 'l2', label: 'L2 amount', align: 'right', sort: s => s.l2_amount, nowrap: true },
+    { key: 'l1', label: 'L1 amount', align: 'right', sort: s => s.l1_amount, nowrap: true },
+    { key: 'l1r', label: 'L1 recipient', hide: 'lg' },
+    { key: 'created', label: 'Created', sort: s => s.created_at_height },
+    { key: 'expires', label: 'Expires', sort: s => s.expires_at_height, hide: 'md' },
+  ];
+  swapKey = (s: SwapItem) => s.id;
+  swapMatches = matchAny<SwapItem>(s => s.id, s => s.l1_recipient_address, s => s.l2_recipient, s => s.l2_creator_address, s => s.l1_txid);
+
+  private filtersOf: { items: SwapItem[]; filters: CxFilter<SwapItem>[] } | null = null;
+
+  /** chips by state and by parent chain (kept per list: a new array would reset the table) */
+  swapFilters(items: SwapItem[]): CxFilter<SwapItem>[] {
+    if (this.filtersOf?.items !== items) {
+      this.filtersOf = { items, filters: [...chipsBy(items, 'State', s => swapState(s.state).split(' ')[0]), ...chipsBy(items, 'Chain', s => s.parent_chain)] };
+    }
+    return this.filtersOf.filters;
+  }
 
   constructor(private api: L2ApiService, private seo: SeoService) {}
 

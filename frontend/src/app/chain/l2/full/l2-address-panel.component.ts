@@ -2,10 +2,13 @@ import { ChangeDetectionStrategy, Component, Input, OnChanges } from '@angular/c
 import { Observable, catchError, map, of } from 'rxjs';
 import { PROFILE } from '@app/chain/profiles';
 import { L2ApiService } from '@app/chain/l2/l2-api.service';
-import { L2Address, L2Content } from '@app/chain/l2/l2.interfaces';
+import { L2Address } from '@app/chain/l2/l2.interfaces';
+import { CxColumn } from '@app/chain/components/chain-table/chain-table.component';
 import { L2_PAGE_IMPORTS } from '@app/chain/l2/l2-common';
 import { L2AddressAssetsComponent, hasAssets } from '@app/chain/l2/features/asset-badge';
 import { L2PositionsComponent } from '@app/chain/l2/features/market';
+
+type Utxo = L2Address['utxos'][number];
 
 /**
  * The address page's sidechain panel (CHAIN_UI 'full'): the names and assets the address holds (BitNames,
@@ -35,18 +38,11 @@ import { L2PositionsComponent } from '@app/chain/l2/features/market';
       @if (special(a).length) {
         <section>
           <h5 class="p-h5 mt-0">Unspent outputs holding more than sats</h5>
-          <table class="table table-borderless table-sm p-table mb-0">
-            <thead><tr><th>Outpoint</th><th>Block</th><th>Content</th></tr></thead>
-            <tbody>
-              @for (u of special(a); track $index) {
-                <tr>
-                  <td><app-l2-outpoint [op]="u.outpoint"></app-l2-outpoint></td>
-                  <td><a [routerLink]="['/block' | relativeUrl, u.height]">{{ u.height | number }}</a></td>
-                  <td><app-l2-content [c]="u.content" [value]="u.value"></app-l2-content></td>
-                </tr>
-              }
-            </tbody>
-          </table>
+          <app-chain-table [rows]="special(a)" [columns]="utxoCols" [search]="utxoMatches" searchPlaceholder="Outpoint, asset, name…" sort="height" [pageSize]="10" empty="None.">
+            <ng-template cxCell="outpoint" let-u><app-l2-outpoint [op]="u.outpoint"></app-l2-outpoint></ng-template>
+            <ng-template cxCell="height" let-u><a [routerLink]="['/block' | relativeUrl, u.height]">{{ u.height | number }}</a></ng-template>
+            <ng-template cxCell="content" let-u><app-l2-content [c]="u.content" [value]="u.value"></app-l2-content></ng-template>
+          </app-chain-table>
           @if (a.utxos.length >= limit) {<div class="muted small mt-1">Among its first {{ limit }} unspent outputs.</div>}
         </section>
       }
@@ -58,6 +54,14 @@ export class L2AddressPanelComponent implements OnChanges {
 
   profile = PROFILE;
   limit = 100;
+  utxoCols: CxColumn<Utxo>[] = [
+    { key: 'outpoint', label: 'Outpoint' },
+    { key: 'height', label: 'Block', sort: true },
+    { key: 'content', label: 'Content', sort: u => u.content?.type },
+  ];
+  utxoMatches = (u: Utxo, q: string) => [u.outpoint.txid, u.outpoint.label, u.content?.assetId, u.content?.name, u.content?.type]
+    .some(x => String(x ?? '').toLowerCase().includes(q));
+  private specialOf: { utxos: Utxo[]; rows: Utxo[] } | null = null;
   view$: Observable<L2Address | null>;
   markets$: Observable<boolean>;
 
@@ -79,7 +83,11 @@ export class L2AddressPanelComponent implements OnChanges {
     return hasAssets(a.utxos.map(u => u.content));
   }
 
-  special(a: L2Address): { outpoint: any; content: L2Content; value: number; height: number }[] {
-    return a.utxos.filter(u => u.content && u.content.type !== 'value');
+  /** its outputs holding more than sats (kept: a new array would reset the table) */
+  special(a: L2Address): Utxo[] {
+    if (this.specialOf?.utxos !== a.utxos) {
+      this.specialOf = { utxos: a.utxos, rows: a.utxos.filter(u => u.content && u.content.type !== 'value') };
+    }
+    return this.specialOf.rows;
   }
 }

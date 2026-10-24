@@ -4,6 +4,7 @@ import { RouterModule } from '@angular/router';
 import { Observable, catchError, map, of, shareReplay, switchMap, take } from 'rxjs';
 import { L2ApiService } from '@app/chain/l2/l2-api.service';
 import { L2Content, L2Input, L2Output } from '@app/chain/l2/l2.interfaces';
+import { ChainTableComponent, CxCellDirective, CxColumn } from '@app/chain/components/chain-table/chain-table.component';
 
 /*
  * Assets and names as the explorers show them (BitAssets, BitNames): a badge with the plain name when the backend
@@ -228,7 +229,7 @@ function summarize(entries: { c: L2Content | null; v: number | null; side: 'in' 
         <tbody>
           @for (r of rows; track r.key) {
             <tr>
-              <td><app-l2-asset [id]="r.key" [kind]="r.kind"></app-l2-asset> <span class="muted">{{ r.what }}</span></td>
+              <td><app-l2-asset [id]="r.key" [kind]="r.kind"></app-l2-asset><span class="muted ms-1">{{ r.what }}</span></td>
               <td class="r">{{ r.in | number }}</td>
               <td class="r">{{ r.out | number }}</td>
               <td class="r" [class.pos]="r.out > r.in" [class.neg]="r.out < r.in">{{ r.out > r.in ? '+' : r.out < r.in ? '−' : '' }}{{ abs(r.out - r.in) | number }}</td>
@@ -256,31 +257,26 @@ export class L2TxAssetsComponent {
 @Component({
   selector: 'app-l2-address-assets',
   standalone: true,
-  imports: [CommonModule, L2AssetComponent],
+  imports: [CommonModule, L2AssetComponent, ChainTableComponent, CxCellDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styles: [`
-    table { width: 100%; font-size: 0.85rem; margin: 0; }
-    th { color: var(--transparent-fg); font-weight: normal; font-size: 0.75rem; padding: 4px 10px 4px 0; }
-    td { padding: 4px 10px 4px 0; } .r { text-align: right; } .muted { color: var(--transparent-fg); font-size: 0.8rem; }
-  `],
+  styles: [`.muted { color: var(--transparent-fg); font-size: 0.8rem; }`],
   template: `
     @if (rows.length) {
-      <table>
-        <thead><tr><th>Asset</th><th class="r">Balance</th><th class="r">Unspent outputs</th></tr></thead>
-        <tbody>
-          @for (r of rows; track r.key) {
-            <tr>
-              <td><app-l2-asset [id]="r.key" [kind]="r.kind"></app-l2-asset> <span class="muted">{{ r.what }}</span></td>
-              <td class="r">{{ r.out | number }}</td>
-              <td class="r">{{ r.utxos | number }}</td>
-            </tr>
-          }
-        </tbody>
-      </table>
+      <app-chain-table [rows]="rows" [columns]="cols" [search]="matches" searchPlaceholder="Asset, name…" sort="out" [pageSize]="10" empty="None.">
+        <ng-template cxCell="key" let-r><app-l2-asset [id]="r.key" [kind]="r.kind"></app-l2-asset><span class="muted ms-1">{{ r.what }}</span></ng-template>
+        <ng-template cxCell="out" let-r>{{ r.out | number }}</ng-template>
+        <ng-template cxCell="utxos" let-r>{{ r.utxos | number }}</ng-template>
+      </app-chain-table>
     }`,
 })
 export class L2AddressAssetsComponent {
   rows: AssetRow[] = [];
+  cols: CxColumn<AssetRow>[] = [
+    { key: 'key', label: 'Asset', sort: r => r.what },
+    { key: 'out', label: 'Balance', align: 'right', sort: true },
+    { key: 'utxos', label: 'Unspent outputs', align: 'right', sort: true },
+  ];
+  matches = (r: AssetRow, q: string) => r.key.toLowerCase().includes(q) || String(r.what ?? '').toLowerCase().includes(q);
   @Input() set utxos(u: { content: L2Content; value: number }[] | null) {
     this.rows = summarize((u ?? []).map(x => ({ c: x.content, v: x.value, side: 'out' as const })));
   }

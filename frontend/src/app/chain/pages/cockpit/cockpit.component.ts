@@ -4,6 +4,7 @@ import { Subject, Subscription, catchError, of, switchMap, timer, merge } from '
 import { ChainApiService } from '@app/chain/chain-api.service';
 import { PROFILE, slotColor, slotMarkId } from '@app/chain/profiles';
 import { cockpitCharts } from '@app/chain/pages/cockpit/cockpit-charts';
+import { CxColumn, CxFilter } from '@app/chain/components/chain-table/chain-table.component';
 import { SeoService } from '@app/services/seo.service';
 import { StateService } from '@app/services/state.service';
 
@@ -30,6 +31,21 @@ const FEEDS = [
   { id: 'bmm-requests', label: 'BMM requests' },
 ];
 
+/** the event log's two feed-specific columns: their heads, and what they sort by */
+const FEED_COLS: Record<string, [string, string, ((e: any) => number | string | null) | null]> = {
+  'bmm': ['Side block', 'Bid', e => e.bid ?? null],
+  'bmm-requests': ['Side block', 'Bid', e => e.bid ?? null],
+  'deposits': ['Destination', 'Amount', e => e.amount],
+  'withdrawals': ['Bundle', 'Amount', e => e.amount],
+  'bundles': ['Bundle', 'Status', e => e.type],
+  'proposals': ['Proposal', 'Hash', null],
+};
+const FEED_FILTERS: Record<string, CxFilter[] | undefined> = {
+  'bmm-requests': [{ options: [{ label: 'accepted', test: e => !!e.accepted }, { label: 'not accepted', test: e => !e.accepted }] }],
+  'bundles': [{ options: ['proposed', 'paid', 'failed'].map(t => ({ label: t, test: (e: any) => e.type === t })) }],
+  'proposals': [{ options: [{ label: 'proposed', test: e => e.type === 'M1' }, { label: 'ack', test: e => e.type !== 'M1' }] }],
+};
+
 @Component({
   selector: 'app-chain-cockpit',
   templateUrl: './cockpit.component.html',
@@ -52,6 +68,96 @@ export class ChainCockpitComponent implements OnInit, OnDestroy {
 
   charts: Record<string, any> = {};
   chartInitOptions = { renderer: 'svg' };
+
+  // --- the tables -----------------------------------------------------------------------------------
+
+  bidCols: CxColumn[] = [
+    { key: 'name', label: 'Sidechain', sort: r => (r.name ?? '').toLowerCase() },
+    { key: 'lastBid', label: 'Current bid', align: 'right', sort: true, nowrap: true },
+    { key: 'block', label: 'Block', align: 'right', sort: r => r.lastBidHeight, nowrap: true },
+    { key: 'bidMedian', label: 'Median', align: 'right', sort: true, hide: 'sm' },
+    { key: 'range', label: 'Range', align: 'right', sort: r => r.bidMax, hide: 'md', nowrap: true },
+    { key: 'coverage', label: 'Coverage', align: 'right', sort: true, hide: 'md' },
+  ];
+
+  marketCols: CxColumn[] = [
+    { key: 'name', label: 'Sidechain', sort: r => (r.name ?? '').toLowerCase() },
+    { key: 'bids', label: 'Bids paid', align: 'right', sort: true, nowrap: true },
+    { key: 'share', label: 'Share of bids', sort: r => r.bids, hide: 'sm' },
+    { key: 'accepts', label: 'Blocks', align: 'right', sort: true },
+    { key: 'bidAvg', label: 'Avg', align: 'right', sort: true, hide: 'md' },
+    { key: 'spread', label: 'P10 · median · P90', align: 'right', sort: r => r.bidMedian, nowrap: true, title: 'The 10th percentile, median and 90th percentile bids, sats' },
+    { key: 'bidMax', label: 'Max', align: 'right', sort: true, hide: 'md' },
+    { key: 'rejected', label: 'Beaten', align: 'right', sort: true, hide: 'lg', title: 'Its BMM requests that another request for the slot beat' },
+    { key: 'contested', label: 'Contested', align: 'right', sort: true, hide: 'lg', title: 'eCash blocks with more than one request for the slot' },
+  ];
+  marketSearch = (r: any, q: string): boolean => (r.name ?? '').toLowerCase().includes(q) || String(r.slot) === q;
+
+  bundleCols: CxColumn[] = [
+    { key: 'name', label: 'Sidechain', sort: r => (r.name ?? '').toLowerCase() },
+    { key: 'hash', label: 'Bundle' },
+    { key: 'votes', label: 'Votes', sort: r => r.score },
+    { key: 'blocksleft', label: 'Blocks left', align: 'right', sort: true },
+    { key: 'height', label: 'Proposed at', align: 'right', sort: true, hide: 'md' },
+    { key: 'state', label: 'Status', align: 'right', nowrap: true },
+  ];
+  bundleFilters: CxFilter[] = [{ options: [
+    { label: 'payable', test: b => !!b.payable },
+    { label: 'on track', test: b => !b.payable && this.bundleProgress(b).canMake },
+    { label: 'out of time', test: b => !this.bundleProgress(b).canMake },
+  ] }];
+
+  ledgerCols: CxColumn[] = [
+    { key: 'name', label: 'Sidechain', sort: r => (r.name ?? '').toLowerCase() },
+    { key: 'accepts', label: 'BMM blocks', align: 'right', sort: true },
+    { key: 'coverage', label: 'Coverage', align: 'right', sort: true },
+    { key: 'requests', label: 'Requests', align: 'right', sort: true },
+    { key: 'rejected', label: 'Rejected', align: 'right', sort: true },
+    { key: 'bidMedian', label: 'Median bid', align: 'right', sort: true },
+    { key: 'bidMax', label: 'Max bid', align: 'right', sort: true },
+    { key: 'bids', label: 'Bids total', align: 'right', sort: true },
+    { key: 'deposits', label: 'Deposits', align: 'right', sort: r => r.depositAmount, nowrap: true },
+    { key: 'withdrawals', label: 'Withdrawals', align: 'right', sort: r => r.withdrawalAmount, nowrap: true },
+    { key: 'netFlow', label: 'Net', align: 'right', sort: true },
+    { key: 'votes', label: '▲ / ▼ / –', align: 'right', sort: r => r.upvotes, nowrap: true, title: 'upvotes / downvotes / abstains' },
+    { key: 'bundles', label: 'Bundles P/✓/✗', align: 'right', sort: r => r.bundlesProposed, nowrap: true, title: 'proposed / paid / failed' },
+  ];
+
+  minerCols: CxColumn[] = [
+    { key: 'name', label: 'Miner', sort: r => (r.name || r.tag || '').toLowerCase() },
+    { key: 'blocks', label: 'Blocks', align: 'right', sort: true },
+    { key: 'share', label: 'Share', align: 'right', sort: true },
+    { key: 'acceptsPerBlock', label: 'BMM / block', align: 'right', sort: true, hide: 'sm' },
+    { key: 'bids', label: 'Bids earned', align: 'right', sort: true },
+    { key: 'voted', label: 'Voted', align: 'right', sort: r => r.blocks ? r.voteBlocks / r.blocks : 0, hide: 'sm' },
+  ];
+  matchMiner = (m: any, q: string) => (m.name ?? '').toLowerCase().includes(q) || (m.tag ?? '').toLowerCase().includes(q);
+
+  proposalCols: CxColumn[] = [
+    { key: 'title', label: 'Sidechain', sort: r => (r.title ?? '').toLowerCase() },
+    { key: 'slot', label: 'Slot', align: 'right', sort: true },
+    { key: 'description', label: 'Description', hide: 'md' },
+    { key: 'voteCount', label: 'Acks', align: 'right', sort: true },
+    { key: 'proposalHeight', label: 'Proposed at', align: 'right', sort: true, nowrap: true },
+  ];
+  matchProposal = (p: any, q: string) => (p.title ?? '').toLowerCase().includes(q) || String(p.slot) === q
+    || (p.description ?? '').toLowerCase().includes(q);
+
+  feedCols: Record<string, CxColumn[]> = Object.fromEntries(Object.entries(FEED_COLS).map(([id, [a, b, sortB]]) => [id, [
+    { key: 'height', label: 'Height', sort: true },
+    { key: 'age', label: 'Age', sort: (e: any) => e.time, nowrap: true },
+    { key: 'sidechain', label: 'Sidechain', sort: (e: any) => e.slot },
+    { key: 'a', label: a },
+    { key: 'b', label: b, align: 'right', sort: sortB ?? undefined, nowrap: true },
+    { key: 'tx', label: 'Transaction', align: 'right' },
+  ]]));
+  feedFilters = FEED_FILTERS;
+  matchEvent = (e: any, q: string) => String(e.height).includes(q)
+    || [e.txid, e.requestTxid, e.sideBlock, e.destination, e.bundle, e.hash, e.name, e.title]
+      .some(x => typeof x === 'string' && x.toLowerCase().includes(q));
+
+  trackSlotRow = (s: any) => s.slot;
+  trackHash = (b: any) => b.hash;
 
   private reload$ = new Subject<void>();
   private feedReload$ = new Subject<void>();
@@ -168,6 +274,24 @@ export class ChainCockpitComponent implements OnInit, OnDestroy {
   }
   private bidsFor: any = null;
   private bids: any[] = [];
+
+  /** the BMM fee market over the window: the sidechains that bid, and what the bids are to eCash miners */
+  market(d: any): { rows: any[]; total: number; perDay: number | null; perBlock: number } {
+    if (this.marketFor !== d) {
+      this.marketFor = d;
+      const rows = (d?.slots ?? []).filter((s: any) => s.bids > 0 || s.requests > 0);
+      const total = rows.reduce((a: number, s: any) => a + s.bids, 0);
+      const t = d?.totals ?? {};
+      const days = t.firstTime && t.lastTime && t.lastTime > t.firstTime ? (t.lastTime - t.firstTime) / 86400 : null;
+      this.marketData = {
+        rows: rows.map((s: any) => ({ ...s, share: total ? s.bids / total : 0 })),
+        total, perDay: days ? total / days : null, perBlock: t.blocks ? (t.accepts ?? 0) / t.blocks : 0,
+      };
+    }
+    return this.marketData;
+  }
+  private marketFor: any = null;
+  private marketData: { rows: any[]; total: number; perDay: number | null; perBlock: number } = { rows: [], total: 0, perDay: null, perBlock: 0 };
 
   slotStats(slot: number): any {
     return this.data?.slots?.find((s: any) => s.slot === slot);

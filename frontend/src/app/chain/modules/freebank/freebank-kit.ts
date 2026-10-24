@@ -5,6 +5,7 @@ import { Observable } from 'rxjs';
 import { SharedModule } from '@app/shared/shared.module';
 import { PROFILE } from '@app/chain/profiles';
 import { SidechainLabelComponent } from '@app/chain/components/sidechain-label/sidechain-label.component';
+import { ChainTableComponent, CxCellDirective, CxColumn, CxFilter } from '@app/chain/components/chain-table/chain-table.component';
 import { ECASH_GOLD, ECASH_MARK_PATHS, ECASH_MARK_VIEWBOX } from '@app/chain/marks';
 import { FreebankApiService, FbLoaded } from './freebank-api.service';
 import { Bill } from './freebank.interfaces';
@@ -208,43 +209,63 @@ export class FbFieldsComponent implements OnChanges {
   }
 }
 
-/** Bills: id, status, face and escrow, maturity against the tip, holder, the house that holds it */
+/** a bill matches a search: its number, its id, its parties' keys, the house that holds it */
+export const billMatches = (b: Bill, q: string): boolean => String(b.id) === q.replace(/^#/, '') || `house ${b.owner_house_id}` === q
+  || [b.bill_id, b.holder_pubkey, b.drawer_pubkey, b.acceptor_pubkey].some(k => (k ?? '').toLowerCase().includes(q));
+
+/**
+ * Bills: id, status, face and escrow, maturity against the tip, holder, the house that holds it; sorted, searched, paged
+ * (app-chain-table), with the status chips when statusFilter
+ */
 @Component({
   selector: 'app-fb-bills',
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [CommonModule, RouterModule, ChainTableComponent, CxCellDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['../../components/module-page.scss', '../../l2/pages/l2-page.scss', './freebank-page.scss'],
   template: `
-    <table class="table table-borderless table-sm">
-      <thead><tr><th>Bill</th><th>Status</th><th class="r">Face</th><th class="r">Escrow</th><th>Issued</th><th>Maturity</th>
-        <th class="d-none d-md-table-cell">Holder</th><th>Held by</th><th class="d-none d-lg-table-cell">Endorsed</th></tr></thead>
-      <tbody>
-        @for (b of bills; track b.id) {
-          <tr>
-            <td class="nowrap"><a [routerLink]="['/bill', b.id]">#{{ b.id }}</a></td>
-            <td><span class="pill" [ngClass]="fx.billTone(b.status)">{{ fx.billStatus(b.status) }}</span></td>
-            <td class="r nowrap">{{ fx.ecx(b.amount) }} <span class="muted">ECX</span></td>
-            <td class="r nowrap">{{ fx.ecx(b.escrow) }}</td>
-            <td><a [routerLink]="['/block', b.issued_height]">{{ b.issued_height | number }}</a></td>
-            <td class="nowrap"><a [routerLink]="['/block', b.maturity_height]">{{ b.maturity_height | number }}</a>
-              @if (fx.billTerm(b, tip); as t) {@if (t.label) {<div class="hint" [class.neg]="t.tone === 'bad'">{{ t.label }}</div>}}</td>
-            <td class="d-none d-md-table-cell mono" [title]="b.holder_pubkey">{{ fx.shortId(b.holder_pubkey, 6) }}</td>
-            <td>@if (b.owner_house_id) {<a [routerLink]="['/house', b.owner_house_id]">house {{ b.owner_house_id }}</a>} @else {<span class="muted">–</span>}</td>
-            <td class="d-none d-lg-table-cell">{{ b.endorsements?.length || 0 }}</td>
-          </tr>
-        } @empty {<tr><td colspan="9" class="empty">{{ empty }}</td></tr>}
-      </tbody>
-    </table>`,
+    <app-chain-table [rows]="bills" [columns]="cols" [filters]="statusFilter ? filters : null" [search]="matches"
+      searchPlaceholder="Bill, key, house 3…" [sort]="sort" [asc]="asc" [pageSize]="pageSize" [empty]="empty" [trackBy]="trackId">
+      <ng-template cxCell="id" let-b><a [routerLink]="['/bill', b.id]">#{{ b.id }}</a></ng-template>
+      <ng-template cxCell="status" let-b><span class="pill" [ngClass]="fx.billTone(b.status)">{{ fx.billStatus(b.status) }}</span></ng-template>
+      <ng-template cxCell="amount" let-b>{{ fx.ecx(b.amount) }}<span class="muted ms-1">ECX</span></ng-template>
+      <ng-template cxCell="escrow" let-b>{{ fx.ecx(b.escrow) }}</ng-template>
+      <ng-template cxCell="issued" let-b><a [routerLink]="['/block', b.issued_height]">{{ b.issued_height | number }}</a></ng-template>
+      <ng-template cxCell="maturity" let-b><a [routerLink]="['/block', b.maturity_height]">{{ b.maturity_height | number }}</a>
+        @if (fx.billTerm(b, tip); as t) {@if (t.label) {<div class="hint" [class.neg]="t.tone === 'bad'">{{ t.label }}</div>}}</ng-template>
+      <ng-template cxCell="holder" let-b><span class="mono" [title]="b.holder_pubkey">{{ fx.shortId(b.holder_pubkey, 6) }}</span></ng-template>
+      <ng-template cxCell="house" let-b>@if (b.owner_house_id) {<a [routerLink]="['/house', b.owner_house_id]">house {{ b.owner_house_id }}</a>} @else {<span class="muted">–</span>}</ng-template>
+      <ng-template cxCell="endorsed" let-b>{{ b.endorsements?.length || 0 }}</ng-template>
+    </app-chain-table>`,
 })
 export class FbBillsTableComponent {
   @Input() bills: Bill[] = [];
   @Input() tip: number | null = null;
   @Input() empty = 'No bill.';
+  /** chips by status (active, retired, defaulted, disputed) */
+  @Input() statusFilter = false;
+  /** the initial sort: a column key (id, amount, maturity, …), descending unless asc */
+  @Input() sort = 'id';
+  @Input() asc = false;
+  @Input() pageSize = 25;
   fx = F;
+  matches = billMatches;
+  trackId = (b: Bill) => b.id;
+  cols: CxColumn<Bill>[] = [
+    { key: 'id', label: 'Bill', sort: b => b.id, nowrap: true },
+    { key: 'status', label: 'Status', sort: b => F.billStatus(b.status) },
+    { key: 'amount', label: 'Face', align: 'right', sort: b => Number(b.amount) || 0, nowrap: true },
+    { key: 'escrow', label: 'Escrow', align: 'right', sort: b => Number(b.escrow) || 0, nowrap: true },
+    { key: 'issued', label: 'Issued', sort: b => b.issued_height },
+    { key: 'maturity', label: 'Maturity', sort: b => b.maturity_height, nowrap: true },
+    { key: 'holder', label: 'Holder', hide: 'md' },
+    { key: 'house', label: 'Held by', sort: b => b.owner_house_id || null },
+    { key: 'endorsed', label: 'Endorsed', hide: 'lg', sort: b => b.endorsements?.length || 0 },
+  ];
+  filters: CxFilter<Bill>[] = [{ label: 'Status', options: Object.entries(F.BILL_STATUS).map(([k, label]) => ({ label, test: (b: Bill) => b.status === k })) }];
 }
 
 export const FB_PAGE_IMPORTS = [
   CommonModule, RouterModule, SharedModule, SidechainLabelComponent, FbStateComponent, FbHeadComponent, FbEcashLinkComponent,
-  FbFieldsComponent, FbBillsTableComponent,
+  FbFieldsComponent, FbBillsTableComponent, ChainTableComponent, CxCellDirective,
 ];

@@ -21,7 +21,7 @@ import { L2TxMarketComponent } from '@app/chain/l2/features/market';
     @if (view$ | async; as v) {
       <app-l2-state [state]="v" what="Transaction" [id]="txid" [height]="400"></app-l2-state>
       @if (v.data; as tx) {
-        <div class="sub"><span class="id">{{ tx.txid }}</span> <app-clipboard [text]="tx.txid"></app-clipboard></div>
+        <div class="sub"><span class="id">{{ tx.txid }}</span><app-clipboard class="ms-1" [text]="tx.txid"></app-clipboard></div>
         <div class="grid2">
           <div class="box">
             <table class="kv"><tbody>

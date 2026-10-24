@@ -2,28 +2,39 @@
 .mn-head { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }
 h1 { font-size: 1.9rem; margin: 0; display: flex; align-items: center; gap: 10px; }
 .mn-icon { color: var(--accent); display: inline-flex; }
-.mn-sub { color: var(--transparent-fg); font-size: 0.88rem; margin-top: 4px; }
-.mn-h2 { font-size: 1.25rem; margin: 24px 0 10px; .sub2 { font-size: 0.78rem; color: var(--transparent-fg); font-weight: normal; margin-left: 8px; } }
-h5 { font-size: 0.95rem; margin-bottom: 8px; small { color: var(--transparent-fg); font-size: 0.75rem; margin-left: 4px; } }
-.box { padding: 14px 16px; border-radius: 8px; }
+.mn-sub { color: var(--cx-ink-3); font-size: 0.88rem; margin-top: 4px; }
+.mn-skel { height: 300px; }
+.mn-sec { margin-top: 28px; }
+.mn-h2 { font-size: 1.25rem; margin: 0 0 10px; .sub2 { font-size: 0.78rem; color: var(--cx-ink-3); font-weight: normal; margin-left: 8px; } }
+h5 small { color: var(--cx-ink-3); font-size: 0.75rem; font-weight: normal; margin-left: 4px; }
+.box { padding: 14px 18px; }
+.muted { color: var(--cx-ink-3); }
 .pos { color: #3bd16f; } .neg { color: #ff6b6b; }
-.kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; margin-bottom: 12px; }
-.kpi { background: var(--box-bg); border-radius: 8px; padding: 12px 14px; border-top: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
-  .k-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--transparent-fg); }
-  .k-value { font-size: 1.4rem; font-weight: 600; margin: 2px 0; white-space: nowrap; }
-  .k-sub { font-size: 0.75rem; color: var(--transparent-fg); } }
-.row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+.row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; > * { min-width: 0; } }
 @media (max-width: 900px) { .row-2 { grid-template-columns: 1fr; } }
 .chart { height: 260px; width: 100%; } .chart.tall { height: 430px; } .chart.short { height: 130px; }
-.table-box { overflow-x: auto; }
-.mn-table { margin: 0; font-size: 0.85rem; th { color: var(--transparent-fg); font-weight: normal; font-size: 0.75rem; white-space: nowrap; } td { vertical-align: middle; white-space: nowrap; } }
-.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; vertical-align: middle; }
-.datum { font-size: 0.68rem; font-weight: 700; padding: 1px 6px; border-radius: 4px; margin-left: 6px; color: #5aa6ff; border: 1px solid #5aa6ff88; }
-.miner-row td { color: var(--transparent-fg); font-size: 0.8rem; padding-top: 1px; padding-bottom: 1px; }
-.miner { padding-left: 28px !important; }
-.bar { display: inline-block; width: 110px; height: 8px; border-radius: 4px; background: #ffffff10; overflow: hidden; vertical-align: middle; margin-right: 6px;
-  .fill { height: 100%; background: var(--accent); } &.big { width: 100%; height: 12px; margin: 4px 0; } }
-.rules { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px;
-  div { display: flex; flex-direction: column; } .wide { grid-column: span 2; }
-  span { font-size: 0.7rem; color: var(--transparent-fg); text-transform: uppercase; letter-spacing: 0.04em; } b { font-size: 0.9rem; font-weight: 600; } }
-.pool-logo { width: 20px; height: 20px; object-fit: contain; margin-right: 7px; vertical-align: middle; }
+
+// the pools table: a pool's line, then its DATUM miners' lines, the same height in every column so they line up
+.ln { display: flex; align-items: center; white-space: nowrap; }
+.ln.main { min-height: 24px; }
+.ln.sub { height: 20px; font-size: 0.78rem; color: var(--cx-ink-3); }
+:host ::ng-deep .cx-table td.r .ln { justify-content: flex-end; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; flex: none; }
+.datum { font-family: var(--cx-mono); font-size: 0.64rem; font-weight: 500; letter-spacing: 0.06em; padding: 0 7px; border-radius: 99px; margin-left: 8px;
+  color: #a9cfff; background: #5aa6ff14; border: 1px solid #5aa6ff55; }
+.miner { padding-left: 16px; }
+.ln .bar { width: 110px; flex: none; margin-right: 8px; }
+.ln .bar.faint { opacity: 0.6; height: 4px; }
+.pc { font-variant-numeric: tabular-nums; }
+.pool-logo { width: 20px; height: 20px; object-fit: contain; margin-right: 7px; }
+
+// the retarget and halving: label above value, progress as a labelled bar
+.rules { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px;
+  > div { display: flex; flex-direction: column; } .wide { grid-column: span 2; }
+  span { font-size: 0.74rem; color: var(--cx-ink-3); } b { font-size: 0.92rem; font-weight: 600; font-variant-numeric: tabular-nums; } }
+.rules .prog { gap: 6px;
+  .prog-l { display: flex; justify-content: space-between; align-items: baseline; }
+  small { font-size: 0.74rem; } }
+
+// the shared look (last, so it wins)
+@import '../../../components/chain-ui';

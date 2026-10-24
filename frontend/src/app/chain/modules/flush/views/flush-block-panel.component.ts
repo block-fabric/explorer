@@ -5,6 +5,7 @@ import { FlushApiService, FlushLoaded, flushResult } from '../flush-api.service'
 import { FLUSH_PAGE_IMPORTS } from '../flush-kit';
 import { FlushBlockMark } from '../flush-live.service';
 import * as F from '../flush-format';
+import { CxColumn } from '@app/chain/components/chain-table/chain-table.component';
 
 /**
  * The block page's Flush panel, under upstream's block header (GET /api/v1/flush/block/:hash): a block of stake (its
@@ -53,9 +54,10 @@ import * as F from '../flush-format';
         </tbody></table>
         @if (b.evidence?.length) {
           <h5 class="p-h5">Evidence: leaders that signed two blocks for a slot</h5>
-          <table class="table table-borderless table-sm p-table mb-0"><thead><tr><th>Slot</th><th>The two blocks</th></tr></thead><tbody>
-            @for (e of b.evidence; track $index) {<tr><td>{{ e.slot | number }}</td><td>@for (h of e.hashes; track h) {<a [routerLink]="['/block', h]" class="mono me-2">{{ fx.shortId(h) }}</a>}</td></tr>}
-          </tbody></table>
+          <app-chain-table [rows]="b.evidence" [columns]="evidenceCols" sort="slot" [pageSize]="10">
+            <ng-template cxCell="slot" let-e>{{ e.slot | number }}</ng-template>
+            <ng-template cxCell="hashes" let-e>@for (h of e.hashes; track h) {<a [routerLink]="['/block', h]" class="mono me-2">{{ fx.shortId(h) }}</a>}</ng-template>
+          </app-chain-table>
         }
       </div>
       <br>
@@ -72,6 +74,7 @@ export class FlushBlockPanelComponent implements OnChanges {
   profile = PROFILE;
   fx = F;
   view$: Observable<FlushLoaded<FlushBlockMark>>;
+  evidenceCols: CxColumn<{ slot: number; hashes: string[] }>[] = [{ key: 'slot', label: 'Slot', sort: e => e.slot }, { key: 'hashes', label: 'The two blocks' }];
 
   constructor(private api: FlushApiService) {}
 

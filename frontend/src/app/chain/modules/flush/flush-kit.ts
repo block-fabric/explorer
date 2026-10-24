@@ -4,11 +4,12 @@ import { RouterModule } from '@angular/router';
 import { SharedModule } from '@app/shared/shared.module';
 import { PROFILE } from '@app/chain/profiles';
 import { SidechainLabelComponent } from '@app/chain/components/sidechain-label/sidechain-label.component';
+import { ChainTableComponent, CxCellDirective, CxColumn, CxFilter } from '@app/chain/components/chain-table/chain-table.component';
 import { ECASH_GOLD, ECASH_MARK_PATHS, ECASH_MARK_VIEWBOX } from '@app/chain/marks';
 import { Observable } from 'rxjs';
 import { FlushApiService, FlushLoaded } from './flush-api.service';
 import { AssetInfo, ECX_ID, FlushAssetsService } from './flush-assets.service';
-import { Holder, LaunchSummary, Pool, Trade } from './flush.interfaces';
+import { Holder, LaunchSummary, Pool, Trade, TreasuryInflow } from './flush.interfaces';
 import * as F from './flush-format';
 
 /*
@@ -221,7 +222,7 @@ export const ASSET_TABS: FlushTab[] = [
   { path: '/assets', title: 'Assets' }, { path: '/launches', title: 'Launches' }, { path: '/oracles', title: 'Oracles' },
   { path: '/verifications', title: 'Verified issuers' },
 ];
-export const STAKE_TABS: FlushTab[] = [{ path: '/stake', title: 'Validators and anchors' }];
+export const STAKE_TABS: FlushTab[] = [{ path: '/stake', title: 'Validators and anchors' }, { path: '/fees', title: 'Fees' }];
 export const PEG_TABS: FlushTab[] = [{ path: '/peg', title: 'The peg' }, { path: '/bmm', title: 'BMM on eCash' }];
 
 /** A page's head: the chain's mark, title, a line under it, the sibling pages' tabs */
@@ -246,43 +247,61 @@ export class FlushHeadComponent {
   profile = PROFILE;
 }
 
+const TABLE_STYLES = ['../../components/module-page.scss', '../../l2/pages/l2-page.scss', './flush-page.scss'];
+
 /** The pools of the market index: pair, kind, price, liquidity, 24 h volume and change */
 @Component({
   selector: 'app-flush-pools',
   standalone: true,
-  imports: [CommonModule, RouterModule, FlushTokenComponent],
+  imports: [CommonModule, RouterModule, FlushTokenComponent, ChainTableComponent, CxCellDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrls: ['../../components/module-page.scss', '../../l2/pages/l2-page.scss', './flush-page.scss'],
+  styleUrls: TABLE_STYLES,
   template: `
-    <table class="table table-borderless table-sm">
-      <thead><tr><th>Pool</th><th>Kind</th><th class="r">Price</th><th class="r">Liquidity</th><th class="r">24 h volume</th><th class="r">24 h</th>
-        @if (!compact) {<th class="r d-none d-lg-table-cell">Reserves</th><th class="r d-none d-lg-table-cell">Swaps</th>}</tr></thead>
-      <tbody>
-        @for (p of pools; track p.pool) {
-          <tr>
-            <td class="nowrap"><a [routerLink]="['/pool', p.pool]" class="me-1" title="The pool's page">⇄</a>
-              <app-flush-token [ticker]="p.asset_a" [id]="p.asset_a_id" [logo]="p.logo"></app-flush-token> / <app-flush-token [ticker]="p.asset_b" [id]="p.asset_b_id"></app-flush-token>
-              @if (p.locked) {<span class="pill ms-1" title="A graduated launch's pool: its first shares are nobody's, its liquidity stays for good">locked</span>}
-              @if (p.abandoned) {<span class="pill warn ms-1">abandoned</span>}</td>
-            <td class="nowrap"><a [routerLink]="['/pool', p.pool]"><span class="pill on">{{ fx.kindLabel(p.curve) }}</span></a> <span class="muted">{{ kindDetail(p) }}</span></td>
-            <td class="r nowrap">{{ fx.price(p.price) }} <span class="muted">{{ p.asset_b }}</span></td>
-            <td class="r nowrap">@if (p.depth_ecx || p.liquidity_ecx) {<span>{{ fx.compact(p.liquidity_ecx || p.depth_ecx * 2) }} </span><span class="muted">ECX</span>} @else {<span class="muted">–</span>}</td>
-            <td class="r nowrap">{{ fx.compact(p.volume_24h) }}</td>
-            <td class="r nowrap" [class.pos]="(p.change_24h ?? 0) > 0" [class.neg]="(p.change_24h ?? 0) < 0">{{ fx.change(p.change_24h) }}</td>
-            @if (!compact) {
-              <td class="r nowrap d-none d-lg-table-cell">{{ fx.compact(p.reserve_a) }} / {{ fx.compact(p.reserve_b) }}</td>
-              <td class="r d-none d-lg-table-cell">{{ p.swaps | number }}</td>
-            }
-          </tr>
-        } @empty {<tr><td colspan="8" class="empty">{{ empty }}</td></tr>}
-      </tbody>
-    </table>`,
+    <app-chain-table [rows]="pools" [columns]="cols" [filters]="filters" [search]="searchable ? matches : null" searchPlaceholder="Ticker or pool id"
+        [pageSize]="pageSize" [empty]="empty" [trackBy]="trackPool">
+      <ng-template cxCell="pool" let-p><a [routerLink]="['/pool', p.pool]" class="me-1" title="The pool's page">⇄</a>
+        <app-flush-token [ticker]="p.asset_a" [id]="p.asset_a_id" [logo]="p.logo"></app-flush-token> / <app-flush-token [ticker]="p.asset_b" [id]="p.asset_b_id"></app-flush-token>
+        @if (p.locked) {<span class="pill ms-1" title="A graduated launch's pool: its first shares are nobody's, its liquidity stays for good">locked</span>}
+        @if (p.abandoned) {<span class="pill warn ms-1">abandoned</span>}</ng-template>
+      <ng-template cxCell="kind" let-p><a [routerLink]="['/pool', p.pool]"><span class="pill on">{{ fx.kindLabel(p.curve) }}</span></a><span class="muted ms-1">{{ kindDetail(p) }}</span></ng-template>
+      <ng-template cxCell="price" let-p>{{ fx.price(p.price) }} <span class="muted">{{ p.asset_b }}</span></ng-template>
+      <ng-template cxCell="liquidity" let-p>@if (p.depth_ecx || p.liquidity_ecx) {<span>{{ fx.compact(p.liquidity_ecx || p.depth_ecx * 2) }} </span><span class="muted">ECX</span>} @else {<span class="muted">–</span>}</ng-template>
+      <ng-template cxCell="volume" let-p>{{ fx.compact(p.volume_24h) }}</ng-template>
+      <ng-template cxCell="change" let-p><span [class.pos]="(p.change_24h ?? 0) > 0" [class.neg]="(p.change_24h ?? 0) < 0">{{ fx.change(p.change_24h) }}</span></ng-template>
+      <ng-template cxCell="reserves" let-p>{{ fx.compact(p.reserve_a) }} / {{ fx.compact(p.reserve_b) }}</ng-template>
+      <ng-template cxCell="swaps" let-p>{{ p.swaps | number }}</ng-template>
+    </app-chain-table>`,
 })
-export class FlushPoolsTableComponent {
+export class FlushPoolsTableComponent implements OnChanges {
   @Input() pools: Pool[] = [];
   @Input() compact = false;
   @Input() empty = 'No pool here.';
+  @Input() pageSize = 25;
+  /** chips of the kinds among the rows */
+  @Input() kindFilter = false;
+  @Input() searchable = false;
   fx = F;
+  cols: CxColumn<Pool>[] = [];
+  filters: CxFilter<Pool>[] = [];
+  trackPool = (p: Pool) => p.pool;
+  matches = (p: Pool, q: string) => `${p.asset_a} ${p.asset_b} ${p.pool}`.toLowerCase().includes(q);
+
+  ngOnChanges(): void {
+    this.cols = [
+      { key: 'pool', label: 'Pool', sort: p => `${p.asset_a}/${p.asset_b}`, nowrap: true },
+      { key: 'kind', label: 'Kind', sort: p => F.kindLabel(p.curve), nowrap: true },
+      { key: 'price', label: 'Price', align: 'right', sort: p => p.price, nowrap: true },
+      { key: 'liquidity', label: 'Liquidity', align: 'right', sort: p => p.liquidity_ecx || p.depth_ecx * 2, nowrap: true },
+      { key: 'volume', label: '24 h volume', align: 'right', sort: p => p.volume_24h, nowrap: true },
+      { key: 'change', label: '24 h', align: 'right', sort: p => p.change_24h, nowrap: true },
+      ...(this.compact ? [] : [
+        { key: 'reserves', label: 'Reserves', align: 'right', hide: 'lg', nowrap: true },
+        { key: 'swaps', label: 'Swaps', align: 'right', hide: 'lg', sort: (p: Pool) => p.swaps },
+      ] as CxColumn<Pool>[]),
+    ];
+    const kinds = [...new Set((this.pools ?? []).map(p => p.curve))];
+    this.filters = this.kindFilter && kinds.length > 1 ? [{ label: 'Kind', options: kinds.map(k => ({ label: F.kindLabel(k), test: (p: Pool) => p.curve === k })) }] : [];
+  }
 
   kindDetail(p: Pool): string {
     const parts: string[] = [];
@@ -306,40 +325,49 @@ export class FlushPoolsTableComponent {
 @Component({
   selector: 'app-flush-launches',
   standalone: true,
-  imports: [CommonModule, RouterModule, SharedModule, FlushTokenComponent],
+  imports: [CommonModule, RouterModule, SharedModule, FlushTokenComponent, ChainTableComponent, CxCellDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrls: ['../../components/module-page.scss', '../../l2/pages/l2-page.scss', './flush-page.scss'],
+  styleUrls: TABLE_STYLES,
   template: `
-    <table class="table table-borderless table-sm">
-      <thead><tr><th>Token</th><th>State</th><th>Progress</th><th class="r">Price</th><th class="r">Market cap</th><th class="r">24 h volume</th>
-        @if (!compact) {<th class="r">24 h</th><th class="r d-none d-lg-table-cell">Holders</th><th class="d-none d-lg-table-cell">Created</th>}</tr></thead>
-      <tbody>
-        @for (l of launches; track l.id) {
-          <tr>
-            <td class="nowrap"><app-flush-token [ticker]="l.ticker" [id]="l.id" [logo]="l.logo" [name]="l.name" [showName]="!compact" [link]="false"></app-flush-token>
-              <a [routerLink]="['/launch', l.ticker || l.id]" class="ms-1">launch →</a></td>
-            <td><span class="pill" [class.ok]="l.state === 'graduated'" [class.warn]="l.state === 'graduating'" [class.on]="l.state === 'curve'">{{ stateLabel(l.state) }}</span></td>
-            <td class="progress-cell"><div class="bar"><div class="fill" [style.width.%]="min100(l.progress)"></div></div>
-              <div class="t">{{ fx.amount(l.raised_ecx, 2) }} / {{ graduation | number }} ECX · {{ fx.pct(l.progress, 1) }}</div></td>
-            <td class="r nowrap">{{ fx.price(l.price_ecx) }} <span class="muted">ECX</span></td>
-            <td class="r nowrap">{{ fx.compact(l.mcap_ecx) }} <span class="muted">ECX</span></td>
-            <td class="r nowrap">{{ fx.compact(l.volume_24h) }}</td>
-            @if (!compact) {
-              <td class="r nowrap" [class.pos]="(l.change_24h ?? 0) > 0" [class.neg]="(l.change_24h ?? 0) < 0">{{ fx.change(l.change_24h) }}</td>
-              <td class="r d-none d-lg-table-cell">{{ l.holders | number }}</td>
-              <td class="d-none d-lg-table-cell nowrap">@if (l.created_time) {<app-time kind="since" [time]="l.created_time" [fastRender]="true"></app-time>} @else {block {{ l.created_height | number }}}</td>
-            }
-          </tr>
-        } @empty {<tr><td colspan="9" class="empty">{{ empty }}</td></tr>}
-      </tbody>
-    </table>`,
+    <app-chain-table [rows]="launches" [columns]="cols" [pageSize]="pageSize" [empty]="empty" [trackBy]="trackLaunch">
+      <ng-template cxCell="token" let-l><app-flush-token [ticker]="l.ticker" [id]="l.id" [logo]="l.logo" [name]="l.name" [showName]="!compact" [link]="false"></app-flush-token>
+        <a [routerLink]="['/launch', l.ticker || l.id]" class="ms-1">launch →</a></ng-template>
+      <ng-template cxCell="state" let-l><span class="pill" [class.ok]="l.state === 'graduated'" [class.warn]="l.state === 'graduating'" [class.on]="l.state === 'curve'">{{ stateLabel(l.state) }}</span></ng-template>
+      <ng-template cxCell="progress" let-l><div class="progress-cell"><div class="bar"><div class="fill" [style.width.%]="min100(l.progress)"></div></div>
+        <div class="t">{{ fx.amount(l.raised_ecx, 2) }} / {{ graduation | number }} ECX · {{ fx.pct(l.progress, 1) }}</div></div></ng-template>
+      <ng-template cxCell="price" let-l>{{ fx.price(l.price_ecx) }} <span class="muted">ECX</span></ng-template>
+      <ng-template cxCell="mcap" let-l>{{ fx.compact(l.mcap_ecx) }} <span class="muted">ECX</span></ng-template>
+      <ng-template cxCell="volume" let-l>{{ fx.compact(l.volume_24h) }}</ng-template>
+      <ng-template cxCell="change" let-l><span [class.pos]="(l.change_24h ?? 0) > 0" [class.neg]="(l.change_24h ?? 0) < 0">{{ fx.change(l.change_24h) }}</span></ng-template>
+      <ng-template cxCell="holders" let-l>{{ l.holders | number }}</ng-template>
+      <ng-template cxCell="created" let-l>@if (l.created_time) {<app-time kind="since" [time]="l.created_time" [fastRender]="true"></app-time>} @else {block {{ l.created_height | number }}}</ng-template>
+    </app-chain-table>`,
 })
-export class FlushLaunchesTableComponent {
+export class FlushLaunchesTableComponent implements OnChanges {
   @Input() launches: LaunchSummary[] = [];
   @Input() compact = false;
   @Input() graduation = 500;
   @Input() empty = 'No launch here.';
+  @Input() pageSize = 25;
   fx = F;
+  cols: CxColumn<LaunchSummary>[] = [];
+  trackLaunch = (l: LaunchSummary) => l.id;
+
+  ngOnChanges(): void {
+    this.cols = [
+      { key: 'token', label: 'Token', sort: l => l.ticker, nowrap: true },
+      { key: 'state', label: 'State', sort: l => l.state },
+      { key: 'progress', label: 'Progress', sort: l => l.progress },
+      { key: 'price', label: 'Price', align: 'right', sort: l => l.price_ecx, nowrap: true },
+      { key: 'mcap', label: 'Market cap', align: 'right', sort: l => l.mcap_ecx, nowrap: true },
+      { key: 'volume', label: '24 h volume', align: 'right', sort: l => l.volume_24h, nowrap: true },
+      ...(this.compact ? [] : [
+        { key: 'change', label: '24 h', align: 'right', sort: (l: LaunchSummary) => l.change_24h, nowrap: true },
+        { key: 'holders', label: 'Holders', align: 'right', hide: 'lg', sort: (l: LaunchSummary) => l.holders },
+        { key: 'created', label: 'Created', hide: 'lg', sort: (l: LaunchSummary) => l.created_height, nowrap: true },
+      ] as CxColumn<LaunchSummary>[]),
+    ];
+  }
 
   min100(n: number): number {
     return Math.max(0, Math.min(100, Number(n) || 0));
@@ -354,62 +382,125 @@ export class FlushLaunchesTableComponent {
 @Component({
   selector: 'app-flush-trades',
   standalone: true,
-  imports: [CommonModule, RouterModule, SharedModule, FlushAddrComponent],
+  imports: [CommonModule, RouterModule, SharedModule, FlushAddrComponent, ChainTableComponent, CxCellDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrls: ['../../components/module-page.scss', '../../l2/pages/l2-page.scss', './flush-page.scss'],
+  styleUrls: TABLE_STYLES,
   template: `
-    <table class="table table-borderless table-sm">
-      <thead><tr><th>When</th>@if (showPair) {<th>Pair</th>}<th>Side</th><th>Venue</th><th class="r">ECX</th><th class="r">{{ tokenLabel }}</th><th class="r">Price</th><th class="d-none d-md-table-cell">To</th><th class="d-none d-lg-table-cell">Transaction</th></tr></thead>
-      <tbody>
-        @for (t of trades; track $index) {
-          <tr>
-            <td class="nowrap" [title]="'Flush block ' + t.height">@if (t.time) {<app-time kind="since" [time]="t.time" [fastRender]="true"></app-time>} @else {block {{ t.height | number }}}</td>
-            @if (showPair) {<td class="nowrap">{{ t.asset_in }} → {{ t.asset_out }}</td>}
-            <td><span class="pill" [class.ok]="t.side === 'buy'" [class.bad]="t.side === 'sell'">{{ t.side }}</span></td>
-            <td class="nowrap">@if (t.pool) {<a [routerLink]="['/pool', t.pool]">{{ t.venue }}</a>} @else {<span>{{ t.venue }}</span>}@if (t.hops > 1) {<span class="muted"> · {{ t.hops }} hops</span>}</td>
-            <td class="r nowrap">{{ fx.amount(t.ecx) }}</td>
-            <td class="r nowrap">{{ fx.amount(t.tokens, 6) }}</td>
-            <td class="r nowrap">{{ fx.price(t.price_ecx) }}</td>
-            <td class="d-none d-md-table-cell"><app-flush-addr [address]="t.address"></app-flush-addr></td>
-            <td class="d-none d-lg-table-cell mono" [title]="t.txid">{{ fx.shortId(t.txid, 6) }}</td>
-          </tr>
-        } @empty {<tr><td colspan="9" class="empty">{{ empty }}</td></tr>}
-      </tbody>
-    </table>`,
+    <app-chain-table [rows]="trades" [columns]="cols" [filters]="tools ? sides : null" [search]="tools ? matches : null" searchPlaceholder="Address or transaction"
+        [pageSize]="pageSize" [empty]="empty">
+      <ng-template cxCell="when" let-t><span [title]="'Flush block ' + t.height">@if (t.time) {<app-time kind="since" [time]="t.time" [fastRender]="true"></app-time>} @else {block {{ t.height | number }}}</span></ng-template>
+      <ng-template cxCell="pair" let-t>{{ t.asset_in }} → {{ t.asset_out }}</ng-template>
+      <ng-template cxCell="side" let-t><span class="pill" [class.ok]="t.side === 'buy'" [class.bad]="t.side === 'sell'">{{ t.side }}</span></ng-template>
+      <ng-template cxCell="venue" let-t>@if (t.pool) {<a [routerLink]="['/pool', t.pool]">{{ t.venue }}</a>} @else {<span>{{ t.venue }}</span>}@if (t.hops > 1) {<span class="muted"> · {{ t.hops }} hops</span>}</ng-template>
+      <ng-template cxCell="ecx" let-t>{{ fx.amount(t.ecx) }}</ng-template>
+      <ng-template cxCell="tokens" let-t>{{ fx.amount(t.tokens, 6) }}</ng-template>
+      <ng-template cxCell="price" let-t>{{ fx.price(t.price_ecx) }}</ng-template>
+      <ng-template cxCell="to" let-t><app-flush-addr [address]="t.address"></app-flush-addr></ng-template>
+      <ng-template cxCell="tx" let-t><span class="mono" [title]="t.txid">{{ fx.shortId(t.txid, 6) }}</span></ng-template>
+    </app-chain-table>`,
 })
-export class FlushTradesTableComponent {
+export class FlushTradesTableComponent implements OnChanges {
   @Input() trades: Trade[] = [];
   @Input() tokenLabel = 'Tokens';
   @Input() showPair = false;
   @Input() empty = 'No trade yet.';
+  @Input() pageSize = 25;
+  /** the side chips and the search box (none in a widget) */
+  @Input() tools = true;
   fx = F;
+  cols: CxColumn<Trade>[] = [];
+  sides: CxFilter<Trade>[] = [{ label: 'Side', options: [{ label: 'buy', test: t => t.side === 'buy' }, { label: 'sell', test: t => t.side === 'sell' }] }];
+  matches = (t: Trade, q: string) => `${t.address ?? ''} ${t.txid ?? ''}`.toLowerCase().includes(q);
+
+  ngOnChanges(): void {
+    this.cols = [
+      { key: 'when', label: 'When', sort: t => t.height, nowrap: true },
+      ...(this.showPair ? [{ key: 'pair', label: 'Pair', nowrap: true }] : []),
+      { key: 'side', label: 'Side', sort: t => t.side },
+      { key: 'venue', label: 'Venue', sort: t => t.venue, nowrap: true },
+      { key: 'ecx', label: 'ECX', align: 'right', sort: t => t.ecx, nowrap: true },
+      { key: 'tokens', label: this.tokenLabel, align: 'right', sort: t => t.tokens, nowrap: true },
+      { key: 'price', label: 'Price', align: 'right', sort: t => t.price_ecx, nowrap: true },
+      { key: 'to', label: 'To', hide: 'md' },
+      { key: 'tx', label: 'Transaction', hide: 'lg' },
+    ];
+  }
 }
 
 /** Holders, largest first; the curve's and the pool's holdings tagged */
 @Component({
   selector: 'app-flush-holders',
   standalone: true,
-  imports: [CommonModule, FlushAddrComponent],
+  imports: [CommonModule, FlushAddrComponent, ChainTableComponent, CxCellDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrls: ['../../components/module-page.scss', '../../l2/pages/l2-page.scss', './flush-page.scss'],
+  styleUrls: TABLE_STYLES,
   template: `
-    <table class="table table-borderless table-sm">
-      <thead><tr><th>#</th><th>Holder</th><th class="r">Amount</th><th>Share</th></tr></thead>
-      <tbody>
-        @for (h of holders; track h.address; let i = $index) {
-          <tr>
-            <td class="muted">{{ i + 1 }}</td>
-            <td><app-flush-addr [address]="h.address" [short]="true"></app-flush-addr> @if (h.tag) {<span class="pill on ms-1">{{ h.tag }}</span>}</td>
-            <td class="r nowrap">{{ fx.amount(h.amount, 6) }}</td>
-            <td class="progress-cell"><div class="bar"><div class="fill" [style.width.%]="h.share * 100"></div></div><div class="t">{{ fx.pct(h.share * 100, 2) }}</div></td>
-          </tr>
-        } @empty {<tr><td colspan="4" class="empty">No holder yet.</td></tr>}
-      </tbody>
-    </table>`,
+    <app-chain-table [rows]="rows" [columns]="cols" [search]="matches" searchPlaceholder="Address" [pageSize]="pageSize" empty="No holder yet." [trackBy]="trackHolder">
+      <ng-template cxCell="rank" let-h><span class="muted">{{ h.rank }}</span></ng-template>
+      <ng-template cxCell="holder" let-h><app-flush-addr [address]="h.address" [short]="true"></app-flush-addr>@if (h.tag) {<span class="pill on ms-1">{{ h.tag }}</span>}</ng-template>
+      <ng-template cxCell="amount" let-h>{{ fx.amount(h.amount, 6) }}</ng-template>
+      <ng-template cxCell="share" let-h><div class="progress-cell"><div class="bar"><div class="fill" [style.width.%]="h.share * 100"></div></div><div class="t">{{ fx.pct(h.share * 100, 2) }}</div></div></ng-template>
+    </app-chain-table>`,
 })
-export class FlushHoldersTableComponent {
+export class FlushHoldersTableComponent implements OnChanges {
   @Input() holders: Holder[] = [];
+  @Input() pageSize = 25;
   fx = F;
+  rows: (Holder & { rank: number })[] = [];
+  cols: CxColumn<Holder & { rank: number }>[] = [
+    { key: 'rank', label: '#', sort: h => -h.rank },
+    { key: 'holder', label: 'Holder' },
+    { key: 'amount', label: 'Amount', align: 'right', sort: h => h.amount, nowrap: true },
+    { key: 'share', label: 'Share', sort: h => h.share },
+  ];
+  trackHolder = (h: Holder) => h.address;
+  matches = (h: Holder, q: string) => `${h.address ?? ''} ${h.tag ?? ''}`.toLowerCase().includes(q);
+
+  ngOnChanges(): void {
+    this.rows = (this.holders ?? []).map((h, i) => ({ ...h, rank: i + 1 }));
+  }
+}
+
+/** The treasury's inflows by block (GET market/treasury): source, asset, ECX, its parts from swaps and launches */
+@Component({
+  selector: 'app-flush-inflows',
+  standalone: true,
+  imports: [CommonModule, RouterModule, SharedModule, ChainTableComponent, CxCellDirective],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  styleUrls: TABLE_STYLES,
+  template: `
+    <app-chain-table [rows]="inflows" [columns]="cols" [filters]="filters" [search]="matches" searchPlaceholder="Block or asset" sort="height"
+        [pageSize]="pageSize" empty="No inflow yet.">
+      <ng-template cxCell="height" let-i><a [routerLink]="['/block', i.height]">{{ i.height | number }}</a></ng-template>
+      <ng-template cxCell="time" let-i><app-time kind="since" [time]="i.time" [fastRender]="true"></app-time></ng-template>
+      <ng-template cxCell="source" let-i><span class="pill on">{{ i.source }}</span></ng-template>
+      <ng-template cxCell="amount" let-i>{{ fx.amount(i.amount_ecx) }}</ng-template>
+      <ng-template cxCell="from_swaps" let-i>{{ fx.amount(i.from_swaps) }}</ng-template>
+      <ng-template cxCell="from_launches" let-i>{{ fx.amount(i.from_launches) }}</ng-template>
+      <ng-template cxCell="security_held" let-i>{{ fx.amount(i.security_held) }}</ng-template>
+    </app-chain-table>`,
+})
+export class FlushInflowsTableComponent implements OnChanges {
+  @Input() inflows: TreasuryInflow[] = [];
+  @Input() pageSize = 25;
+  fx = F;
+  cols: CxColumn<TreasuryInflow>[] = [
+    { key: 'height', label: 'Block', sort: i => i.height },
+    { key: 'time', label: 'Time', sort: i => i.time, nowrap: true, hide: 'sm' },
+    { key: 'source', label: 'Source', sort: i => i.source },
+    { key: 'asset', label: 'Asset', sort: i => i.asset },
+    { key: 'amount', label: 'ECX', align: 'right', sort: i => i.amount_ecx, nowrap: true },
+    { key: 'from_swaps', label: 'From swaps', align: 'right', sort: i => i.from_swaps, nowrap: true, hide: 'md' },
+    { key: 'from_launches', label: 'From launches', align: 'right', sort: i => i.from_launches, nowrap: true, hide: 'md' },
+    { key: 'security_held', label: 'Security held', align: 'right', sort: i => i.security_held, nowrap: true, hide: 'lg' },
+  ];
+  filters: CxFilter<TreasuryInflow>[] = [];
+  matches = (i: TreasuryInflow, q: string) => `${i.height} ${i.asset ?? ''}`.toLowerCase().includes(q);
+
+  ngOnChanges(): void {
+    const sources = [...new Set((this.inflows ?? []).map(i => i.source))];
+    this.filters = sources.length ? [{ label: 'Source', options: sources.map(x => ({ label: x, test: (i: TreasuryInflow) => i.source === x })) }] : [];
+  }
 }
 
 /** "Older →" for a cursor-paged list */
@@ -418,7 +509,7 @@ export class FlushHoldersTableComponent {
   standalone: true,
   imports: [CommonModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styles: [`.pager { display: flex; gap: 8px; justify-content: flex-end; align-items: center; margin-top: 8px; font-size: 0.8rem; color: var(--transparent-fg); }`],
+  styleUrls: TABLE_STYLES,
   template: `
     <div class="pager">
       @if (total !== null) {<span>{{ total | number }} in all</span>}
@@ -437,5 +528,5 @@ export class FlushPagerComponent {
 export const FLUSH_PAGE_IMPORTS = [
   CommonModule, RouterModule, SharedModule, SidechainLabelComponent, FlushStateComponent, FlushTokenComponent, FlushAddrComponent, FlushAssetComponent, FlushEcashLinkComponent,
   FlushHeadComponent, FlushPoolsTableComponent, FlushLaunchesTableComponent, FlushTradesTableComponent, FlushHoldersTableComponent,
-  FlushPagerComponent,
+  FlushPagerComponent, FlushInflowsTableComponent, ChainTableComponent, CxCellDirective,
 ];

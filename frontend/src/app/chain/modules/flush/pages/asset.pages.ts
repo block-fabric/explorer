@@ -4,6 +4,7 @@ import { BehaviorSubject, Observable, catchError, combineLatest, map, of, shareR
 import { SeoService } from '@app/services/seo.service';
 import { FlushApiService, FlushLoaded, flushLoaded } from '../flush-api.service';
 import { ASSET_TABS, DEX_TABS, FLUSH_PAGE_IMPORTS } from '../flush-kit';
+import { CxColumn, CxFilter } from '@app/chain/components/chain-table/chain-table.component';
 import { FLUSH_CHARTS } from '../flush-charts';
 import { AssetDetail, AssetSummary, Candle, Holder, LaunchDetail, Page, Pool } from '../flush.interfaces';
 import * as F from '../flush-format';
@@ -56,6 +57,15 @@ export interface AssetRow {
   control?: { txid: string; vout: number; address?: string };
 }
 
+/** an asset of the registry's list, with its market (the public API's asset list), when it has one */
+export type AssetListRow = AssetRow & { m: AssetSummary | null };
+
+/** an auction's status as chips: those among the rows */
+function statusFilter(rows: any[] | null | undefined): CxFilter<any>[] {
+  const statuses = [...new Set((rows ?? []).map(x => String(x.status)))];
+  return statuses.length > 1 ? [{ label: 'Status', options: statuses.map(st => ({ label: st, test: (x: any) => String(x.status) === st })) }] : [];
+}
+
 /** /assets: the asset registry (searchassets): ticker, display name, supply, pools, depth, activity */
 @Component({
   selector: 'app-flush-assets-page',
@@ -87,26 +97,18 @@ export interface AssetRow {
       <app-flush-state [state]="v" what="Assets" [list]="true" [height]="400"></app-flush-state>
       @if (v.data; as d) {
         <div class="box">
-          <table class="table table-borderless table-sm">
-            <thead><tr><th>Asset</th><th class="r">Supply</th><th class="r">Holders</th><th class="r">Price</th><th class="r">Pools</th><th class="r">Pool depth</th><th class="r">Volume</th><th class="d-none d-md-table-cell">Registered</th><th class="d-none d-lg-table-cell">Last active</th></tr></thead>
-            <tbody>
-              @for (a of d.assets; track a.asset) {
-                <tr>
-                  <td><app-flush-token [ticker]="a.name" [id]="a.asset" [logo]="a.has_logo || a.logo ? 'logo' : null" [name]="a.display_name" [showName]="true"></app-flush-token>
-                    @if (a.fixed) {<span class="pill ms-1" title="No more can be minted">fixed</span>} @if (a.retired) {<span class="pill warn ms-1">retired</span>}</td>
-                  <td class="r nowrap">{{ fx.compact(a.supply) }}</td>
-                  @let m = d.market[a.asset];
-                  <td class="r">{{ m ? (m.holders | number) : '–' }}</td>
-                  <td class="r nowrap">{{ m?.market?.price_ecx ? fx.price(m.market.price_ecx) + ' ECX' : '–' }}@if (m && m.market.status !== 'none') {<div class="muted small">{{ m.market.kinds.join(' · ') || m.market.status }}</div>}</td>
-                  <td class="r">{{ a.pools ?? 0 }}</td>
-                  <td class="r nowrap">{{ a.pool_depth ? fx.compact(a.pool_depth) + ' ECX' : '–' }}</td>
-                  <td class="r nowrap">{{ a.volume ? fx.compact(a.volume) + ' ECX' : '–' }}</td>
-                  <td class="d-none d-md-table-cell"><a [routerLink]="['/block', a.registered]">{{ a.registered | number }}</a></td>
-                  <td class="d-none d-lg-table-cell">@if (a.last_activity) {<a [routerLink]="['/block', a.last_activity]">{{ a.last_activity | number }}</a>}</td>
-                </tr>
-              } @empty {<tr><td colspan="9" class="empty">No asset matches.</td></tr>}
-            </tbody>
-          </table>
+          <app-chain-table [rows]="d.rows" [columns]="cols" [filters]="filters" [pageSize]="50" empty="No asset matches." [trackBy]="trackAsset">
+            <ng-template cxCell="asset" let-a><app-flush-token [ticker]="a.name" [id]="a.asset" [logo]="a.has_logo || a.logo ? 'logo' : null" [name]="a.display_name" [showName]="true"></app-flush-token>
+              @if (a.fixed) {<span class="pill ms-1" title="No more can be minted">fixed</span>}@if (a.retired) {<span class="pill warn ms-1">retired</span>}</ng-template>
+            <ng-template cxCell="supply" let-a>{{ fx.compact(a.supply) }}</ng-template>
+            <ng-template cxCell="holders" let-a>{{ a.m ? (a.m.holders | number) : '–' }}</ng-template>
+            <ng-template cxCell="price" let-a>{{ a.m?.market?.price_ecx ? fx.price(a.m.market.price_ecx) + ' ECX' : '–' }}@if (a.m && a.m.market.status !== 'none') {<div class="muted small">{{ a.m.market.kinds.join(' · ') || a.m.market.status }}</div>}</ng-template>
+            <ng-template cxCell="pools" let-a>{{ a.pools ?? 0 }}</ng-template>
+            <ng-template cxCell="depth" let-a>{{ a.pool_depth ? fx.compact(a.pool_depth) + ' ECX' : '–' }}</ng-template>
+            <ng-template cxCell="volume" let-a>{{ a.volume ? fx.compact(a.volume) + ' ECX' : '–' }}</ng-template>
+            <ng-template cxCell="registered" let-a><a [routerLink]="['/block', a.registered]">{{ a.registered | number }}</a></ng-template>
+            <ng-template cxCell="last" let-a>@if (a.last_activity) {<a [routerLink]="['/block', a.last_activity]">{{ a.last_activity | number }}</a>}</ng-template>
+          </app-chain-table>
         </div>
         @if (d.partial) {<p class="note">The search stopped at its budget ({{ d.scanned | number }} scanned): the next page goes on.</p>}
         <app-flush-pager [next]="d.next_cursor" [total]="null" [hasPrev]="!!q.cursor" (more)="set({ cursor: $event }, true)" (first)="set({ cursor: '' }, true)"></app-flush-pager>
@@ -119,7 +121,22 @@ export class FlushAssetsPage implements OnInit {
   fx = F;
   q = { q: '', sort: 'activity', has_pool: false, has_logo: false, cursor: '' };
   private q$ = new BehaviorSubject(this.q);
-  view$: Observable<FlushLoaded<{ assets: AssetRow[]; next_cursor: string | null; partial: boolean; scanned: number; market: Record<string, AssetSummary> }>>;
+  view$: Observable<FlushLoaded<{ assets: AssetRow[]; rows: AssetListRow[]; next_cursor: string | null; partial: boolean; scanned: number; market: Record<string, AssetSummary> }>>;
+  cols: CxColumn<AssetListRow>[] = [
+    { key: 'asset', label: 'Asset', sort: a => a.name, nowrap: true },
+    { key: 'supply', label: 'Supply', align: 'right', sort: a => a.supply, nowrap: true },
+    { key: 'holders', label: 'Holders', align: 'right', sort: a => a.m?.holders },
+    { key: 'price', label: 'Price', align: 'right', sort: a => a.m?.market?.price_ecx || null, nowrap: true },
+    { key: 'pools', label: 'Pools', align: 'right', sort: a => a.pools ?? 0, hide: 'sm' },
+    { key: 'depth', label: 'Pool depth', align: 'right', sort: a => a.pool_depth ?? 0, nowrap: true, hide: 'md' },
+    { key: 'volume', label: 'Volume', align: 'right', sort: a => a.volume ?? 0, nowrap: true, hide: 'md' },
+    { key: 'registered', label: 'Registered', sort: a => a.registered, hide: 'md' },
+    { key: 'last', label: 'Last active', sort: a => a.last_activity, hide: 'lg' },
+  ];
+  filters: CxFilter<AssetListRow>[] = [{ label: 'Supply', options: [
+    { label: 'fixed', test: a => !!a.fixed }, { label: 'mintable', test: a => !a.fixed && !a.retired }, { label: 'retired', test: a => !!a.retired },
+  ] }];
+  trackAsset = (a: AssetListRow) => a.asset;
   info$: Observable<FlushLoaded<any>>;
 
   constructor(private api: FlushApiService, private seo: SeoService) {}
@@ -145,7 +162,9 @@ export class FlushAssetsPage implements OnInit {
         map(p => Object.fromEntries((p.items ?? []).map(a => [a.id, a]))),
         catchError(() => of({} as Record<string, AssetSummary>)),
       );
-      return flushLoaded(combineLatest([search$, market$]).pipe(map(([r, market]) => ({ ...r, market }))));
+      return flushLoaded(combineLatest([search$, market$]).pipe(map(([r, market]) => ({
+        ...r, market, rows: (r?.assets ?? []).map((a: AssetRow) => ({ ...a, m: market[a.asset] ?? null })),
+      }))));
     }));
   }
 
@@ -154,6 +173,9 @@ export class FlushAssetsPage implements OnInit {
     this.q$.next(this.q);
   }
 }
+
+/** a change of an asset's field (getassethistory) */
+interface HistoryRow { field: string; value: string | null; txid: string; height: number }
 
 /** /asset/:id: an asset (getasset, getassethistory): details, logo, control, verifications, pools, books, auctions, launch */
 @Component({
@@ -212,11 +234,12 @@ export class FlushAssetsPage implements OnInit {
             <h3>History <span class="hint">getassethistory</span></h3>
             @if (history$ | async; as h) {
               @if (h.data; as hd) {
-                <table class="table table-borderless table-sm"><thead><tr><th>Field</th><th>Value</th><th>Block</th></tr></thead><tbody>
-                  @for (r of historyRows(hd); track $index) {
-                    <tr><td class="muted">{{ r.field }}</td><td class="desc">{{ r.value === null ? '(none)' : r.value }}</td><td><a [routerLink]="['/tx', r.txid]">{{ r.height | number }}</a></td></tr>
-                  } @empty {<tr><td colspan="3" class="empty">No change since its registration.</td></tr>}
-                </tbody></table>
+                <app-chain-table [rows]="hd" [columns]="historyCols" [search]="historyMatches" searchPlaceholder="Field or value" sort="height" [pageSize]="10"
+                    empty="No change since its registration.">
+                  <ng-template cxCell="field" let-r><span class="muted">{{ r.field }}</span></ng-template>
+                  <ng-template cxCell="value" let-r><span class="desc">{{ r.value === null ? '(none)' : r.value }}</span></ng-template>
+                  <ng-template cxCell="height" let-r><a [routerLink]="['/tx', r.txid]">{{ r.height | number }}</a></ng-template>
+                </app-chain-table>
               } @else if (!h.loading) {<p class="muted mb-0">No history.</p>}
             }
           </div>
@@ -232,7 +255,7 @@ export class FlushAssetsPage implements OnInit {
         <h2>Pools and books</h2>
         @if (pools$ | async; as p) {
           <app-flush-state [state]="p" what="Pools" [list]="true" [height]="120"></app-flush-state>
-          @if (p.data; as pd) {<div class="box"><app-flush-pools [pools]="pd" [compact]="true" empty="No pool or book of this asset."></app-flush-pools></div>
+          @if (p.data; as pd) {<div class="box"><app-flush-pools [pools]="pd" [compact]="true" [kindFilter]="true" empty="No pool or book of this asset."></app-flush-pools></div>
             @if (mainPool(pd); as mp) {
               <h2>Price in its {{ mp.asset_a }}/{{ mp.asset_b }} pool <span class="chips d-inline-flex ms-2">@for (i of intervals; track i) {<button class="chip" [class.on]="interval === i" (click)="setInterval(i)">{{ i }}</button>}</span></h2>
               <div class="box">
@@ -252,16 +275,19 @@ export class FlushAssetsPage implements OnInit {
         <h2>Auctions</h2>
         @if (auctions$ | async; as au) {
           <app-flush-state [state]="au" what="Auctions" [list]="true" [height]="100"></app-flush-state>
-          @if (au.data; as ad) {<div class="box"><ng-container *ngTemplateOutlet="auctionTable; context: { $implicit: ad }"></ng-container></div>}
+          @if (au.data; as ad) {
+            <div class="box">
+              <app-chain-table [rows]="ad" [columns]="auctionCols" [filters]="auctionFilters" [pageSize]="25" empty="No auction of this asset." [trackBy]="trackAuction">
+                <ng-template cxCell="auction" let-x><a [routerLink]="['/auction', x.auction]" class="mono">{{ fx.shortId(x.auction, 6) }}</a></ng-template>
+                <ng-template cxCell="sells" let-x>{{ fx.amount(x.amount) }} {{ x.base }} for {{ x.quote }}</ng-template>
+                <ng-template cxCell="left" let-x>{{ fx.amount(x.remaining) }}</ng-template>
+                <ng-template cxCell="unit" let-x>{{ fx.price(x.unit_price) }} {{ x.quote }}</ng-template>
+                <ng-template cxCell="blocks" let-x>{{ x.start_height | number }} to {{ x.end_height | number }}</ng-template>
+                <ng-template cxCell="status" let-x><span class="pill" [class.on]="x.status === 'open'">{{ x.status }}</span></ng-template>
+              </app-chain-table>
+            </div>
+          }
         }
-        <ng-template #auctionTable let-rows>
-          <table class="table table-borderless table-sm"><thead><tr><th>Auction</th><th>Sells</th><th class="r">Left</th><th class="r">Unit price now</th><th>Blocks</th><th>Status</th></tr></thead><tbody>
-            @for (x of rows; track x.auction) {
-              <tr><td><a [routerLink]="['/auction', x.auction]" class="mono">{{ fx.shortId(x.auction, 6) }}</a></td><td>{{ fx.amount(x.amount) }} {{ x.base }} for {{ x.quote }}</td>
-                <td class="r">{{ fx.amount(x.remaining) }}</td><td class="r">{{ fx.price(x.unit_price) }} {{ x.quote }}</td><td>{{ x.start_height | number }} to {{ x.end_height | number }}</td><td><span class="pill" [class.on]="x.status === 'open'">{{ x.status }}</span></td></tr>
-            } @empty {<tr><td colspan="6" class="empty">No auction of this asset.</td></tr>}
-          </tbody></table>
-        </ng-template>
       } @else {
         <app-flush-head title="Asset" [tabs]="tabs" active="/assets"></app-flush-head>
         <app-flush-state [state]="v" what="Asset" [id]="id" [height]="400"></app-flush-state>
@@ -273,11 +299,27 @@ export class FlushAssetPage implements OnInit {
   tabs = ASSET_TABS;
   intervals = INTERVALS;
   fx = F;
+  historyCols: CxColumn<HistoryRow>[] = [
+    { key: 'field', label: 'Field', sort: r => r.field },
+    { key: 'value', label: 'Value' },
+    { key: 'height', label: 'Block', sort: r => r.height },
+  ];
+  historyMatches = (r: HistoryRow, q: string) => `${r.field} ${r.value ?? ''}`.toLowerCase().includes(q);
+  auctionCols: CxColumn<any>[] = [
+    { key: 'auction', label: 'Auction' },
+    { key: 'sells', label: 'Sells', sort: x => Number(x.amount) },
+    { key: 'left', label: 'Left', align: 'right', sort: x => Number(x.remaining) },
+    { key: 'unit', label: 'Unit price now', align: 'right', sort: x => Number(x.unit_price), nowrap: true },
+    { key: 'blocks', label: 'Blocks', sort: x => Number(x.start_height), nowrap: true, hide: 'md' },
+    { key: 'status', label: 'Status', sort: x => x.status },
+  ];
+  auctionFilters: CxFilter<any>[] = [];
+  trackAuction = (x: any) => x.auction;
   id = '';
   interval = '1h';
   private interval$ = new BehaviorSubject('1h');
   view$: Observable<FlushLoaded<any>>;
-  history$: Observable<FlushLoaded<any>>;
+  history$: Observable<FlushLoaded<HistoryRow[]>>;
   launch$: Observable<FlushLoaded<LaunchDetail>>;
   pools$: Observable<FlushLoaded<Pool[]>>;
   candles$: Observable<FlushLoaded<Candle[]>>;
@@ -300,7 +342,7 @@ export class FlushAssetPage implements OnInit {
     );
     this.view$ = asset$;
     const ok = <T>(f: (id: string, a: AssetRow) => Observable<T>) => asset$.pipe(switchMap(v => v.data ? flushLoaded(f(v.data.asset, v.data)) : of({ loading: false } as FlushLoaded<T>)));
-    this.history$ = ok(id => this.api.rpc$<any>('getassethistory', F.assetArg(id)));
+    this.history$ = ok(id => this.api.rpc$<any>('getassethistory', F.assetArg(id)).pipe(map(h => this.historyRows(h))));
     // its market from the public API (Flush v2: GET assets/{id}); none before v2
     this.market$ = ok(id => this.api.market$<AssetDetail>('assets/' + id)).pipe(map(m => m.error ? { loading: false } : m));
     this.launch$ = ok(id => this.api.market$<LaunchDetail>('launches/' + id));
@@ -317,7 +359,7 @@ export class FlushAssetPage implements OnInit {
       const mp = p.data ? this.mainPool(p.data) : null;
       return mp ? flushLoaded(this.api.market$<{ items: Candle[] }>(`pools/${mp.pool}/candles`, { interval: i }).pipe(map(r => r.items ?? []))) : of({ loading: false } as FlushLoaded<Candle[]>);
     }));
-    this.auctions$ = ok((id, a) => this.api.rpc$<any[]>('listauctions', true, 50, 0, a.name));
+    this.auctions$ = ok((id, a) => this.api.rpc$<any[]>('listauctions', true, 50, 0, a.name).pipe(tap(rows => this.auctionFilters = statusFilter(rows))));
     const curators = savedCurators();
     this.verified$ = curators.length ? ok(id => this.api.rpc$<any>('getverifications', F.assetArg(id), curators)) : of({ loading: false });
   }
@@ -343,7 +385,7 @@ export class FlushAssetPage implements OnInit {
     return Object.entries(a.data ?? {}).filter(([, v]) => v !== null && v !== '').map(([k, v]) => [k, String(v)]);
   }
 
-  historyRows(h: Record<string, { value: string | null; txid: string; height: number }[]>): { field: string; value: string | null; txid: string; height: number }[] {
+  historyRows(h: Record<string, { value: string | null; txid: string; height: number }[]>): HistoryRow[] {
     return Object.entries(h ?? {}).flatMap(([field, rows]) => (Array.isArray(rows) ? rows : []).filter(r => r.value !== null || rows.length > 1)
       .map(r => ({ field, value: r.value === null ? null : String(r.value), txid: r.txid, height: r.height })))
       .sort((x, y) => y.height - x.height);
@@ -353,6 +395,8 @@ export class FlushAssetPage implements OnInit {
     return (v?.curators ?? []).map((c: any) => `${c.name || F.shortId(c.curator, 6)}: ${c.verified ? 'yes' : 'no'}`).join(', ');
   }
 }
+
+interface VerificationRow { asset: string; loading: boolean; data?: any; error?: string }
 
 /** /verifications: verified issuers per the viewer's own curator list (getverifications) */
 @Component({
@@ -375,15 +419,11 @@ export class FlushAssetPage implements OnInit {
     </div>
     @if (rows.length) {
       <div class="box">
-        <table class="table table-borderless table-sm"><thead><tr><th>Asset</th><th>Verdict</th><th>Curators</th></tr></thead><tbody>
-          @for (r of rows; track $index) {
-            <tr>
-              <td>@if (r.data) {<app-flush-asset [id]="r.data.asset"></app-flush-asset>} @else {<span>{{ r.asset }}</span>}</td>
-              <td>@if (r.loading) {<span class="muted">…</span>} @else if (r.data) {<span class="pill" [class.ok]="r.data.verified">{{ r.data.verified ? 'verified' : 'not verified' }}</span>} @else {<span class="pill warn">{{ r.error }}</span>}</td>
-              <td>@for (c of r.data?.curators ?? []; track c.curator) {<span class="me-3"><a [routerLink]="['/oracle', c.curator]">{{ c.name || fx.shortId(c.curator, 6) }}</a>: {{ c.verified ? 'yes' : 'no' }}@if (c.round) { <span class="muted">(round {{ c.round }})</span>}</span>}</td>
-            </tr>
-          }
-        </tbody></table>
+        <app-chain-table [rows]="rows" [columns]="cols" [filters]="verdicts" [search]="matches" searchPlaceholder="Asset" [pageSize]="25" empty="No asset to check.">
+          <ng-template cxCell="asset" let-r>@if (r.data) {<app-flush-asset [id]="r.data.asset"></app-flush-asset>} @else {<span>{{ r.asset }}</span>}</ng-template>
+          <ng-template cxCell="verdict" let-r>@if (r.loading) {<span class="muted">…</span>} @else if (r.data) {<span class="pill" [class.ok]="r.data.verified">{{ r.data.verified ? 'verified' : 'not verified' }}</span>} @else {<span class="pill warn">{{ r.error }}</span>}</ng-template>
+          <ng-template cxCell="curators" let-r>@for (c of r.data?.curators ?? []; track c.curator) {<span class="me-3"><a [routerLink]="['/oracle', c.curator]">{{ c.name || fx.shortId(c.curator, 6) }}</a>: {{ c.verified ? 'yes' : 'no' }}@if (c.round) {<span class="muted ms-1">(round {{ c.round }})</span>}</span>}</ng-template>
+        </app-chain-table>
       </div>
     }
   </div>`,
@@ -393,7 +433,16 @@ export class FlushVerificationsPage implements OnInit {
   fx = F;
   curatorsText = '';
   assetsText = '';
-  rows: { asset: string; loading: boolean; data?: any; error?: string }[] = [];
+  rows: VerificationRow[] = [];
+  cols: CxColumn<VerificationRow>[] = [
+    { key: 'asset', label: 'Asset', sort: r => r.asset },
+    { key: 'verdict', label: 'Verdict', sort: r => r.data ? (r.data.verified ? 2 : 1) : 0 },
+    { key: 'curators', label: 'Curators' },
+  ];
+  verdicts: CxFilter<VerificationRow>[] = [{ label: 'Verdict', options: [
+    { label: 'verified', test: r => !!r.data?.verified }, { label: 'not verified', test: r => !!r.data && !r.data.verified }, { label: 'error', test: r => !r.loading && !r.data },
+  ] }];
+  matches = (r: VerificationRow, q: string) => `${r.asset} ${r.data?.asset ?? ''}`.toLowerCase().includes(q);
 
   constructor(private api: FlushApiService, private seo: SeoService, private cd: ChangeDetectorRef) {}
 
@@ -447,15 +496,15 @@ export class FlushVerificationsPage implements OnInit {
       <app-flush-state [state]="v" what="Auctions" [list]="true" [height]="300"></app-flush-state>
       @if (v.data; as d) {
         <div class="box">
-          <table class="table table-borderless table-sm"><thead><tr><th>Auction</th><th>Sells</th><th class="r">Left</th><th class="r">Unit price now</th><th class="r">Start → end price</th><th>Blocks</th><th class="r">Bids</th><th>Status</th></tr></thead><tbody>
-            @for (x of d; track x.auction) {
-              <tr><td><a [routerLink]="['/auction', x.auction]" class="mono">{{ fx.shortId(x.auction, 6) }}</a></td>
-                <td class="nowrap">{{ fx.amount(x.amount) }} <app-flush-token [ticker]="x.base" [id]="x.base_id"></app-flush-token> for <app-flush-token [ticker]="x.quote" [id]="x.quote_id"></app-flush-token></td>
-                <td class="r">{{ fx.amount(x.remaining) }}</td><td class="r nowrap">{{ fx.price(x.unit_price) }} {{ x.quote }}</td>
-                <td class="r nowrap">{{ fx.amount(x.start_price) }} → {{ fx.amount(x.end_price) }}</td><td class="nowrap">{{ x.start_height | number }} to {{ x.end_height | number }}</td>
-                <td class="r">{{ x.bids }}</td><td><span class="pill" [class.on]="x.status === 'open'" [class.ok]="x.status === 'sold out'">{{ x.status }}</span></td></tr>
-            } @empty {<tr><td colspan="8" class="empty">No auction.</td></tr>}
-          </tbody></table>
+          <app-chain-table [rows]="d" [columns]="cols" [filters]="filters" [search]="matches" searchPlaceholder="Auction or ticker" [pageSize]="25" empty="No auction." [trackBy]="trackAuction">
+            <ng-template cxCell="auction" let-x><a [routerLink]="['/auction', x.auction]" class="mono">{{ fx.shortId(x.auction, 6) }}</a></ng-template>
+            <ng-template cxCell="sells" let-x>{{ fx.amount(x.amount) }} <app-flush-token [ticker]="x.base" [id]="x.base_id"></app-flush-token> for <app-flush-token [ticker]="x.quote" [id]="x.quote_id"></app-flush-token></ng-template>
+            <ng-template cxCell="left" let-x>{{ fx.amount(x.remaining) }}</ng-template>
+            <ng-template cxCell="unit" let-x>{{ fx.price(x.unit_price) }} {{ x.quote }}</ng-template>
+            <ng-template cxCell="range" let-x>{{ fx.amount(x.start_price) }} → {{ fx.amount(x.end_price) }}</ng-template>
+            <ng-template cxCell="blocks" let-x>{{ x.start_height | number }} to {{ x.end_height | number }}</ng-template>
+            <ng-template cxCell="status" let-x><span class="pill" [class.on]="x.status === 'open'" [class.ok]="x.status === 'sold out'">{{ x.status }}</span></ng-template>
+          </app-chain-table>
         </div>
       }
     }
@@ -464,6 +513,19 @@ export class FlushVerificationsPage implements OnInit {
 export class FlushAuctionsPage implements OnInit {
   tabs = DEX_TABS;
   fx = F;
+  cols: CxColumn<any>[] = [
+    { key: 'auction', label: 'Auction' },
+    { key: 'sells', label: 'Sells', sort: x => Number(x.amount), nowrap: true },
+    { key: 'left', label: 'Left', align: 'right', sort: x => Number(x.remaining) },
+    { key: 'unit', label: 'Unit price now', align: 'right', sort: x => Number(x.unit_price), nowrap: true },
+    { key: 'range', label: 'Start → end price', align: 'right', nowrap: true, hide: 'lg' },
+    { key: 'blocks', label: 'Blocks', sort: x => Number(x.start_height), nowrap: true, hide: 'md' },
+    { key: 'bids', label: 'Bids', align: 'right', sort: x => Number(x.bids) },
+    { key: 'status', label: 'Status', sort: x => x.status },
+  ];
+  filters: CxFilter<any>[] = [];
+  trackAuction = (x: any) => x.auction;
+  matches = (x: any, q: string) => `${x.auction} ${x.base ?? ''} ${x.quote ?? ''}`.toLowerCase().includes(q);
   closed = false;
   private closed$ = new BehaviorSubject(false);
   view$: Observable<FlushLoaded<any[]>>;
@@ -472,7 +534,7 @@ export class FlushAuctionsPage implements OnInit {
 
   ngOnInit(): void {
     this.seo.setTitle('Flush auctions');
-    this.view$ = this.closed$.pipe(switchMap(c => flushLoaded(this.api.rpc$<any[]>('listauctions', c, 200))));
+    this.view$ = this.closed$.pipe(switchMap(c => flushLoaded(this.api.rpc$<any[]>('listauctions', c, 200).pipe(tap(rows => this.filters = statusFilter(rows))))));
   }
 
   toggle(c: boolean): void {
@@ -545,14 +607,14 @@ export class FlushAuctionPage implements OnInit {
       <app-flush-state [state]="v" what="Oracles" [list]="true" [height]="300"></app-flush-state>
       @if (v.data; as d) {
         <div class="box">
-          <table class="table table-borderless table-sm"><thead><tr><th>Oracle</th><th>Name</th><th>Key</th><th class="r">Attestations</th><th>Registered</th></tr></thead><tbody>
-            @for (o of d; track o.oracle) {
-              <tr><td><a [routerLink]="['/oracle', o.oracle]" class="mono">{{ fx.shortId(o.oracle, 8) }}</a></td><td>{{ o.name }}</td><td class="mono" [title]="o.pubkey">{{ fx.shortId(o.pubkey, 6) }}</td>
-                <td class="r">{{ o.attestations | number }}</td><td><a [routerLink]="['/tx', o.registration]">{{ o.height | number }}</a></td></tr>
-            } @empty {<tr><td colspan="5" class="empty">No oracle registered.</td></tr>}
-          </tbody></table>
+          <app-chain-table [rows]="d" [columns]="cols" [search]="matches" searchPlaceholder="Oracle, name or key" [pageSize]="25" empty="No oracle registered." [trackBy]="trackOracle">
+            <ng-template cxCell="oracle" let-o><a [routerLink]="['/oracle', o.oracle]" class="mono">{{ fx.shortId(o.oracle, 8) }}</a></ng-template>
+            <ng-template cxCell="pubkey" let-o><span class="mono" [title]="o.pubkey">{{ fx.shortId(o.pubkey, 6) }}</span></ng-template>
+            <ng-template cxCell="attestations" let-o>{{ o.attestations | number }}</ng-template>
+            <ng-template cxCell="height" let-o><a [routerLink]="['/tx', o.registration]">{{ o.height | number }}</a></ng-template>
+          </app-chain-table>
         </div>
-        @if (d.length >= 200) {<button class="btn btn-sm btn-secondary mt-2" (click)="more(d[d.length - 1].oracle)">Next →</button>}
+        @if (d.length >= 200) {<div class="pager"><button class="btn btn-sm btn-secondary" (click)="more(d[d.length - 1].oracle)">Next →</button></div>}
       }
     }
   </div>`,
@@ -560,6 +622,15 @@ export class FlushAuctionPage implements OnInit {
 export class FlushOraclesPage implements OnInit {
   tabs = ASSET_TABS;
   fx = F;
+  cols: CxColumn<any>[] = [
+    { key: 'oracle', label: 'Oracle' },
+    { key: 'name', label: 'Name', sort: o => String(o.name ?? '') },
+    { key: 'pubkey', label: 'Key', hide: 'md' },
+    { key: 'attestations', label: 'Attestations', align: 'right', sort: o => Number(o.attestations) },
+    { key: 'height', label: 'Registered', sort: o => Number(o.height) },
+  ];
+  trackOracle = (o: any) => o.oracle;
+  matches = (o: any, q: string) => `${o.oracle} ${o.name ?? ''} ${o.pubkey ?? ''}`.toLowerCase().includes(q);
   private start$ = new BehaviorSubject<string | undefined>(undefined);
   view$: Observable<FlushLoaded<any[]>>;
 

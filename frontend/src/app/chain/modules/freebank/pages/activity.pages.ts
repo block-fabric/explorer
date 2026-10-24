@@ -122,8 +122,11 @@ export function describe(it: ActivityItem): { title: string; parts: Part[] } {
   styleUrls: STYLES,
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [`
-    .what { min-width: 260px; } .what .t { font-weight: 500; } .what .s { font-size: 0.8rem; color: var(--transparent-fg); }
-    .fam { font-size: 0.68rem; padding: 1px 6px; border-radius: 4px; background: var(--chain-accent, #c9a227); color: #111; margin-right: 6px; vertical-align: 1px; }
+    .what { min-width: 280px; }
+    .what .t { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 500; }
+    .what .t .pill { font-weight: 400; min-width: 4.6rem; justify-content: center; }
+    .what .s { font-size: 0.82rem; color: var(--cx-ink-2); margin-top: 3px; line-height: 1.45; overflow-wrap: anywhere; }
+    .when { font-size: 0.78rem; color: var(--cx-ink-3); }
     .err { color: #ff6b6b; }`],
   template: `
     @if (chips) {
@@ -138,30 +141,35 @@ export function describe(it: ActivityItem): { title: string; parts: Part[] } {
       @if (failed) {
         <div class="unavail">The credit history is not available right now.</div>
       } @else if (!items) {
-        <div class="skeleton-loader" style="height: 160px"></div>
+        <div class="skeleton-loader" [style.height.px]="160"></div>
       } @else {
         <table class="table table-borderless table-sm">
-          <thead><tr><th>What happened</th><th>Block</th><th class="d-none d-md-table-cell">Time</th><th class="d-none d-sm-table-cell">Transaction</th></tr></thead>
+          <thead><tr><th>What happened</th><th class="r">Block</th><th class="d-none d-sm-table-cell">Transaction</th></tr></thead>
           <tbody>
             @for (it of items; track it.txid) {
               @let d = describe(it);
               <tr>
-                <td class="what"><div class="t"><span class="fam">{{ label[it.family] ?? it.family }}</span><a [routerLink]="['/tx', it.txid]">{{ d.title }}</a></div>
+                <td class="what">
+                  <div class="t"><span class="pill on">{{ label[it.family] ?? it.family }}</span><a [routerLink]="['/tx', it.txid]">{{ d.title }}</a></div>
                   <div class="s">@for (p of d.parts; track $index) {@if (p.link) {<a [routerLink]="p.link">{{ p.t }}</a>} @else {<span>{{ p.t }}</span>}}
-                    @if (it.error) {<span class="err"> · {{ it.error }}</span>}</div></td>
-                <td><a [routerLink]="['/block', it.height]">{{ it.height | number }}</a></td>
-                <td class="d-none d-md-table-cell nowrap"><app-time kind="since" [time]="it.time" [fastRender]="true"></app-time></td>
+                    @if (it.error) {<span class="err ms-1">· {{ it.error }}</span>}</div>
+                </td>
+                <td class="r nowrap"><a [routerLink]="['/block', it.height]">{{ it.height | number }}</a>
+                  <div class="when"><app-time kind="since" [time]="it.time" [fastRender]="true"></app-time></div></td>
                 <td class="d-none d-sm-table-cell"><a [routerLink]="['/tx', it.txid]" class="mono">{{ fx.shortId(it.txid, 8) }}</a></td>
               </tr>
-            } @empty {<tr><td colspan="4" class="empty">{{ empty }}</td></tr>}
+            } @empty {<tr><td colspan="3" class="empty">{{ empty }}</td></tr>}
           </tbody>
         </table>
-        <div class="pager">
-          @if (status && !status.complete) {
-            <span class="hint">Still reading the chain's history: blocks {{ status.low | number }} to {{ status.high | number }} so far, older activity to come.</span>
-          }
-          @if (next) {<button class="btn btn-sm btn-secondary" [disabled]="loading" (click)="more()">Older →</button>}
-        </div>
+        @if (items.length || (status && !status.complete)) {
+          <div class="pager">
+            @if (status && !status.complete) {
+              <span class="me-auto">Still reading the chain's history: blocks {{ status.low | number }} to {{ status.high | number }} so far, older activity to come.</span>
+            }
+            @if (items.length) {<span>{{ items.length | number }} {{ items.length === 1 ? 'operation' : 'operations' }}, newest first</span>}
+            @if (next) {<button class="btn btn-sm" [disabled]="loading" (click)="more()">{{ loading ? 'Loading…' : 'Older →' }}</button>}
+          </div>
+        }
       }
     </div>`,
 })

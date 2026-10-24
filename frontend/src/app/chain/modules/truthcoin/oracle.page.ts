@@ -5,7 +5,8 @@ import { SeoService } from '@app/services/seo.service';
 import { L2ApiService } from '@app/chain/l2/l2-api.service';
 import { Loaded } from '@app/chain/l2/l2.interfaces';
 import { shortId } from '@app/chain/l2/l2-common';
-import { FEATURE_PAGE_IMPORTS, featureData$ } from '@app/chain/l2/features/feature-kit';
+import { FEATURE_PAGE_IMPORTS, chipsBy, featureData$, matchAny } from '@app/chain/l2/features/feature-kit';
+import { CxColumn, CxFilter } from '@app/chain/components/chain-table/chain-table.component';
 
 // GET /api/v1/l2/feature/decisions[/:id], feature/votes (chains/L2-API.md): Truthcoin's oracle, from the node's public reads
 export interface DecisionItem {
@@ -53,21 +54,14 @@ export interface VotesView {
             }
           </div>
           <div class="box">
-            <table class="table table-borderless table-sm">
-              <thead><tr><th>Decision</th><th>Question</th><th>Type</th><th>State</th><th>Period</th><th>Markets</th></tr></thead>
-              <tbody>
-                @for (x of d.items; track x.decision_id_hex) {
-                  <tr>
-                    <td><a [routerLink]="['/decisions', x.decision_id_hex]" class="mono">{{ x.decision_id_hex }}</a></td>
-                    <td>{{ x.decision?.header }}</td>
-                    <td class="small muted">{{ x.decision?.decision_type }}</td>
-                    <td><span class="status" [class.ok]="x.state === 'Resolved'" [class.wait]="x.state === 'Voting'">{{ x.state }}</span></td>
-                    <td>{{ x.period_index }}</td>
-                    <td class="small">@for (m of x.markets; track m.market_id) {<div><a [routerLink]="['/markets', m.market_id]">{{ m.title }}</a></div>} @empty {<span class="muted">–</span>}</td>
-                  </tr>
-                } @empty {<tr><td colspan="6" class="empty">No claimed decisions.</td></tr>}
-              </tbody>
-            </table>
+            <app-chain-table [rows]="d.items" [columns]="decisionCols" [filters]="chipsBy(d.items, 'State', stateOf)" [search]="decisionMatches"
+                searchPlaceholder="Decision, question, market…" sort="period_index" empty="No claimed decisions." [trackBy]="decisionKey">
+              <ng-template cxCell="id" let-x><a [routerLink]="['/decisions', x.decision_id_hex]" class="mono">{{ x.decision_id_hex }}</a></ng-template>
+              <ng-template cxCell="header" let-x>{{ x.decision?.header }}</ng-template>
+              <ng-template cxCell="type" let-x><span class="small muted">{{ x.decision?.decision_type }}</span></ng-template>
+              <ng-template cxCell="state" let-x><span class="status" [class.ok]="x.state === 'Resolved'" [class.wait]="x.state === 'Voting'">{{ x.state }}</span></ng-template>
+              <ng-template cxCell="markets" let-x><span class="small">@for (m of x.markets; track m.market_id) {<div><a [routerLink]="['/markets', m.market_id]">{{ m.title }}</a></div>} @empty {<span class="muted">–</span>}</span></ng-template>
+            </app-chain-table>
           </div>
           <p class="note">A market's questions are oracle decisions: each is claimed in a period's slot, voted on by the Votecoin holders in its
             voting period, then resolved. "Created" counts the slots of the open periods nobody has claimed yet.</p>
@@ -78,6 +72,18 @@ export interface VotesView {
 })
 export class TruthcoinDecisionsPage implements OnInit {
   view$: Observable<Loaded<{ status: DecisionStatus; counts: Record<string, number>; items: DecisionItem[] }> | 'unavailable'>;
+  chipsBy = chipsBy;
+  stateOf = (x: DecisionItem) => x.state;
+  decisionCols: CxColumn<DecisionItem>[] = [
+    { key: 'id', label: 'Decision', sort: x => x.decision_id_hex },
+    { key: 'header', label: 'Question', sort: x => x.decision?.header },
+    { key: 'type', label: 'Type', sort: x => x.decision?.decision_type, hide: 'md' },
+    { key: 'state', label: 'State', sort: true },
+    { key: 'period_index', label: 'Period', sort: true },
+    { key: 'markets', label: 'Markets', sort: x => x.markets.length, hide: 'md' },
+  ];
+  decisionKey = (x: DecisionItem) => x.decision_id_hex;
+  decisionMatches = matchAny<DecisionItem>(x => x.decision_id_hex, x => x.decision?.header, x => x.markets.map(m => m.title).join(' '));
 
   constructor(private api: L2ApiService, private seo: SeoService) {}
 
@@ -120,19 +126,10 @@ export class TruthcoinDecisionsPage implements OnInit {
         </div>
         <h2>Votes</h2>
         <div class="box">
-          <table class="table table-borderless table-sm">
-            <thead><tr><th>Voter</th><th class="text-end">Vote</th><th>Period</th><th>Block</th></tr></thead>
-            <tbody>
-              @for (x of d.votes; track x.voter_address + x.period_id) {
-                <tr>
-                  <td><a [routerLink]="['/address', x.voter_address]" class="mono">{{ x.voter_address }}</a></td>
-                  <td class="text-end">{{ x.vote_value }}</td>
-                  <td>{{ x.period_id }}</td>
-                  <td><a [routerLink]="['/block', x.block_height]">{{ x.block_height | number }}</a></td>
-                </tr>
-              } @empty {<tr><td colspan="4" class="empty">No votes yet.</td></tr>}
-            </tbody>
-          </table>
+          <app-chain-table [rows]="d.votes" [columns]="voteCols" [search]="voteMatches" searchPlaceholder="Voter…" sort="block" empty="No votes yet.">
+            <ng-template cxCell="voter" let-x><a [routerLink]="['/address', x.voter_address]" class="mono">{{ x.voter_address }}</a></ng-template>
+            <ng-template cxCell="block" let-x><a [routerLink]="['/block', x.block_height]">{{ x.block_height | number }}</a></ng-template>
+          </app-chain-table>
         </div>
       }
     }
@@ -142,6 +139,13 @@ export class TruthcoinDecisionPage implements OnInit {
   id = '';
   title: string | null = 'Decision';
   view$: Observable<Loaded<DecisionDetail>>;
+  voteCols: CxColumn<DecisionDetail['votes'][number]>[] = [
+    { key: 'voter', label: 'Voter', sort: x => x.voter_address },
+    { key: 'vote_value', label: 'Vote', align: 'right', sort: true },
+    { key: 'period_id', label: 'Period', sort: true },
+    { key: 'block', label: 'Block', sort: x => x.block_height },
+  ];
+  voteMatches = matchAny<DecisionDetail['votes'][number]>(x => x.voter_address);
 
   constructor(private api: L2ApiService, private route: ActivatedRoute, private seo: SeoService) {}
 
@@ -190,51 +194,34 @@ export class TruthcoinDecisionPage implements OnInit {
             <div>
               <h2>Votecoin holders</h2>
               <div class="box">
-                <table class="table table-borderless table-sm">
-                  <thead><tr><th>Voter</th><th class="text-end">Votecoin</th><th class="text-end">Votes</th><th></th></tr></thead>
-                  <tbody>
-                    @for (x of d.voters; track x.address) {
-                      <tr>
-                        <td><a [routerLink]="['/address', x.address]" class="mono">{{ x.address }}</a></td>
-                        <td class="text-end">{{ x.votecoin_balance | number:'1.0-6' }}</td>
-                        <td class="text-end">{{ x.total_votes | number }}</td>
-                        <td>@if (x.is_active) {<span class="status ok">active</span>}</td>
-                      </tr>
-                    } @empty {<tr><td colspan="4" class="empty">No voters.</td></tr>}
-                  </tbody>
-                </table>
+                <app-chain-table [rows]="d.voters" [columns]="voterCols" [filters]="activeFilters" [search]="voterMatches" searchPlaceholder="Voter…"
+                    sort="votecoin" [pageSize]="10" empty="No voters.">
+                  <ng-template cxCell="address" let-x><a [routerLink]="['/address', x.address]" class="mono">{{ x.address }}</a></ng-template>
+                  <ng-template cxCell="votecoin" let-x>{{ x.votecoin_balance | number:'1.0-6' }}</ng-template>
+                  <ng-template cxCell="votes" let-x>{{ x.total_votes | number }}</ng-template>
+                  <ng-template cxCell="active" let-x>@if (x.is_active) {<span class="status ok">active</span>}</ng-template>
+                </app-chain-table>
               </div>
             </div>
             <div>
               <h2>Decision slots</h2>
               <div class="box">
-                <table class="table table-borderless table-sm">
-                  <thead><tr><th>Period</th><th class="text-end">Cheapest slot</th><th>Free slots by tier</th></tr></thead>
-                  <tbody>
-                    @for (p of d.periods; track p.period_index) {
-                      <tr>
-                        <td>{{ p.period_index }}</td>
-                        <td class="text-end"><app-l2-amount [sats]="p.cheapest_available_slot_sats"></app-l2-amount></td>
-                        <td class="mono small">{{ p.slots_available_by_tier.join(' · ') }}</td>
-                      </tr>
-                    } @empty {<tr><td colspan="3" class="empty">No open periods.</td></tr>}
-                  </tbody>
-                </table>
+                <app-chain-table [rows]="d.periods" [columns]="periodCols" sort="period_index" [asc]="true" [pageSize]="10" empty="No open periods.">
+                  <ng-template cxCell="cheapest" let-p><app-l2-amount [sats]="p.cheapest_available_slot_sats"></app-l2-amount></ng-template>
+                  <ng-template cxCell="tiers" let-p><span class="mono small">{{ p.slots_available_by_tier.join(' · ') }}</span></ng-template>
+                </app-chain-table>
               </div>
             </div>
           </div>
           @if (d.voteTxs.length) {
             <h2>Vote transactions</h2>
             <div class="box">
-              <table class="table table-borderless table-sm">
-                <tbody>
-                  @for (t of d.voteTxs; track t.txid) {
-                    <tr><td><a [routerLink]="['/block', t.height]">{{ t.height | number }}</a></td><td>{{ t.type }}</td>
-                      <td>@if (t.voter) {<a [routerLink]="['/address', t.voter]" class="mono">{{ t.voter }}</a>}</td>
-                      <td><a [routerLink]="['/tx', t.txid]" class="mono">{{ shortId(t.txid) }}</a></td></tr>
-                  }
-                </tbody>
-              </table>
+              <app-chain-table [rows]="d.voteTxs" [columns]="voteTxCols" [filters]="chipsBy(d.voteTxs, 'Type', typeOf)" [search]="voteTxMatches"
+                  searchPlaceholder="Voter, tx…" sort="height" empty="None.">
+                <ng-template cxCell="height" let-t><a [routerLink]="['/block', t.height]">{{ t.height | number }}</a></ng-template>
+                <ng-template cxCell="voter" let-t>@if (t.voter) {<a [routerLink]="['/address', t.voter]" class="mono">{{ t.voter }}</a>}</ng-template>
+                <ng-template cxCell="txid" let-t><a [routerLink]="['/tx', t.txid]" class="mono">{{ shortId(t.txid) }}</a></ng-template>
+              </app-chain-table>
             </div>
           }
         }
@@ -245,6 +232,28 @@ export class TruthcoinDecisionPage implements OnInit {
 export class TruthcoinVotesPage implements OnInit {
   view$: Observable<Loaded<VotesView> | 'unavailable'>;
   shortId = shortId;
+  chipsBy = chipsBy;
+  typeOf = (t: VotesView['voteTxs'][number]) => t.type;
+  voterCols: CxColumn<VotesView['voters'][number]>[] = [
+    { key: 'address', label: 'Voter' },
+    { key: 'votecoin', label: 'Votecoin', align: 'right', sort: x => x.votecoin_balance },
+    { key: 'votes', label: 'Votes', align: 'right', sort: x => x.total_votes },
+    { key: 'active', label: '', sort: x => x.is_active ? 1 : 0 },
+  ];
+  activeFilters: CxFilter<VotesView['voters'][number]>[] = [{ options: [{ label: 'active', test: x => x.is_active }, { label: 'inactive', test: x => !x.is_active }] }];
+  voterMatches = matchAny<VotesView['voters'][number]>(x => x.address);
+  periodCols: CxColumn<VotesView['periods'][number]>[] = [
+    { key: 'period_index', label: 'Period', sort: true },
+    { key: 'cheapest', label: 'Cheapest slot', align: 'right', sort: p => p.cheapest_available_slot_sats },
+    { key: 'tiers', label: 'Free slots by tier' },
+  ];
+  voteTxCols: CxColumn<VotesView['voteTxs'][number]>[] = [
+    { key: 'height', label: 'Block', sort: true },
+    { key: 'type', label: 'Type', sort: true },
+    { key: 'voter', label: 'Voter', sort: true },
+    { key: 'txid', label: 'Transaction' },
+  ];
+  voteTxMatches = matchAny<VotesView['voteTxs'][number]>(t => t.voter, t => t.txid);
 
   constructor(private api: L2ApiService, private seo: SeoService) {}
 

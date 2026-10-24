@@ -1664,3 +1664,10 @@ form label:not(.form-check-label):not(.btn) {
 .ngb-dp-header, .ngb-dp-week {
   background-color: var(--bg) !important;
 }
+// Chains Explorer: themed scrollbars everywhere (no system defaults): thin, a muted thumb on a clear track
+* { scrollbar-width: thin; scrollbar-color: #ffffff2e transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #ffffff26; border-radius: 99px; border: 3px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: #ffffff45; background-clip: padding-box; border: 3px solid transparent; }
+::-webkit-scrollbar-corner { background: transparent; }

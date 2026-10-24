@@ -7,8 +7,9 @@ import { FreebankApiService, FbLoaded, fbLoaded } from '../freebank-api.service'
 import { FreebankLiveService } from '../freebank-live.service';
 import { CREDIT_TABS, FB_PAGE_IMPORTS } from '../freebank-kit';
 import { FbActivityComponent } from './activity.pages';
-import { House, HouseMember, LoanBook, TokenClaims } from '../freebank.interfaces';
+import { House, HouseMember, HousePartner, LoanBook, TokenClaims } from '../freebank.interfaces';
 import * as F from '../freebank-format';
+import { CxColumn, CxFilter } from '@app/chain/components/chain-table/chain-table.component';
 
 const STYLES = ['../../../components/module-page.scss', '../../../l2/pages/l2-page.scss', '../freebank-page.scss'];
 const MEMBERS_PAGE = 100;
@@ -46,31 +47,23 @@ function deadline(h: House, tip: number | null): { label: string; late: boolean 
           <div class="kpi"><div class="l">Loan books</div><div class="v">{{ fx.sats(d.book) }} <span class="muted">ECX</span></div><div class="s">face of the bills houses hold</div></div>
         </div>
         <div class="box">
-          <table class="table table-borderless table-sm">
-            <thead><tr><th>House</th><th>Type</th><th>Status</th><th class="r">Escrow</th><th class="r">Reserves attested</th><th class="r">Ratio</th>
-              <th class="r">Minted</th><th class="r d-none d-md-table-cell">Deposits</th><th class="r d-none d-md-table-cell">Loan book</th>
-              <th class="d-none d-lg-table-cell">Registered</th><th class="d-none d-lg-table-cell">Next attestation</th></tr></thead>
-            <tbody>
-              @for (h of d.houses; track h.id) {
-                <tr>
-                  <td class="nowrap"><a [routerLink]="['/house', h.id]">#{{ h.id }}</a><span class="muted ms-2">{{ h.classid }}</span></td>
-                  <td class="nowrap">{{ fx.houseType(h.type) }}@if (h.type === 'members') {<span class="muted"> · {{ h.member_records ?? 0 }}</span>}</td>
-                  <td class="nowrap"><span class="pill" [ngClass]="fx.statusTone(h.effective_status)" title="Effective status at the tip">{{ fx.houseStatus(h.effective_status) }}</span>
-                    @if (h.status !== h.effective_status) {<span class="pill ms-1" title="Stored status">{{ fx.houseStatus(h.status) }}</span>}
-                    @if (h.closed) {<span class="pill bad ms-1">closed</span>}</td>
-                  <td class="r nowrap">{{ fx.ecx(h.activeescrow, 4) }}</td>
-                  <td class="r nowrap">{{ fx.ecx(h.lastattestreserves, 4) }}<div class="hint">at <a [routerLink]="['/block', h.lastattestheight]">{{ h.lastattestheight | number }}</a></div></td>
-                  <td class="r nowrap" [class.neg]="h.mintedunits > 0 && h.attestedratiobps < 10000">{{ h.mintedunits ? fx.bps(h.attestedratiobps) : '–' }}</td>
-                  <td class="r nowrap">{{ fx.num(h.mintedunits) }}</td>
-                  <td class="r nowrap d-none d-md-table-cell">{{ fx.num(h.depositunits) }}</td>
-                  <td class="r nowrap d-none d-md-table-cell">@if (h.loanbookface) {<a [routerLink]="['/loanbook']" [queryParams]="{ house: h.id }">{{ fx.sats(h.loanbookface) }}</a>} @else {<span class="muted">–</span>}</td>
-                  <td class="d-none d-lg-table-cell"><a [routerLink]="['/block', h.registeredheight]">{{ h.registeredheight | number }}</a></td>
-                  <td class="d-none d-lg-table-cell nowrap"><a [routerLink]="['/block', h.attest_deadline]">{{ h.attest_deadline | number }}</a>
-                    @if (dl(h, d.tip); as t) {@if (t.label) {<div class="hint" [class.neg]="t.late">{{ t.label }}</div>}}</td>
-                </tr>
-              } @empty {<tr><td colspan="11" class="empty">No discount house on the chain yet.</td></tr>}
-            </tbody>
-          </table>
+          <app-chain-table [rows]="d.houses" [columns]="cols" [filters]="filters" [search]="matches" searchPlaceholder="House, class, hash…"
+            sort="id" [asc]="true" empty="No discount house on the chain yet." [trackBy]="trackId">
+            <ng-template cxCell="id" let-h><a [routerLink]="['/house', h.id]">#{{ h.id }}</a><span class="muted ms-2">{{ h.classid }}</span></ng-template>
+            <ng-template cxCell="type" let-h>{{ fx.houseType(h.type) }}@if (h.type === 'members') {<span class="muted ms-1">· {{ h.member_records ?? 0 }}</span>}</ng-template>
+            <ng-template cxCell="status" let-h><span class="pill" [ngClass]="fx.statusTone(h.effective_status)" title="Effective status at the tip">{{ fx.houseStatus(h.effective_status) }}</span>
+              @if (h.status !== h.effective_status) {<span class="pill ms-1" title="Stored status">{{ fx.houseStatus(h.status) }}</span>}
+              @if (h.closed) {<span class="pill bad ms-1">closed</span>}</ng-template>
+            <ng-template cxCell="escrow" let-h>{{ fx.ecx(h.activeescrow, 4) }}</ng-template>
+            <ng-template cxCell="reserves" let-h>{{ fx.ecx(h.lastattestreserves, 4) }}<div class="hint">at <a [routerLink]="['/block', h.lastattestheight]">{{ h.lastattestheight | number }}</a></div></ng-template>
+            <ng-template cxCell="ratio" let-h><span [class.neg]="h.mintedunits > 0 && h.attestedratiobps < 10000">{{ h.mintedunits ? fx.bps(h.attestedratiobps) : '–' }}</span></ng-template>
+            <ng-template cxCell="minted" let-h>{{ fx.num(h.mintedunits) }}</ng-template>
+            <ng-template cxCell="deposits" let-h>{{ fx.num(h.depositunits) }}</ng-template>
+            <ng-template cxCell="book" let-h>@if (h.loanbookface) {<a [routerLink]="['/loanbook']" [queryParams]="{ house: h.id }">{{ fx.sats(h.loanbookface) }}</a>} @else {<span class="muted">–</span>}</ng-template>
+            <ng-template cxCell="registered" let-h><a [routerLink]="['/block', h.registeredheight]">{{ h.registeredheight | number }}</a></ng-template>
+            <ng-template cxCell="deadline" let-h><a [routerLink]="['/block', h.attest_deadline]">{{ h.attest_deadline | number }}</a>
+              @if (dl(h, d.tip); as t) {@if (t.label) {<div class="hint" [class.neg]="t.late">{{ t.label }}</div>}}</ng-template>
+          </app-chain-table>
         </div>
         <p class="note mt-2">Escrow and reserves in ECX; notes, deposits in note units (one unit redeems for one sat at its house); loan books in ECX of face.</p>
       }
@@ -81,6 +74,25 @@ export class FreebankHousesPage implements OnInit {
   tabs = CREDIT_TABS;
   fx = F;
   dl = deadline;
+  trackId = (h: House) => h.id;
+  matches = (h: House, q: string) => String(h.id) === q.replace(/^#/, '') || [h.classid, h.househash].some(x => String(x ?? '').toLowerCase().includes(q));
+  cols: CxColumn<House>[] = [
+    { key: 'id', label: 'House', sort: h => h.id, nowrap: true },
+    { key: 'type', label: 'Type', sort: h => F.houseType(h.type), nowrap: true },
+    { key: 'status', label: 'Status', sort: h => F.houseStatus(h.effective_status), nowrap: true },
+    { key: 'escrow', label: 'Escrow', align: 'right', sort: h => Number(h.activeescrow) || 0, nowrap: true },
+    { key: 'reserves', label: 'Reserves attested', align: 'right', sort: h => Number(h.lastattestreserves) || 0, nowrap: true },
+    { key: 'ratio', label: 'Ratio', align: 'right', sort: h => h.mintedunits ? h.attestedratiobps : null, nowrap: true },
+    { key: 'minted', label: 'Minted', align: 'right', sort: h => h.mintedunits, nowrap: true },
+    { key: 'deposits', label: 'Deposits', align: 'right', sort: h => h.depositunits, hide: 'md', nowrap: true },
+    { key: 'book', label: 'Loan book', align: 'right', sort: h => h.loanbookface, hide: 'md', nowrap: true },
+    { key: 'registered', label: 'Registered', sort: h => h.registeredheight, hide: 'lg' },
+    { key: 'deadline', label: 'Next attestation', sort: h => h.attest_deadline, hide: 'lg', nowrap: true },
+  ];
+  filters: CxFilter<House>[] = [
+    { label: 'Status', options: Object.entries(F.HOUSE_STATUS).map(([k, label]) => ({ label, test: (h: House) => h.effective_status === k })) },
+    { label: 'Type', options: Object.entries(F.HOUSE_TYPE).map(([k, label]) => ({ label, test: (h: House) => h.type === k })) },
+  ];
   view$: Observable<FbLoaded<{ houses: House[]; tip: number | null; open: number; escrow: number; minted: number; book: number }>>;
 
   constructor(private api: FreebankApiService, private live: FreebankLiveService, private seo: SeoService) {}
@@ -148,12 +160,12 @@ export class FreebankHousesPage implements OnInit {
           </div>
           <div class="card-box">
             <h3>Partners <span class="hint">{{ h.partners?.length ?? 0 }}</span></h3>
-            <table class="table table-borderless table-sm"><thead><tr><th>#</th><th>Key</th><th class="r">Pledge</th><th>Status</th></tr></thead><tbody>
-              @for (p of h.partners; track p.index) {
-                <tr><td class="muted">{{ p.index }}</td><td class="mono" [title]="p.pubkey">{{ fx.shortId(p.pubkey, 8) }}</td><td class="r nowrap">{{ fx.ecx(p.pledge, 4) }} ECX</td>
-                  <td><span class="pill" [class.ok]="p.status === 'active'">{{ p.status }}</span>@if (p.tailunlockheight) {<span class="hint"> until {{ p.tailunlockheight | number }}</span>}</td></tr>
-              } @empty {<tr><td colspan="4" class="empty">No partner.</td></tr>}
-            </tbody></table>
+            <app-chain-table [rows]="h.partners" [columns]="partnerCols" sort="index" [asc]="true" [pageSize]="10" empty="No partner." [trackBy]="trackIndex">
+              <ng-template cxCell="index" let-p><span class="muted">{{ p.index }}</span></ng-template>
+              <ng-template cxCell="pubkey" let-p><span class="mono" [title]="p.pubkey">{{ fx.shortId(p.pubkey, 8) }}</span></ng-template>
+              <ng-template cxCell="pledge" let-p>{{ fx.ecx(p.pledge, 4) }} ECX</ng-template>
+              <ng-template cxCell="status" let-p><span class="pill" [class.ok]="p.status === 'active'">{{ p.status }}</span>@if (p.tailunlockheight) {<span class="hint ms-1">until {{ p.tailunlockheight | number }}</span>}</ng-template>
+            </app-chain-table>
           </div>
         </div>
 
@@ -171,10 +183,13 @@ export class FreebankHousesPage implements OnInit {
                       <td><span class="pill" [class.ok]="x.active">{{ x.active ? 'yes' : 'no' }}</span></td></tr>
                   } @empty {<tr><td colspan="4" class="empty">No member listed.</td></tr>}
                 </tbody></table>
-                <div class="pager">
-                  @if (memberStarts.length > 1) {<button class="btn btn-sm btn-secondary" (click)="membersFirst()">First</button>}
-                  @if (ms.length >= membersPage) {<button class="btn btn-sm btn-secondary" (click)="membersNext(ms[ms.length - 1].address)">Next →</button>}
-                </div>
+                @if (memberStarts.length > 1 || ms.length >= membersPage) {
+                  <div class="pager">
+                    <span>page {{ memberStarts.length }} · {{ membersPage }} a page</span>
+                    @if (memberStarts.length > 1) {<button class="btn btn-sm" (click)="membersFirst()">First</button>}
+                    @if (ms.length >= membersPage) {<button class="btn btn-sm" (click)="membersNext(ms[ms.length - 1].address)">Next →</button>}
+                  </div>
+                }
               }
             }
           </div>
@@ -186,20 +201,20 @@ export class FreebankHousesPage implements OnInit {
             @if (claims$ | async; as c) {
               <app-fb-state [state]="c" what="The claims" [height]="120"></app-fb-state>
               @if (c.data; as tc) {
-                <div class="d-flex flex-wrap gap-4 mb-2">
-                  <div><div class="hint">window</div><b>{{ tc.insolventsince ? (tc.insolventsince | number) + ' – ' + (tc.windowend | number) : 'not insolvent' }}</b></div>
-                  <div><div class="hint">claimed</div><b>{{ fx.num(tc.claimed) }}</b> <span class="muted">units in {{ tc.claims | number }} claims</span></div>
-                  <div><div class="hint">collected</div><b>{{ tc.collected | number }}</b></div>
-                  <div><div class="hint">paid</div><b>{{ fx.sats(tc.paid) }}</b> <span class="muted">ECX</span></div>
-                  <div><div class="hint">written off</div><b>{{ fx.num(tc.writeoff) }}</b></div>
+                <div class="kpis">
+                  <div class="kpi"><div class="l">Claim window</div><div class="v">{{ tc.insolventsince ? (tc.insolventsince | number) + ' – ' + (tc.windowend | number) : 'not insolvent' }}</div><div class="s">blocks</div></div>
+                  <div class="kpi"><div class="l">Claimed</div><div class="v">{{ fx.num(tc.claimed) }}</div><div class="s">units in {{ tc.claims | number }} claims</div></div>
+                  <div class="kpi"><div class="l">Collected</div><div class="v">{{ tc.collected | number }}</div><div class="s">claims</div></div>
+                  <div class="kpi"><div class="l">Paid</div><div class="v">{{ fx.sats(tc.paid) }} <span class="muted">ECX</span></div><div class="s">to the claimants</div></div>
+                  <div class="kpi"><div class="l">Written off</div><div class="v">{{ fx.num(tc.writeoff) }}</div><div class="s">units</div></div>
                 </div>
-                <table class="table table-borderless table-sm"><thead><tr><th>Y</th><th class="r">Amount</th><th class="r">Fee</th><th>Posted</th><th>Collected</th></tr></thead><tbody>
-                  @for (x of tc.list; track x.y) {
-                    <tr><td class="mono" [title]="x.y">{{ fx.shortId(x.y, 8) }}</td><td class="r">{{ fx.num(x.amount) }}</td><td class="r">{{ fx.bps(x.feebps) }}</td>
-                      <td><a [routerLink]="['/block', x.height]">{{ x.height | number }}</a></td>
-                      <td>@if (x.collectheight) {<a [routerLink]="['/block', x.collectheight]">{{ x.collectheight | number }}</a>} @else {<span class="muted">–</span>}</td></tr>
-                  } @empty {<tr><td colspan="5" class="empty">No claim posted.</td></tr>}
-                </tbody></table>
+                <app-chain-table [rows]="tc.list" [columns]="claimCols" [search]="claimMatches" searchPlaceholder="Token key…" sort="height" empty="No claim posted." [trackBy]="trackY">
+                  <ng-template cxCell="y" let-x><span class="mono" [title]="x.y">{{ fx.shortId(x.y, 8) }}</span></ng-template>
+                  <ng-template cxCell="amount" let-x>{{ fx.num(x.amount) }}</ng-template>
+                  <ng-template cxCell="feebps" let-x>{{ fx.bps(x.feebps) }}</ng-template>
+                  <ng-template cxCell="height" let-x><a [routerLink]="['/block', x.height]">{{ x.height | number }}</a></ng-template>
+                  <ng-template cxCell="collectheight" let-x>@if (x.collectheight) {<a [routerLink]="['/block', x.collectheight]">{{ x.collectheight | number }}</a>} @else {<span class="muted">–</span>}</ng-template>
+                </app-chain-table>
               }
             }
           </div>
@@ -210,13 +225,13 @@ export class FreebankHousesPage implements OnInit {
           @if (book$ | async; as b) {
             <app-fb-state [state]="b" what="The loan book" [height]="120"></app-fb-state>
             @if (b.data; as lb) {
-              <div class="d-flex flex-wrap gap-4 mb-2">
-                <div><div class="hint">bills</div><b>{{ lb.count | number }}</b></div>
-                <div><div class="hint">face</div><b>{{ fx.sats(lb.face_total) }}</b> <span class="muted">ECX</span></div>
-                @if (lb.wtd_avg_maturity) {<div><div class="hint">average maturity</div><b>block {{ lb.wtd_avg_maturity | number }}</b></div>}
-                @if (lb.face_matches === false) {<div><div class="hint">state</div><b class="neg">the house's own count says {{ fx.sats(lb.recorded_face) }} ECX</b></div>}
+              <div class="kpis">
+                <div class="kpi"><div class="l">Bills</div><div class="v">{{ lb.count | number }}</div><div class="s">held by this house</div></div>
+                <div class="kpi"><div class="l">Face</div><div class="v">{{ fx.sats(lb.face_total) }} <span class="muted">ECX</span></div><div class="s">owed to it at maturity</div></div>
+                @if (lb.wtd_avg_maturity) {<div class="kpi"><div class="l">Average maturity</div><div class="v">{{ lb.wtd_avg_maturity | number }}</div><div class="s">block, weighted by face</div></div>}
+                @if (lb.face_matches === false) {<div class="kpi"><div class="l">State</div><div class="v neg">{{ fx.sats(lb.recorded_face) }} <span class="muted">ECX</span></div><div class="s">the house's own count, not the bills'</div></div>}
               </div>
-              <app-fb-bills [bills]="lb.bills" [tip]="(tip$ | async) ?? null" empty="This house holds no bill."></app-fb-bills>
+              <app-fb-bills [bills]="lb.bills" [tip]="(tip$ | async) ?? null" sort="maturity" [asc]="true" empty="This house holds no bill."></app-fb-bills>
             }
           }
         </div>
@@ -233,6 +248,22 @@ export class FreebankHousePage implements OnInit {
   dl = deadline;
   id = '';
   membersPage = MEMBERS_PAGE;
+  trackIndex = (p: HousePartner) => p.index;
+  trackY = (x: TokenClaims['list'][number]) => x.y;
+  claimMatches = (x: TokenClaims['list'][number], q: string) => x.y.toLowerCase().includes(q) || (x.payout ?? '').toLowerCase().includes(q);
+  partnerCols: CxColumn<HousePartner>[] = [
+    { key: 'index', label: '#', sort: p => p.index },
+    { key: 'pubkey', label: 'Key' },
+    { key: 'pledge', label: 'Pledge', align: 'right', sort: p => Number(p.pledge) || 0, nowrap: true },
+    { key: 'status', label: 'Status', sort: true },
+  ];
+  claimCols: CxColumn<TokenClaims['list'][number]>[] = [
+    { key: 'y', label: 'Y' },
+    { key: 'amount', label: 'Amount', align: 'right', sort: x => x.amount },
+    { key: 'feebps', label: 'Fee', align: 'right', sort: x => x.feebps },
+    { key: 'height', label: 'Posted', sort: x => x.height },
+    { key: 'collectheight', label: 'Collected', sort: x => x.collectheight || null },
+  ];
   /** the start address of each members page seen (the first: none) */
   memberStarts: (string | null)[] = [null];
   private membersStart$ = new BehaviorSubject<string | null>(null);

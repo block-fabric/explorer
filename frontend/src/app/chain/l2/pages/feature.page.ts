@@ -7,6 +7,7 @@ import { L2ApiService, loaded } from '@app/chain/l2/l2-api.service';
 import { Loaded } from '@app/chain/l2/l2.interfaces';
 import { L2_PAGE_IMPORTS, humanize, shortId } from '@app/chain/l2/l2-common';
 import { L2FeaturePage, L2_FEATURE_PAGES, featurePage } from '@app/chain/l2/l2-nav';
+import { CxColumn } from '@app/chain/components/chain-table/chain-table.component';
 
 /**
  * The chain features' pages (/names, /assets, /auctions, /pools, /markets, /votes, /shielded, /swaps and their
@@ -31,6 +32,8 @@ const MAX_COLUMNS = 7;
 export interface FeatureItem {
   id: string | null;
   fields: Record<string, any>;
+  /** its place in the node's list, from 1 */
+  n?: number;
 }
 
 function isObject(v: any): boolean {
@@ -52,6 +55,11 @@ export function normalizeItem(raw: any): FeatureItem {
     return { id: k ? String(raw[k]) : null, fields: raw };
   }
   return { id: null, fields: { value: raw } };
+}
+
+/** a field's value to sort by: numbers and text as they are, anything else not sortable */
+function scalar(v: any): number | string | null {
+  return typeof v === 'number' || typeof v === 'string' ? v : typeof v === 'boolean' ? Number(v) : null;
 }
 
 function columnsOf(items: FeatureItem[], page: string, idKey: string | null): string[] {
@@ -78,6 +86,8 @@ interface FeatureView {
   /** a list ({ items }) */
   items: FeatureItem[] | null;
   columns: string[];
+  /** the table's columns: the id, then the fields (keys 'f:<field>') */
+  cols: CxColumn<FeatureItem>[];
   /** fields left out of the table */
   hidden: number;
   /** not a list: shown as is */
@@ -91,8 +101,7 @@ interface FeatureView {
   styleUrls: ['../../components/module-page.scss', './l2-page.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [`.tabs a.btn-tab { padding: 6px 12px; color: var(--transparent-fg); border-bottom: 2px solid transparent; text-decoration: none; }
-    .tabs a.btn-tab.on { color: var(--fg); border-bottom-color: var(--chain-accent, var(--title-fg)); }
-    .filter { max-width: 320px; margin-bottom: 10px; }`],
+    .tabs a.btn-tab.on { color: var(--fg); border-bottom-color: var(--chain-accent, var(--title-fg)); }`],
   template: `
   <div class="container-xl mp">
     <h1><app-svg-images name="chain-mark" [fill]="profile.id" width="28" height="28" class="cmark"></app-svg-images> {{ page.title }}</h1>
@@ -110,26 +119,18 @@ interface FeatureView {
         <app-l2-state [state]="v" [what]="page.title" [height]="400"></app-l2-state>
         @if (v.data; as f) {
           @if (f.items) {
-            <input type="search" class="form-control form-control-sm filter" placeholder="Filter" [value]="filter" (input)="filter = $any($event.target).value">
             <div class="box">
-              <table class="table table-borderless table-sm">
-                <thead><tr><th>{{ page.item }}</th>@for (c of f.columns; track c) {<th>{{ label(c) }}</th>}</tr></thead>
-                <tbody>
-                  @for (it of filtered(f.items); track $index) {
-                    <tr>
-                      <td>
-                        @if (it.id !== null && page.detail) {<a [routerLink]="['/' + page.path, it.id]" class="mono" [title]="it.id">{{ shortId(it.id, 10) }}</a>}
-                        @else if (it.id !== null) {<span class="mono" [title]="it.id">{{ shortId(it.id, 10) }}</span>}
-                        @else {<span class="muted">#{{ $index + 1 }}</span>}
-                      </td>
-                      @for (c of f.columns; track c) {<td><app-l2-value [value]="it.fields[c]" [depth]="3"></app-l2-value></td>}
-                    </tr>
-                  } @empty {
-                    <tr><td [attr.colspan]="f.columns.length + 1" class="empty">{{ filter ? 'Nothing matches the filter.' : 'None yet.' }}</td></tr>
-                  }
-                </tbody>
-              </table>
-              @if (f.hidden && page.detail) {<div class="muted small">More fields on each {{ page.item.toLowerCase() }}'s page.</div>}
+              <app-chain-table [rows]="f.items" [columns]="f.cols" [search]="matches" [searchPlaceholder]="page.item + ', any field…'" empty="None yet.">
+                <ng-template cxCell="id" let-it>
+                  @if (it.id !== null && page.detail) {<a [routerLink]="['/' + page.path, it.id]" class="mono" [title]="it.id">{{ shortId(it.id, 10) }}</a>}
+                  @else if (it.id !== null) {<span class="mono" [title]="it.id">{{ shortId(it.id, 10) }}</span>}
+                  @else {<span class="muted">#{{ it.n }}</span>}
+                </ng-template>
+                @for (c of f.columns; track c) {
+                  <ng-template [cxCell]="'f:' + c" let-it><app-l2-value [value]="it.fields[c]" [depth]="3"></app-l2-value></ng-template>
+                }
+              </app-chain-table>
+              @if (f.hidden && page.detail) {<div class="muted small mt-2">More fields on each {{ page.item.toLowerCase() }}'s page.</div>}
             </div>
             <div class="muted small mt-1">{{ f.items.length | number }} {{ page.title.toLowerCase() }}</div>
           } @else {
@@ -144,7 +145,6 @@ export class L2FeaturePageComponent implements OnInit {
   profile = PROFILE;
   page: L2FeaturePage;
   siblings: L2FeaturePage[] = [];
-  filter = '';
   view$: Observable<Loaded<FeatureView> | 'unavailable'>;
   shortId = shortId;
   label = humanize;
@@ -164,27 +164,25 @@ export class L2FeaturePageComponent implements OnInit {
 
   toView(r: any): FeatureView {
     if (r && Array.isArray(r.items)) {
-      const items = r.items.map(normalizeItem);
+      const items: FeatureItem[] = r.items.map((x: any, i: number) => ({ ...normalizeItem(x), n: i + 1 }));
       const all = new Set(items.flatMap((it: FeatureItem) => Object.keys(it.fields)));
       const columns = columnsOf(items, this.page.path, null);
-      return { items, columns, hidden: Math.max(0, all.size - columns.length), object: null };
+      const cols: CxColumn<FeatureItem>[] = [
+        { key: 'id', label: this.page.item, sort: it => it.id ?? it.n },
+        ...columns.map(c => ({ key: 'f:' + c, label: humanize(c), sort: (it: FeatureItem) => scalar(it.fields[c]) })),
+      ];
+      return { items, columns, cols, hidden: Math.max(0, all.size - columns.length), object: null };
     }
-    return { items: null, columns: [], hidden: 0, object: r };
+    return { items: null, columns: [], cols: [], hidden: 0, object: r };
   }
 
-  filtered(items: FeatureItem[]): FeatureItem[] {
-    const q = this.filter.trim().toLowerCase();
-    if (!q) {
-      return items;
+  matches = (it: FeatureItem, q: string): boolean => {
+    try {
+      return (String(it.id ?? '') + JSON.stringify(it.fields)).toLowerCase().includes(q);
+    } catch (e) {
+      return false;
     }
-    return items.filter(it => {
-      try {
-        return (String(it.id ?? '') + JSON.stringify(it.fields)).toLowerCase().includes(q);
-      } catch (e) {
-        return false;
-      }
-    });
-  }
+  };
 }
 
 /** /<page>/:id: one name, asset, market or swap, as the node gives it */
@@ -197,7 +195,7 @@ export class L2FeaturePageComponent implements OnInit {
   template: `
   <div class="container-xl mp">
     <h1><app-svg-images name="chain-mark" [fill]="profile.id" width="28" height="28" class="cmark"></app-svg-images> {{ page.item }}</h1>
-    <div class="sub"><span class="id">{{ id }}</span> <app-clipboard [text]="id"></app-clipboard> · <a [routerLink]="['/' + page.path]">all {{ page.title.toLowerCase() }}</a></div>
+    <div class="sub"><span class="id">{{ id }}</span><app-clipboard class="ms-1" [text]="id"></app-clipboard> · <a [routerLink]="['/' + page.path]">all {{ page.title.toLowerCase() }}</a></div>
     @if (page.note) {<p class="note">{{ page.note }}</p>}
     @if (view$ | async; as v) {
       <app-l2-state [state]="v" [what]="page.item" [id]="id" [height]="300"></app-l2-state>

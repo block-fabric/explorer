@@ -64,8 +64,8 @@
     }
 
     <div class="grid2 mt-3">
-      <div class="box">
-        <h2 class="mt-0">Sidechain wealth and eCash escrow</h2>
+      <div class="card-box">
+        <h3>Sidechain wealth and eCash escrow</h3>
         <table class="kv">
           <tbody>
             <tr><th>Held on {{ profile.name }}</th><td><app-l2-amount [sats]="d.summary.wealth"></app-l2-amount></td></tr>
@@ -76,7 +76,7 @@
               } @else {<span class="muted">unknown</span>}
             </td></tr>
             @if (d.summary.escrow; as e) {
-              <tr><th>Difference</th><td><app-l2-amount [sats]="e.amount - d.summary.wealth" [signed]="true"></app-l2-amount> <span class="muted">(escrow − wealth)</span></td></tr>
+              <tr><th>Difference</th><td><app-l2-amount [sats]="e.amount - d.summary.wealth" [signed]="true"></app-l2-amount><span class="muted ms-1">(escrow − wealth)</span></td></tr>
             }
           </tbody>
         </table>
@@ -84,8 +84,8 @@
           <div class="bar mt-2" [title]="(share(d.summary) * 100 | number:'1.2-2') + '% of the escrow is on the sidechain'"><div class="fill" [style.width.%]="share(d.summary) * 100"></div></div>
         }
       </div>
-      <div class="box">
-        <h2 class="mt-0">Pending withdrawal bundle</h2>
+      <div class="card-box">
+        <h3>Pending withdrawal bundle</h3>
         @if (d.summary.pendingBundle; as b) {
           <table class="kv mb-2">
             <tbody>
@@ -93,16 +93,12 @@
               <tr><th>Total</th><td><app-l2-amount [sats]="b.total"></app-l2-amount> · {{ b.payouts.length }} payouts</td></tr>
             </tbody>
           </table>
-          <table class="table table-borderless table-sm">
-            <thead><tr><th>eCash address</th><th class="text-end">Amount</th><th class="text-end">Fee</th></tr></thead>
-            <tbody>
-              @for (p of b.payouts.slice(0, 8); track $index) {
-                <tr><td><app-l2-main-link kind="address" [id]="p.address" [short]="true"></app-l2-main-link></td>
-                  <td class="text-end"><app-l2-amount [sats]="p.amount"></app-l2-amount></td><td class="text-end"><app-l2-amount [sats]="p.fee"></app-l2-amount></td></tr>
-              }
-            </tbody>
-          </table>
-          @if (b.payouts.length > 8) {<div class="muted small">and {{ b.payouts.length - 8 }} more</div>}
+          <app-chain-table [rows]="b.payouts" [columns]="payoutCols" [search]="payoutMatches" searchPlaceholder="eCash address…"
+              sort="amount" [pageSize]="10" empty="No payouts.">
+            <ng-template cxCell="address" let-p><app-l2-main-link kind="address" [id]="p.address" [short]="true"></app-l2-main-link></ng-template>
+            <ng-template cxCell="amount" let-p><app-l2-amount [sats]="p.amount"></app-l2-amount></ng-template>
+            <ng-template cxCell="fee" let-p><app-l2-amount [sats]="p.fee"></app-l2-amount></ng-template>
+          </app-chain-table>
         } @else {
           <div class="empty">No withdrawal bundle is pending.</div>
         }
@@ -111,67 +107,40 @@
 
     <h2>Latest blocks <a class="small ms-2" [routerLink]="['/blocks']">all blocks</a></h2>
     <div class="box">
-      <table class="table table-borderless table-sm">
-        <thead><tr><th>Height</th><th>Hash</th><th>Time</th><th>eCash block (BMM)</th><th class="text-end">Bid</th><th class="text-end">Txs</th><th class="text-end">Deposits</th><th class="text-end">Volume</th><th class="text-end">Fees</th></tr></thead>
-        <tbody>
-          @for (b of d.blocks; track b.hash) {
-            <tr>
-              <td><a [routerLink]="['/block', b.hash]">{{ b.height | number }}</a></td>
-              <td><a [routerLink]="['/block', b.hash]" class="mono" [title]="b.hash">{{ shortId(b.hash) }}</a></td>
-              <td>@if (b.time) {<app-time kind="since" [time]="b.time" [fastRender]="true"></app-time>} @else {<span class="muted">–</span>}</td>
-              <td>@if (b.mainBlock; as m) {<app-l2-main-link kind="block" [id]="m.hash" [text]="'' + m.height"></app-l2-main-link>} @else {<span class="muted">–</span>}</td>
-              <td class="text-end">@if (b.bmm?.bid !== null && b.bmm?.bid !== undefined) { {{ b.bmm?.bid | number }} <span class="muted">sats</span>} @else {<span class="muted">–</span>}</td>
-              <td class="text-end">{{ b.txCount }}</td>
-              <td class="text-end">{{ b.deposits }}</td>
-              <td class="text-end"><app-l2-amount [sats]="b.volume"></app-l2-amount></td>
-              <td class="text-end"><app-l2-amount [sats]="b.fees"></app-l2-amount></td>
-            </tr>
-          } @empty {
-            <tr><td colspan="9" class="empty">No blocks indexed yet.</td></tr>
-          }
-        </tbody>
-      </table>
+      <app-chain-table [rows]="d.blocks" [columns]="blockCols" sort="height" [pageSize]="10" empty="No blocks indexed yet." [trackBy]="blockKey">
+        <ng-template cxCell="height" let-b><a [routerLink]="['/block', b.hash]">{{ b.height | number }}</a></ng-template>
+        <ng-template cxCell="hash" let-b><a [routerLink]="['/block', b.hash]" class="mono" [title]="b.hash">{{ shortId(b.hash) }}</a></ng-template>
+        <ng-template cxCell="time" let-b>@if (b.time) {<app-time kind="since" [time]="b.time" [fastRender]="true"></app-time>} @else {<span class="muted">–</span>}</ng-template>
+        <ng-template cxCell="main" let-b>@if (b.mainBlock; as m) {<app-l2-main-link kind="block" [id]="m.hash" [text]="'' + m.height"></app-l2-main-link>} @else {<span class="muted">–</span>}</ng-template>
+        <ng-template cxCell="bid" let-b>@if (b.bmm?.bid !== null && b.bmm?.bid !== undefined) {<span>{{ b.bmm?.bid | number }}</span><span class="muted ms-1">sats</span>} @else {<span class="muted">–</span>}</ng-template>
+        <ng-template cxCell="volume" let-b><app-l2-amount [sats]="b.volume"></app-l2-amount></ng-template>
+        <ng-template cxCell="fees" let-b><app-l2-amount [sats]="b.fees"></app-l2-amount></ng-template>
+      </app-chain-table>
     </div>
 
     <div class="grid2">
       <div>
         <h2>Latest deposits <a class="small ms-2" [routerLink]="['/deposits']">all</a></h2>
         <div class="box">
-          <table class="table table-borderless table-sm">
-            <thead><tr><th>Block</th><th>eCash tx</th><th>To</th><th class="text-end">Amount</th></tr></thead>
-            <tbody>
-              @for (x of d.deposits; track $index) {
-                <tr>
-                  <td><a [routerLink]="['/block', x.hash]">{{ x.height | number }}</a></td>
-                  <td><app-l2-main-link kind="tx" [id]="x.mainTxid" [short]="true"></app-l2-main-link></td>
-                  <td>@if (x.burned) {<span class="pill">burned</span>} @else {<a [routerLink]="['/address', x.address]" class="mono">{{ shortId(x.address, 6) }}</a>}</td>
-                  <td class="text-end"><app-l2-amount [sats]="x.amount"></app-l2-amount></td>
-                </tr>
-              } @empty {
-                <tr><td colspan="4" class="empty">No deposits yet.</td></tr>
-              }
-            </tbody>
-          </table>
+          <app-chain-table [rows]="d.deposits" [columns]="depositCols" [search]="depositMatches" searchPlaceholder="Address, eCash tx…"
+              sort="height" [pageSize]="10" empty="No deposits yet.">
+            <ng-template cxCell="height" let-x><a [routerLink]="['/block', x.hash]">{{ x.height | number }}</a></ng-template>
+            <ng-template cxCell="mainTxid" let-x><app-l2-main-link kind="tx" [id]="x.mainTxid" [short]="true"></app-l2-main-link></ng-template>
+            <ng-template cxCell="address" let-x>@if (x.burned) {<span class="pill">burned</span>} @else {<a [routerLink]="['/address', x.address]" class="mono">{{ shortId(x.address, 6) }}</a>}</ng-template>
+            <ng-template cxCell="amount" let-x><app-l2-amount [sats]="x.amount"></app-l2-amount></ng-template>
+          </app-chain-table>
         </div>
       </div>
       <div>
         <h2>Latest withdrawals <a class="small ms-2" [routerLink]="['/withdrawals']">all</a></h2>
         <div class="box">
-          <table class="table table-borderless table-sm">
-            <thead><tr><th>Block</th><th>To (eCash)</th><th>Status</th><th class="text-end">Amount</th></tr></thead>
-            <tbody>
-              @for (w of d.withdrawals; track $index) {
-                <tr>
-                  <td><a [routerLink]="['/block', w.height]">{{ w.height | number }}</a> <a [routerLink]="['/tx', w.txid]" class="mono small" [title]="w.txid">tx</a></td>
-                  <td><app-l2-main-link kind="address" [id]="w.mainAddress" [short]="true"></app-l2-main-link></td>
-                  <td><span class="status" [ngClass]="w.status">{{ w.status }}</span></td>
-                  <td class="text-end"><app-l2-amount [sats]="w.amount"></app-l2-amount></td>
-                </tr>
-              } @empty {
-                <tr><td colspan="4" class="empty">No withdrawals yet.</td></tr>
-              }
-            </tbody>
-          </table>
+          <app-chain-table [rows]="d.withdrawals" [columns]="withdrawalCols" [filters]="withdrawalFilters" [search]="withdrawalMatches"
+              searchPlaceholder="Address, tx…" sort="height" [pageSize]="10" empty="No withdrawals yet.">
+            <ng-template cxCell="height" let-w><a [routerLink]="['/block', w.height]">{{ w.height | number }}</a><a [routerLink]="['/tx', w.txid]" class="mono small ms-1" [title]="w.txid">tx</a></ng-template>
+            <ng-template cxCell="mainAddress" let-w><app-l2-main-link kind="address" [id]="w.mainAddress" [short]="true"></app-l2-main-link></ng-template>
+            <ng-template cxCell="status" let-w><span class="status" [ngClass]="w.status">{{ w.status }}</span></ng-template>
+            <ng-template cxCell="amount" let-w><app-l2-amount [sats]="w.amount"></app-l2-amount></ng-template>
+          </app-chain-table>
         </div>
       </div>
     </div>

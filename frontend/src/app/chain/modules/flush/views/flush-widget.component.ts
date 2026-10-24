@@ -24,10 +24,9 @@ const REFRESH = 30000;
   styles: [`
     .kv { width: 100%; font-size: 0.85rem; margin: 0; td { padding: 3px 4px; vertical-align: middle; } td:first-child { color: var(--transparent-fg); } }
     .big-row { flex-wrap: wrap; }
-    .bar { height: 6px; border-radius: 3px; background: #ffffff10; overflow: hidden; min-width: 60px; .fill { height: 100%; background: var(--chain-accent, #7d94ab); } }
+    .bar { min-width: 60px; }
     .rows { width: 100%; font-size: 0.85rem; td { padding: 3px 4px; vertical-align: middle; } }
     .muted { color: var(--transparent-fg); } .mono { font-family: monospace; } .pos { color: #3bd16f; } .neg { color: #ff6b6b; }
-    .pill { display: inline-block; font-size: 0.7rem; padding: 0 7px; border-radius: 10px; background: #ffffff14; }
     @media (max-width: 480px) { .big-value { font-size: 1.1rem; } }
   `],
   template: `
@@ -46,7 +45,7 @@ const REFRESH = 30000;
               </div>
               <table class="kv"><tbody>
                 <tr><td>Epoch · slot</td><td>{{ d.pos?.epoch | number }} · {{ d.pos?.slot | number }} <span class="muted">({{ d.pos?.slotseconds }} s slots)</span></td></tr>
-                <tr><td>Leader now</td><td>@if (d.pos?.leader) {<a [routerLink]="['/validator', d.pos.leader]" class="mono">{{ fx.shortId(d.pos.leader, 6) }}</a>} @else {–}@if (d.pos?.stalled) { <span class="pill">stalled</span>}</td></tr>
+                <tr><td>Leader now</td><td>@if (d.pos?.leader) {<a [routerLink]="['/validator', d.pos.leader]" class="mono">{{ fx.shortId(d.pos.leader, 6) }}</a>} @else {–}@if (d.pos?.stalled) {<span class="pill ms-1">stalled</span>}</td></tr>
                 <tr><td>Validators</td><td>{{ d.pos?.validators?.length ?? 0 }} · {{ fx.compact(d.pos?.staking?.bonded) }} ECX bonded</td></tr>
                 <tr><td>Anchors</td><td>{{ d.anchors?.anchors | number }} · final at {{ d.anchors?.finalanchors }} · last at eCash {{ d.pos?.lastanchormainheight | number }}</td></tr>
               </tbody></table>
@@ -82,7 +81,7 @@ const REFRESH = 30000;
             @case ('flush-stake') {
               <table class="rows"><tbody>
                 @for (v of top(d.pos?.validators); track v.pubkey) {
-                  <tr><td><a [routerLink]="['/validator', v.pubkey]" class="mono">{{ fx.shortId(v.pubkey, 6) }}</a>@if (v.pubkey === d.pos?.leader) { <span class="pill">leader</span>}</td>
+                  <tr><td><a [routerLink]="['/validator', v.pubkey]" class="mono">{{ fx.shortId(v.pubkey, 6) }}</a>@if (v.pubkey === d.pos?.leader) {<span class="pill ms-1">leader</span>}</td>
                     <td style="width: 40%"><div class="bar"><div class="fill" [style.width.%]="share(d.pos, v) * 100"></div></div></td>
                     <td class="text-end">{{ fx.pct(share(d.pos, v) * 100, 1) }}</td></tr>
                 } @empty {<tr><td class="empty">No validator in the current epoch's set.</td></tr>}
@@ -107,7 +106,7 @@ const REFRESH = 30000;
               <a class="more" routerLink="/peg">The peg and BMM →</a>
             }
             @case ('flush-trades') {
-              <app-flush-trades [trades]="d.trades" [showPair]="true" empty="No trade yet."></app-flush-trades>
+              <app-flush-trades [trades]="d.trades" [showPair]="true" [tools]="false" [pageSize]="10" empty="No trade yet."></app-flush-trades>
               <a class="more" routerLink="/pools">The DEX →</a>
             }
           }

@@ -10,7 +10,7 @@
   </div>
 
   <div *ngIf="error && !data" class="alert alert-warning">Mining statistics are not available: {{ error }}</div>
-  <div *ngIf="!data && !error" class="skeleton-loader" style="height: 300px"></div>
+  <div *ngIf="!data && !error" class="skeleton-loader mn-skel"></div>
 
   <ng-container *ngIf="data as d">
     <div class="kpis">
@@ -64,33 +64,31 @@
       </div>
     </div>
 
-    <h2 class="mn-h2">Pools <span class="sub2">{{ windowLabel() }}</span></h2>
-    <div class="box table-box">
-      <table class="table table-borderless table-sm mn-table">
-        <thead><tr><th>Pool</th><th class="text-right">Blocks</th><th>Share</th><th class="text-right">Hashrate</th><th class="text-right">Fees</th>
-          <th class="text-right">Empty</th><th class="text-right">Sidechains / block</th><th class="text-right">Last block</th></tr></thead>
-        <tbody>
-          <ng-container *ngFor="let p of d.pools">
-            <tr>
-              <td><span class="dot" [style.background]="colorOf(p.tag)"></span><img *ngIf="p.logo" class="pool-logo" [src]="logoUrl(p.logo)" (error)="hideLogo($event)" alt=""><b>{{ p.name || p.tag }}</b> <span *ngIf="p.datum" class="datum" title="DATUM: miners build their own block templates; the coinbase carries the pool's tag and the miner's">DATUM</span></td>
-              <td class="text-right">{{ p.blocks | number }}</td>
-              <td><div class="bar"><div class="fill" [style.width.%]="100 * p.share" [style.background]="colorOf(p.tag)"></div></div> {{ pct(p.share) }}</td>
-              <td class="text-right">{{ hashrate(p.hashrate) }}</td>
-              <td class="text-right">{{ p.fees / 1e8 | number:'1.0-8' }}</td>
-              <td class="text-right">{{ p.empty | number }}</td>
-              <td class="text-right">{{ p.bmmPerBlock | number:'1.1-1' }}</td>
-              <td class="text-right"><a [routerLink]="['/block' | relativeUrl, p.lastHeight]">{{ p.lastHeight | number }}</a></td>
-            </tr>
-            <tr *ngFor="let m of p.miners.slice(0, 12)" class="miner-row">
-              <td class="miner">↳ {{ m.name || m.tag }}</td>
-              <td class="text-right">{{ m.blocks | number }}</td>
-              <td><div class="bar"><div class="fill" [style.width.%]="100 * m.share" [style.background]="colorOf(p.tag)" style="opacity: 0.6"></div></div> {{ pct(m.share) }}</td>
-              <td colspan="5"></td>
-            </tr>
-          </ng-container>
-        </tbody>
-      </table>
-    </div>
+    <section class="mn-sec">
+      <h2 class="mn-h2">Pools <span class="sub2">{{ windowLabel() }} · a DATUM pool's miners under it</span></h2>
+      <div class="box table-box">
+        <app-chain-table [rows]="d.pools" [columns]="poolCols" [filters]="poolFilters" [search]="matchPool" searchPlaceholder="Pool, tag, miner…"
+            sort="blocks" [trackBy]="trackTag" empty="No block in this window.">
+          <ng-template cxCell="name" let-p>
+            <div class="ln main"><span class="dot" [style.background]="colorOf(p.tag)"></span><img *ngIf="p.logo" class="pool-logo" [src]="logoUrl(p.logo)" (error)="hideLogo($event)" alt=""><b>{{ p.name || p.tag }}</b><span *ngIf="p.datum" class="datum" title="DATUM: miners build their own block templates; the coinbase carries the pool's tag and the miner's">DATUM</span></div>
+            @for (m of p.miners.slice(0, 12); track $index) {<div class="ln sub miner">↳ {{ m.name || m.tag }}</div>}
+          </ng-template>
+          <ng-template cxCell="blocks" let-p>
+            <div class="ln main">{{ p.blocks | number }}</div>
+            @for (m of p.miners.slice(0, 12); track $index) {<div class="ln sub">{{ m.blocks | number }}</div>}
+          </ng-template>
+          <ng-template cxCell="share" let-p>
+            <div class="ln main"><div class="bar" [style.--sc]="colorOf(p.tag)"><div class="fill" [style.width.%]="100 * p.share"></div></div><span class="pc">{{ pct(p.share) }}</span></div>
+            @for (m of p.miners.slice(0, 12); track $index) {<div class="ln sub"><div class="bar faint" [style.--sc]="colorOf(p.tag)"><div class="fill" [style.width.%]="100 * m.share"></div></div><span class="pc">{{ pct(m.share) }}</span></div>}
+          </ng-template>
+          <ng-template cxCell="hashrate" let-p><div class="ln main">{{ hashrate(p.hashrate) }}</div></ng-template>
+          <ng-template cxCell="fees" let-p><div class="ln main">{{ p.fees / 1e8 | number:'1.0-8' }}</div></ng-template>
+          <ng-template cxCell="empty" let-p><div class="ln main">{{ p.empty | number }}</div></ng-template>
+          <ng-template cxCell="bmmPerBlock" let-p><div class="ln main">{{ p.bmmPerBlock | number:'1.1-1' }}</div></ng-template>
+          <ng-template cxCell="lastHeight" let-p><div class="ln main"><a [routerLink]="['/block' | relativeUrl, p.lastHeight]">{{ p.lastHeight | number }}</a></div></ng-template>
+        </app-chain-table>
+      </div>
+    </section>
 
     <div class="row-2">
       <div class="box">
@@ -118,17 +116,17 @@
             <div><span>Estimated next difficulty</span><b>{{ r.nextDifficulty !== null ? diff(r.nextDifficulty) + ' (' + (r.change > 0 ? '+' : '') + (r.change * 100 | number:'1.1-1') + '%)' : '–' }}</b></div>
             <div><span>Retarget</span><b>block {{ r.nextRetarget | number }} · ~{{ r.eta * 1000 | date:'MMM d, y HH:mm' }}</b></div>
             <div *ngIf="r.minDifficultyAfter"><span>Min-difficulty block allowed</span><b>if none is found by {{ r.minDifficultyAfter * 1000 | date:'HH:mm:ss' }} (20 min after the tip)</b></div>
-            <div class="wide"><span>Period progress</span>
-              <div class="bar big"><div class="fill" [style.width.%]="100 * r.progress"></div></div>
-              <small class="text-muted">{{ pct(r.progress, 1) }} · {{ r.blocksLeft | number }} blocks left</small></div>
+            <div class="wide prog"><div class="prog-l"><span>Period progress</span><b>{{ pct(r.progress, 1) }}</b></div>
+              <div class="bar"><div class="fill" [style.width.%]="100 * r.progress"></div></div>
+              <small class="muted">{{ r.blocksLeft | number }} blocks left</small></div>
           </ng-container>
           <div><span>Halving epoch</span><b>{{ d.halving.epoch + 1 }} · {{ d.halving.subsidy }} {{ profile.unit }} per block</b></div>
           <div><span>Next halving</span><b>block {{ d.halving.nextHalving | number }}</b></div>
-          <div class="wide"><span>Epoch progress</span>
-            <div class="bar big"><div class="fill" [style.width.%]="100 * d.halving.progress"></div></div>
-            <small class="text-muted">{{ pct(d.halving.progress, 2) }} · {{ d.halving.blocksLeft | number }} blocks left at 10 min each</small></div>
+          <div class="wide prog"><div class="prog-l"><span>Epoch progress</span><b>{{ pct(d.halving.progress, 2) }}</b></div>
+            <div class="bar"><div class="fill" [style.width.%]="100 * d.halving.progress"></div></div>
+            <small class="muted">{{ d.halving.blocksLeft | number }} blocks left at 10 min each</small></div>
         </div>
-        <p class="text-muted small mt-2 mb-0">Every 2016 blocks the difficulty is set so that the last period would have taken two weeks
+        <p class="hint small mt-3 mb-0">Every 2016 blocks the difficulty is set so that the last period would have taken two weeks
           at 10 minutes per block. The estimate above assumes the rest of the period keeps the pace so far.</p>
       </div>
     </div>

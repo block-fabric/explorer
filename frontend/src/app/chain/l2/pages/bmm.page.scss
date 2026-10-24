@@ -9,3 +9,6 @@
 .pager { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
 .kpis { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
 .kpi .k-value { font-size: 1.25rem; }
+
+// the shared look (last, so it wins)
+@import '../../components/chain-ui';

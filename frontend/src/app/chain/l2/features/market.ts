@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, Input, OnChanges } from '@angular/c
 import { Observable, catchError, map, of, startWith } from 'rxjs';
 import { L2ApiService, l2Error } from '@app/chain/l2/l2-api.service';
 import { L2Market, L2Positions, L2Tx, Loaded } from '@app/chain/l2/l2.interfaces';
+import { CxColumn } from '@app/chain/components/chain-table/chain-table.component';
 import { L2_PAGE_IMPORTS, shortId } from '@app/chain/l2/l2-common';
 
 /*
@@ -28,6 +29,8 @@ const STYLES = `
 .sum { margin-top: 8px; font-size: 0.82rem; color: var(--transparent-fg); }
 .text-end { text-align: right; }
 `;
+
+type Position = L2Positions['positions'][number];
 
 const PAYOUT_NAMES: Record<string, string> = { buyChange: 'change', sellChange: 'change', sellProceeds: 'proceeds' };
 
@@ -130,20 +133,13 @@ export class L2TxMarketComponent {
       <div class="muted small">Positions are not available: {{ v.error.message }}</div>
     } @else if (v.data; as p) {
       @if (p.positions.length) {
-        <table class="table table-borderless table-sm">
-          <thead><tr><th>Market</th><th>Outcome</th><th class="text-end">Shares</th><th class="text-end d-none d-md-table-cell">Price</th><th class="text-end">Value</th></tr></thead>
-          <tbody>
-            @for (x of p.positions; track $index) {
-              <tr>
-                <td><a [routerLink]="['/markets' | relativeUrl, x.marketId]">{{ x.title || x.marketId }}</a>@if (x.title) {<div class="mono muted small">{{ x.marketId }}</div>}</td>
-                <td>{{ x.outcomeName || ('Outcome ' + x.outcome) }}</td>
-                <td class="text-end">{{ x.shares | number }}</td>
-                <td class="text-end d-none d-md-table-cell">@if (x.price !== null) {<span>{{ x.price | number:'1.0-4' }}</span>} @else {<span class="muted">–</span>}</td>
-                <td class="text-end"><app-l2-amount [sats]="x.value"></app-l2-amount></td>
-              </tr>
-            }
-          </tbody>
-        </table>
+        <app-chain-table [rows]="p.positions" [columns]="positionCols" [search]="positionMatches" searchPlaceholder="Market, outcome…" sort="value" [pageSize]="10" empty="No positions.">
+          <ng-template cxCell="market" let-x><a [routerLink]="['/markets' | relativeUrl, x.marketId]">{{ x.title || x.marketId }}</a>@if (x.title) {<div class="mono muted small">{{ x.marketId }}</div>}</ng-template>
+          <ng-template cxCell="outcome" let-x>{{ x.outcomeName || ('Outcome ' + x.outcome) }}</ng-template>
+          <ng-template cxCell="shares" let-x>{{ x.shares | number }}</ng-template>
+          <ng-template cxCell="price" let-x>@if (x.price !== null) {<span>{{ x.price | number:'1.0-4' }}</span>} @else {<span class="muted">–</span>}</ng-template>
+          <ng-template cxCell="value" let-x><app-l2-amount [sats]="x.value"></app-l2-amount></ng-template>
+        </app-chain-table>
         <div class="sum">Worth <app-l2-amount [sats]="p.value"></app-l2-amount> at the markets' current prices (a share pays its outcome's final price in sats).</div>
       } @else {
         <div class="muted small">No shares in any market.</div>
@@ -157,6 +153,14 @@ export class L2TxMarketComponent {
 export class L2PositionsComponent implements OnChanges {
   @Input() address: string;
   view$: Observable<Loaded<L2Positions>>;
+  positionCols: CxColumn<Position>[] = [
+    { key: 'market', label: 'Market', sort: x => x.title || x.marketId },
+    { key: 'outcome', label: 'Outcome', sort: x => x.outcomeName || x.outcome },
+    { key: 'shares', label: 'Shares', align: 'right', sort: true },
+    { key: 'price', label: 'Price', align: 'right', sort: true, hide: 'md' },
+    { key: 'value', label: 'Value', align: 'right', sort: true },
+  ];
+  positionMatches = (x: Position, q: string) => [x.title, x.marketId, x.outcomeName].some(s => String(s ?? '').toLowerCase().includes(q));
 
   constructor(private api: L2ApiService) {}
 

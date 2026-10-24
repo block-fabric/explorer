@@ -6,7 +6,8 @@ import { ChartSeries, L2ChartComponent } from '@app/chain/l2/features/feature-ki
 import { FlushApiService, FlushLoaded, flushLoaded } from '../flush-api.service';
 import { DEX_TABS, FLUSH_PAGE_IMPORTS } from '../flush-kit';
 import { FLUSH_CHARTS } from '../flush-charts';
-import { Book, Candle, FlushStats, FlushTreasury, Page, Pool, PoolTicks, Trade } from '../flush.interfaces';
+import { Book, Candle, FlushStats, FlushTreasury, Page, Pool, PoolTicks, Trade, TreasuryBalance } from '../flush.interfaces';
+import { CxColumn } from '@app/chain/components/chain-table/chain-table.component';
 import * as F from '../flush-format';
 
 const STYLES = ['../../../components/module-page.scss', '../../../l2/pages/l2-page.scss', '../flush-page.scss'];
@@ -47,7 +48,7 @@ export const INTERVALS = ['5m', '1h', '4h', '1d'];
     @if (view$ | async; as v) {
       <app-flush-state [state]="v" what="Pools" [list]="true" [height]="400"></app-flush-state>
       @if (v.data; as d) {
-        <div class="box"><app-flush-pools [pools]="d.items" empty="No pool matches."></app-flush-pools></div>
+        <div class="box"><app-flush-pools [pools]="d.items" [pageSize]="50" empty="No pool matches."></app-flush-pools></div>
         @if (d.partial) {<p class="note">The index stopped at its search budget: the next page goes on.</p>}
         <app-flush-pager [next]="d.next_cursor" [total]="d.total" [hasPrev]="!!q.cursor" (more)="set({ cursor: $event }, true)" (first)="set({ cursor: '' }, true)"></app-flush-pager>
       }
@@ -260,20 +261,14 @@ export class FlushPoolPage implements OnInit {
       <app-flush-state [state]="v" what="Order books" [list]="true" [height]="300"></app-flush-state>
       @if (v.data; as d) {
         <div class="box">
-          <table class="table table-borderless table-sm">
-            <thead><tr><th>Book</th><th class="r">Last price</th><th class="r">Held</th><th class="r">24 h volume</th><th>Created</th></tr></thead>
-            <tbody>
-              @for (b of d.items; track b.pool) {
-                <tr>
-                  <td><a [routerLink]="['/book', b.asset_a, b.asset_b]"><app-flush-token [ticker]="b.asset_a" [id]="b.asset_a_id" [link]="false"></app-flush-token> / <app-flush-token [ticker]="b.asset_b" [id]="b.asset_b_id" [link]="false"></app-flush-token></a></td>
-                  <td class="r">{{ fx.price(b.price) }}</td>
-                  <td class="r nowrap">{{ fx.compact(b.reserve_a) }} {{ b.asset_a }} · {{ fx.compact(b.reserve_b) }} {{ b.asset_b }}</td>
-                  <td class="r">{{ fx.compact(b.volume_24h) }}</td>
-                  <td>@if (b.created) {<a [routerLink]="['/block', b.created]">{{ b.created | number }}</a>}</td>
-                </tr>
-              } @empty {<tr><td colspan="5" class="empty">No order book yet: the first order of a pair makes its book.</td></tr>}
-            </tbody>
-          </table>
+          <app-chain-table [rows]="d.items" [columns]="cols" [search]="matches" searchPlaceholder="Ticker" sort="volume" [pageSize]="25"
+              empty="No order book yet: the first order of a pair makes its book." [trackBy]="trackPool">
+            <ng-template cxCell="book" let-b><a [routerLink]="['/book', b.asset_a, b.asset_b]"><app-flush-token [ticker]="b.asset_a" [id]="b.asset_a_id" [link]="false"></app-flush-token> / <app-flush-token [ticker]="b.asset_b" [id]="b.asset_b_id" [link]="false"></app-flush-token></a></ng-template>
+            <ng-template cxCell="price" let-b>{{ fx.price(b.price) }}</ng-template>
+            <ng-template cxCell="held" let-b>{{ fx.compact(b.reserve_a) }} {{ b.asset_a }} · {{ fx.compact(b.reserve_b) }} {{ b.asset_b }}</ng-template>
+            <ng-template cxCell="volume" let-b>{{ fx.compact(b.volume_24h) }}</ng-template>
+            <ng-template cxCell="created" let-b>@if (b.created) {<a [routerLink]="['/block', b.created]">{{ b.created | number }}</a>}</ng-template>
+          </app-chain-table>
         </div>
         <app-flush-pager [next]="d.next_cursor" [total]="d.total"></app-flush-pager>
       }
@@ -283,6 +278,15 @@ export class FlushPoolPage implements OnInit {
 export class FlushBooksPage implements OnInit {
   tabs = DEX_TABS;
   fx = F;
+  cols: CxColumn<Pool>[] = [
+    { key: 'book', label: 'Book', sort: b => `${b.asset_a}/${b.asset_b}`, nowrap: true },
+    { key: 'price', label: 'Last price', align: 'right', sort: b => b.price },
+    { key: 'held', label: 'Held', align: 'right', nowrap: true, hide: 'md' },
+    { key: 'volume', label: '24 h volume', align: 'right', sort: b => b.volume_24h },
+    { key: 'created', label: 'Created', sort: b => b.created, hide: 'md' },
+  ];
+  trackPool = (b: Pool) => b.pool;
+  matches = (b: Pool, q: string) => `${b.asset_a} ${b.asset_b} ${b.pool}`.toLowerCase().includes(q);
   view$: Observable<FlushLoaded<Page<Pool>>>;
 
   constructor(private api: FlushApiService, private seo: SeoService) {}
@@ -317,13 +321,17 @@ export class FlushBooksPage implements OnInit {
         <div class="box"><app-flush-depth [book]="b"></app-flush-depth></div>
         <div class="grid2 mt-3">
           <div class="card-box"><h3>Bids <span class="hint">buy {{ b.base }}</span></h3>
-            <table class="table table-borderless table-sm"><thead><tr><th class="r">Price</th><th class="r">Amount</th><th class="r">Orders</th><th class="r">Total</th></tr></thead>
-              <tbody>@for (l of b.bids; track $index) {<tr><td class="r pos">{{ l.price_exact ?? fx.price(l.price) }}</td><td class="r">{{ fx.amount(l.amount) }}</td><td class="r">{{ l.orders }}</td><td class="r">{{ fx.amount(l.total) }}</td></tr>}
-                @empty {<tr><td colspan="4" class="empty">No bid.</td></tr>}</tbody></table></div>
+            <app-chain-table [rows]="b.bids" [columns]="ladder" sort="price" [pageSize]="10" empty="No bid.">
+              <ng-template cxCell="price" let-l><span class="pos">{{ l.price_exact ?? fx.price(l.price) }}</span></ng-template>
+              <ng-template cxCell="amount" let-l>{{ fx.amount(l.amount) }}</ng-template>
+              <ng-template cxCell="total" let-l>{{ fx.amount(l.total) }}</ng-template>
+            </app-chain-table></div>
           <div class="card-box"><h3>Asks <span class="hint">sell {{ b.base }}</span></h3>
-            <table class="table table-borderless table-sm"><thead><tr><th class="r">Price</th><th class="r">Amount</th><th class="r">Orders</th><th class="r">Total</th></tr></thead>
-              <tbody>@for (l of b.asks; track $index) {<tr><td class="r neg">{{ l.price_exact ?? fx.price(l.price) }}</td><td class="r">{{ fx.amount(l.amount) }}</td><td class="r">{{ l.orders }}</td><td class="r">{{ fx.amount(l.total) }}</td></tr>}
-                @empty {<tr><td colspan="4" class="empty">No ask.</td></tr>}</tbody></table></div>
+            <app-chain-table [rows]="b.asks" [columns]="ladder" sort="price" [asc]="true" [pageSize]="10" empty="No ask.">
+              <ng-template cxCell="price" let-l><span class="neg">{{ l.price_exact ?? fx.price(l.price) }}</span></ng-template>
+              <ng-template cxCell="amount" let-l>{{ fx.amount(l.amount) }}</ng-template>
+              <ng-template cxCell="total" let-l>{{ fx.amount(l.total) }}</ng-template>
+            </app-chain-table></div>
         </div>
         <p class="note">Open orders rest until they fill, are settled or expire; makers fill by limit, then by id; an order sells a whole unit
           at least (0.01 ECX of a pair with ECX). A side holds at most 1,000 orders: a better order then takes the worst one's place.</p>
@@ -334,6 +342,13 @@ export class FlushBooksPage implements OnInit {
 export class FlushBookPage implements OnInit {
   tabs = DEX_TABS;
   fx = F;
+  /** a side of the ladder: its levels by price */
+  ladder: CxColumn<any>[] = [
+    { key: 'price', label: 'Price', align: 'right', sort: l => Number(l.price) },
+    { key: 'amount', label: 'Amount', align: 'right', sort: l => Number(l.amount) },
+    { key: 'orders', label: 'Orders', align: 'right', sort: l => Number(l.orders) },
+    { key: 'total', label: 'Total', align: 'right', sort: l => Number(l.total) },
+  ];
   base = '';
   quote = '';
   view$: Observable<FlushLoaded<Book>>;
@@ -377,11 +392,14 @@ export class FlushBookPage implements OnInit {
         </div>
         <div class="grid2">
           <div class="card-box"><h3>Balances by asset</h3>
-            <table class="table table-borderless table-sm"><thead><tr><th>Asset</th><th class="r">Held</th><th class="r">From swaps</th><th class="r">From launches</th><th class="r">Security held</th></tr></thead>
-              <tbody>@for (b of t.balances; track b.asset) {
-                <tr><td><app-flush-token [ticker]="b.asset" [id]="b.asset_id"></app-flush-token></td><td class="r">{{ fx.amount(b.balance) }}</td><td class="r">{{ fx.amount(b.from_swaps) }}</td><td class="r">{{ fx.amount(b.from_launches) }}</td><td class="r">{{ fx.amount(b.security_held) }}</td></tr>
-              } @empty {<tr><td colspan="5" class="empty">Nothing held yet.</td></tr>}</tbody></table>
-            <p class="note mb-0">Security parts of fees paid in an asset cannot be paid by a coinbase: the treasury holds them per asset for a later rule.</p>
+            <app-chain-table [rows]="t.balances" [columns]="balanceCols" sort="balance" [pageSize]="10" empty="Nothing held yet.">
+              <ng-template cxCell="asset" let-b><app-flush-token [ticker]="b.asset" [id]="b.asset_id"></app-flush-token></ng-template>
+              <ng-template cxCell="balance" let-b>{{ fx.amount(b.balance) }}</ng-template>
+              <ng-template cxCell="from_swaps" let-b>{{ fx.amount(b.from_swaps) }}</ng-template>
+              <ng-template cxCell="from_launches" let-b>{{ fx.amount(b.from_launches) }}</ng-template>
+              <ng-template cxCell="security_held" let-b>{{ fx.amount(b.security_held) }}</ng-template>
+            </app-chain-table>
+            <p class="note mt-2 mb-0">Security parts of fees paid in an asset cannot be paid by a coinbase: the treasury holds them per asset for a later rule.</p>
           </div>
           <div class="card-box"><h3>The parts in force <span class="hint">gettreasury</span></h3>
             @if (parts$ | async; as pp) {
@@ -397,11 +415,7 @@ export class FlushBookPage implements OnInit {
         <h2>Inflows by block</h2>
         <div class="box">
           <app-l2-chart [series]="series(t)" kind="bar" unit="ECX" [legend]="true" emptyText="No inflow yet."></app-l2-chart>
-          <table class="table table-borderless table-sm mt-2"><thead><tr><th>Block</th><th>Time</th><th>Source</th><th>Asset</th><th class="r">ECX</th><th class="r">From swaps</th><th class="r">From launches</th></tr></thead>
-            <tbody>@for (i of t.inflows; track $index) {
-              <tr><td><a [routerLink]="['/block', i.height]">{{ i.height | number }}</a></td><td><app-time kind="since" [time]="i.time" [fastRender]="true"></app-time></td>
-                <td><span class="pill on">{{ i.source }}</span></td><td>{{ i.asset }}</td><td class="r">{{ fx.amount(i.amount_ecx) }}</td><td class="r">{{ fx.amount(i.from_swaps) }}</td><td class="r">{{ fx.amount(i.from_launches) }}</td></tr>
-            } @empty {<tr><td colspan="7" class="empty">No inflow yet.</td></tr>}</tbody></table>
+          <div class="mt-3"><app-flush-inflows [inflows]="t.inflows"></app-flush-inflows></div>
         </div>
       }
     }
@@ -410,6 +424,13 @@ export class FlushBookPage implements OnInit {
 export class FlushTreasuryPage implements OnInit {
   tabs = DEX_TABS;
   fx = F;
+  balanceCols: CxColumn<TreasuryBalance>[] = [
+    { key: 'asset', label: 'Asset', sort: b => b.asset },
+    { key: 'balance', label: 'Held', align: 'right', sort: b => b.balance, nowrap: true },
+    { key: 'from_swaps', label: 'From swaps', align: 'right', sort: b => b.from_swaps, nowrap: true },
+    { key: 'from_launches', label: 'From launches', align: 'right', sort: b => b.from_launches, nowrap: true },
+    { key: 'security_held', label: 'Security held', align: 'right', sort: b => b.security_held, nowrap: true, hide: 'md' },
+  ];
   view$: Observable<FlushLoaded<FlushTreasury>>;
   parts$: Observable<FlushLoaded<any>>;
 

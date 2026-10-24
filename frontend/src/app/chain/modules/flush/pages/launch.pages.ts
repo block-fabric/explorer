@@ -56,7 +56,7 @@ const FILTERS = [
     @if (view$ | async; as v) {
       <app-flush-state [state]="v" what="Launches" [list]="true" [height]="400"></app-flush-state>
       @if (v.data; as d) {
-        <div class="box"><app-flush-launches [launches]="d.items" [graduation]="graduation" empty="No launch matches."></app-flush-launches></div>
+        <div class="box"><app-flush-launches [launches]="d.items" [graduation]="graduation" [pageSize]="50" empty="No launch matches."></app-flush-launches></div>
         <app-flush-pager [next]="d.next_cursor" [total]="d.total" [hasPrev]="!!q.cursor" (more)="set({ cursor: $event }, true)" (first)="set({ cursor: '' }, true)"></app-flush-pager>
       }
     }
@@ -179,7 +179,7 @@ export class FlushLaunchesPage implements OnInit {
             @if (holders$ | async; as h) {
               <app-flush-state [state]="h" what="Holders" [height]="200" [list]="true"></app-flush-state>
               @if (h.data; as hd) {
-                <app-flush-holders [holders]="hd.items"></app-flush-holders>
+                <app-flush-holders [holders]="hd.items" [pageSize]="10"></app-flush-holders>
                 <app-flush-pager [total]="hd.total"></app-flush-pager>
               }
             }

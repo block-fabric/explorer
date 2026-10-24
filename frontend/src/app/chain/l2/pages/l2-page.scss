@@ -17,3 +17,6 @@
 .note { font-size: 0.8rem; color: var(--transparent-fg); max-width: 900px; }
 .empty { color: var(--transparent-fg); font-size: 0.86rem; padding: 8px 0; }
 .text-end { text-align: right; }
+
+// the shared look (last, so it wins)
+@import '../../components/chain-ui';

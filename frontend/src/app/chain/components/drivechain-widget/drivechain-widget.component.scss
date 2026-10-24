@@ -2,13 +2,13 @@
 .card-body { position: relative; padding-bottom: 30px; min-height: 230px; }
 .pos { color: #3bd16f; }
 .neg { color: #ff6b6b; }
-.mono { font-family: monospace; font-size: 0.78rem; color: var(--transparent-fg); }
+.mono { color: var(--cx-ink-3); }
 .sc { display: inline-flex; vertical-align: middle; }
-.empty { color: var(--transparent-fg); margin: 0; }
+.empty { color: var(--cx-ink-3); margin: 0; }
 
 .big-row { display: flex; justify-content: space-around; text-align: center; margin-bottom: 12px; gap: 6px; }
-.big-value { font-size: 1.35rem; font-weight: 600; white-space: nowrap; small { font-size: 0.8rem; opacity: 0.6; } }
-.big-label { font-size: 0.72rem; color: var(--transparent-fg); }
+.big-value { font-size: 1.4rem; font-weight: 600; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; white-space: nowrap; small { font-size: 0.8rem; color: var(--cx-ink-3); } }
+.big-label { font-size: 0.72rem; color: var(--cx-ink-3); }
 
 // The treasury's list and the BMM grid sit side by side on the dashboard and list the same sidechains in the same
 // order: one row height for both ($row), and the BMM panel has an invisible copy of the treasury's stacked bar
@@ -21,8 +21,8 @@ $row: 22px;
 .list.rows .li { height: $row; padding: 0; }
 .li .nm { width: 106px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-flex; align-items: center; gap: 4px; }
 .li .nm .pool-logo { width: 12px; height: 12px; object-fit: contain; flex: none; }
-.li .bar { flex: 1; height: 6px; background: #ffffff10; border-radius: 3px; overflow: hidden; .fill { display: block; height: 100%; opacity: 0.8; } }
-.li .num { width: 60px; text-align: right; font-weight: 600; }
+.li .bar { flex: 1; .fill { display: block; } }
+.li .num { width: 60px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
 .li .flow { width: 54px; text-align: right; font-size: 0.75rem; }
 
 .grid { display: flex; flex-direction: column; }
@@ -30,16 +30,21 @@ $row: 22px;
 .g-name { width: 72px; font-size: 0.72rem; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .g-cells { display: flex; gap: 2px; flex: 1; }
 .cell { display: block; flex: 1; height: 12px; border-radius: 2px; background: #ffffff0f; max-width: 9px; }
-.g-pct { width: 34px; text-align: right; font-size: 0.72rem; color: var(--transparent-fg); }
+.g-pct { width: 34px; text-align: right; font-size: 0.72rem; color: var(--cx-ink-3); font-variant-numeric: tabular-nums; }
 
 .bundle + .bundle { margin-top: 8px; }
 .b-top { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; }
-.b-bar { position: relative; height: 14px; background: #ffffff10; border-radius: 7px; overflow: hidden; margin: 4px 0 2px;
-  .b-fill { display: block; height: 100%; }
-  .b-txt { position: absolute; left: 8px; top: 0; font-size: 0.68rem; line-height: 14px; } }
-.b-meta { font-size: 0.7rem; color: var(--transparent-fg); }
+// a progress: its label line above a slim bar
+.b-lbl { display: flex; justify-content: space-between; gap: 8px; font-size: 0.72rem; color: var(--cx-ink-3); margin: 6px 0 4px; font-variant-numeric: tabular-nums;
+  b { color: var(--fg); font-weight: 600; } }
+.b-bar { margin-bottom: 3px; .b-fill { display: block; } }
+.b-meta { font-size: 0.7rem; color: var(--cx-ink-3); }
 
-.peg { margin: 0; font-size: 0.84rem; td { vertical-align: middle; padding: 3px 4px; } .dir { font-weight: 700; width: 48px; } .when { font-size: 0.75rem; color: var(--transparent-fg); } }
+.table.peg > tbody > tr > td { padding: 4px 6px; }
+.peg { margin: 0; font-size: 0.84rem; td { vertical-align: middle; padding: 3px 4px; } .dir { font-weight: 700; width: 48px; } .when { font-size: 0.75rem; color: var(--cx-ink-3); } }
 
-.foot { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--transparent-fg); margin-top: 8px; gap: 8px; flex-wrap: wrap; }
+.foot { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--cx-ink-3); margin-top: 8px; gap: 8px; flex-wrap: wrap; }
 .more { position: absolute; right: 16px; bottom: 8px; font-size: 0.78rem; }
+
+// the shared look (last, so it wins)
+@import '../chain-ui';

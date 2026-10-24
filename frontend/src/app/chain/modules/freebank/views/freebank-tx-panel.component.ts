@@ -36,14 +36,14 @@ const META = new Set(['fields', 'op', 'op_name', 'opName', 'name', 'family', 'ki
   imports: [...FB_PAGE_IMPORTS],
   styleUrls: ['../../../l2/full/l2-panel.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styles: [`.op-name { font-family: monospace; font-size: 0.8rem; color: var(--transparent-fg); } .fam { font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }`],
+  styles: [`.op-name { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 0.8rem; color: var(--transparent-fg); }`],
   template: `
   @if (view$ | async; as v) {
     @if (v.data; as t) {
       @if (t.family || t.assetGenesis || t.peg?.length || t.error) {
         <div class="title-row">
           <h2 class="p-title">{{ t.assetGenesis ? 'Asset genesis' : t.family ? fam(t.family).title : 'Peg and protocol outputs' }}</h2>
-          @if (t.family || t.assetGenesis) {<span class="pill accent fam">{{ t.assetGenesis ? 'asset' : t.family }}</span>}
+          @if (t.family || t.assetGenesis) {<span class="pill on">{{ t.assetGenesis ? 'asset' : t.family }}</span>}
           @if (opName(t); as o) {<span class="op-name">{{ o }}</span>}
           <span class="p-sub">{{ t.assetGenesis ? 'the creation of an asset on ' + profile.name + ' (version 10)' : t.family ? fam(t.family).sub : 'deposits from eCash, withdrawals to it and the block\'s own commitments' }}</span>
           @if (!t.confirmed) {<span class="pill">unconfirmed</span>}
@@ -64,7 +64,7 @@ const META = new Set(['fields', 'op', 'op_name', 'opName', 'name', 'family', 'ki
           @if (t.peg?.length) {
             <h3 class="mt-2">{{ t.family || t.assetGenesis ? 'Peg and protocol outputs' : '' }}</h3>
             @for (p of t.peg; track $index) {
-              <div class="mb-2"><span class="pill">{{ pegTitle(p.kind) }}</span> <span class="muted">output {{ p.vout }}</span>
+              <div class="mb-2"><span class="pill">{{ pegTitle(p.kind) }}</span><span class="muted ms-2">output {{ p.vout }}</span>
                 @if (hasKeys(pegFields(p))) {<app-fb-fields [data]="pegFields(p)"></app-fb-fields>}</div>
             }
           }

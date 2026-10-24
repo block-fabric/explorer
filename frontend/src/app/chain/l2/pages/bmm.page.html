@@ -112,6 +112,69 @@
       </div>
     </div>
 
+    <!-- BMM economics: what each block cost its producer on eCash against what it earned here -->
+    @if (econAvailable) {
+      <h2 class="cp-h2">BMM economics <span class="cp-h2-sub">each {{ profile.name }} block's bid, paid to an eCash miner, against the fees its producer took on {{ profile.name }}@if (econ; as e) {: the newest {{ e.blocks | number }} blocks, {{ e.from | number }} to {{ e.to | number }}}</span></h2>
+      @if (econ; as e) {
+        <div class="kpis">
+          <div class="kpi">
+            <div class="k-label">Bids paid</div>
+            <div class="k-value"><app-l2-amount [sats]="e.bids" [compact]="true" class="wrap"></app-l2-amount></div>
+            <div class="k-sub">{{ e.withBid | number }} blocks with a known bid · median {{ e.bidMedian | number }} sats</div>
+          </div>
+          <div class="kpi">
+            <div class="k-label">Fees earned</div>
+            <div class="k-value"><app-l2-amount [sats]="e.fees" [compact]="true" class="wrap"></app-l2-amount></div>
+            <div class="k-sub">by the blocks' producers · median {{ e.feesMedian | number }} sats a block</div>
+          </div>
+          <div class="kpi">
+            <div class="k-label">Net margin</div>
+            <div class="k-value" [class.pos]="e.margin > 0" [class.neg]="e.margin < 0"><app-l2-amount [sats]="e.margin" [signed]="true" [compact]="true" class="wrap"></app-l2-amount></div>
+            <div class="k-sub">fees earned minus bids paid, blocks with a bid</div>
+          </div>
+          <div class="kpi">
+            <div class="k-label">Paid for itself</div>
+            <div class="k-value">{{ pct(e.withBid ? e.covered / e.withBid : 0, 0) }}</div>
+            <div class="bar mt-1"><div class="fill" [style.width.%]="e.withBid ? 100 * e.covered / e.withBid : 0"></div></div>
+            <div class="k-sub mt-1">{{ e.covered | number }} of {{ e.withBid | number }} blocks earned at least their bid</div>
+          </div>
+          <div class="kpi">
+            <div class="k-label">BMM cost per transaction</div>
+            <div class="k-value">@if (e.txs) { {{ (e.bids / e.txs) | number:'1.0-0' }} <span class="k-small">sats</span>} @else {–}</div>
+            <div class="k-sub">{{ e.txs | number }} transactions in these blocks</div>
+          </div>
+        </div>
+        <div class="chart-grid">
+          <div class="box chart-box">
+            <h5>Bids against fees <small>block by block: fees earned up, the bid paid down, the running margin as a line</small></h5>
+            <div class="chart" *browserOnly echarts [initOpts]="chartInitOptions" [options]="charts.economics"></div>
+          </div>
+          <div class="box chart-box">
+            <h5>The bid market <small>the newest {{ requests.length | number }} BMM requests by bid size: accepted and beaten</small></h5>
+            @if (charts.bidMarket) {
+              <div class="chart" *browserOnly echarts [initOpts]="chartInitOptions" [options]="charts.bidMarket"></div>
+            } @else {
+              <div class="skeleton-loader chart"></div>
+            }
+          </div>
+        </div>
+        <div class="box mt-3">
+          <app-chain-table [rows]="econRows" [columns]="econCols" [filters]="econFilters" [search]="econSearch" searchPlaceholder="Height or hash"
+            sort="height" [pageSize]="25" [trackBy]="trackHeightRow" [empty]="'No ' + profile.name + ' block yet.'">
+            <ng-template cxCell="height" let-r><a [routerLink]="['/block', r.hash]">{{ r.height | number }}</a></ng-template>
+            <ng-template cxCell="mainHeight" let-r>@if (r.mainHeight) {<app-l2-main-link kind="block" [id]="'' + r.mainHeight" [text]="(r.mainHeight | number) + ''"></app-l2-main-link>} @else {<span class="muted">–</span>}@if (r.contested) {<span class="status ms-2" title="Other requests for the slot in that eCash block">contested</span>}</ng-template>
+            <ng-template cxCell="time" let-r>@if (r.time) {<app-time kind="since" [time]="r.time" [fastRender]="true"></app-time>}</ng-template>
+            <ng-template cxCell="txs" let-r>{{ r.txs | number }}</ng-template>
+            <ng-template cxCell="fees" let-r>{{ r.fees | number }} <span class="muted">sats</span></ng-template>
+            <ng-template cxCell="bid" let-r>@if (r.bid !== null) { {{ r.bid | number }} <span class="muted">sats</span>} @else {<span class="muted">unknown</span>}</ng-template>
+            <ng-template cxCell="margin" let-r>@if (r.margin !== null) {<span [class.pos]="r.margin > 0" [class.neg]="r.margin < 0">{{ r.margin > 0 ? '+' : '' }}{{ r.margin | number }}</span>} @else {<span class="muted">–</span>}</ng-template>
+          </app-chain-table>
+        </div>
+      } @else {
+        <div class="skeleton-loader" style="height: 120px"></div>
+      }
+    }
+
     <!-- charts -->
     <div class="chart-grid">
       <div class="box chart-box">
@@ -173,21 +236,13 @@
     <div class="row-2">
       <div class="box table-box">
         <h5>eCash miners that carried {{ profile.name }} <small>{{ windowLabel() }}</small></h5>
-        <table class="table table-borderless table-sm cp-table">
-          <thead><tr><th>Miner</th><th class="text-right">Blocks</th><th class="text-right"><app-sidechain-label [chain]="profile.id" [name]="profile.name"></app-sidechain-label> blocks</th><th class="text-right">Bids earned</th></tr></thead>
-          <tbody>
-            @for (m of carriers(); track m.tag) {
-              <tr>
-                <td class="miner" [title]="(m.name || m.tag) + ' · coinbase tag ' + m.tag">{{ m.name || m.tag }}</td>
-                <td class="text-right">{{ m.blocks | number }}</td>
-                <td class="text-right">{{ m.accepts | number }}</td>
-                <td class="text-right"><app-l2-amount [sats]="m.bids"></app-l2-amount></td>
-              </tr>
-            } @empty {
-              <tr><td colspan="4" class="text-muted">No eCash block carried a {{ profile.name }} block in the window.</td></tr>
-            }
-          </tbody>
-        </table>
+        <app-chain-table [rows]="carriers()" [columns]="minerCols" [search]="minerSearch" searchPlaceholder="Miner" sort="accepts" [pageSize]="10"
+          [empty]="'No eCash block carried a ' + profile.name + ' block in the window.'">
+          <ng-template cxCell="name" let-m><span class="miner" [title]="(m.name || m.tag) + ' · coinbase tag ' + m.tag">{{ m.name || m.tag }}</span></ng-template>
+          <ng-template cxCell="blocks" let-m>{{ m.blocks | number }}</ng-template>
+          <ng-template cxCell="accepts" let-m>{{ m.accepts | number }}</ng-template>
+          <ng-template cxCell="bids" let-m><app-l2-amount [sats]="m.bids"></app-l2-amount></ng-template>
+        </app-chain-table>
       </div>
       <div class="box">
         <h5>Drivechain rules <small>from the enforcer</small></h5>

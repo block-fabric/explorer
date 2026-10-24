@@ -5,6 +5,7 @@ import { L2ApiService } from '@app/chain/l2/l2-api.service';
 import { Loaded } from '@app/chain/l2/l2.interfaces';
 import { shortId } from '@app/chain/l2/l2-common';
 import { ChartSeries, FEATURE_PAGE_IMPORTS, featureData$ } from '@app/chain/l2/features/feature-kit';
+import { CxColumn, CxFilter } from '@app/chain/components/chain-table/chain-table.component';
 
 // GET /api/v1/l2/feature/shielded (chains/L2-API.md)
 export interface ShieldedView {
@@ -23,6 +24,8 @@ export interface ShieldedView {
   recent: { txid: string; height: number; time: number | null; actions: number; valueBalance: number; flags: number;
     transparentIn: number; transparentOut: number; fee: number; kind: 'shield' | 'unshield' | 'shielded' }[];
 }
+
+type ShieldedTx = ShieldedView['recent'][number];
 
 /** /shielded: zSide's Orchard pool: its size over time, what went in and out, actions and nullifiers, the latest shielded txs */
 @Component({
@@ -49,31 +52,24 @@ export interface ShieldedView {
           </div>
 
           <h2>Pool size</h2>
-          <div class="box"><app-l2-chart [series]="poolSeries(s)" kind="step" emptyText="Fewer than two blocks with shielded activity."></app-l2-chart></div>
+          <div class="chart-box"><app-l2-chart [series]="poolSeries(s)" kind="step" emptyText="Fewer than two blocks with shielded activity."></app-l2-chart></div>
           <h2>Into and out of the pool, per block</h2>
-          <div class="box"><app-l2-chart [series]="flowSeries(s)" kind="bar" [legend]="true" emptyText="No shielded activity yet."></app-l2-chart></div>
+          <div class="chart-box"><app-l2-chart [series]="flowSeries(s)" kind="bar" [legend]="true" emptyText="No shielded activity yet."></app-l2-chart></div>
           <h2>Actions per block</h2>
-          <div class="box"><app-l2-chart [series]="actionSeries(s)" kind="bar" [height]="120" emptyText="No shielded activity yet."></app-l2-chart></div>
+          <div class="chart-box"><app-l2-chart [series]="actionSeries(s)" kind="bar" [height]="120" emptyText="No shielded activity yet."></app-l2-chart></div>
 
           <h2>Latest shielded transactions</h2>
           <div class="box">
-            <table class="table table-borderless table-sm">
-              <thead><tr><th>Block</th><th>Time</th><th>Kind</th><th class="text-end">Value balance</th><th class="text-end">Actions</th><th class="text-end">Transparent in / out</th><th class="text-end">Fee</th><th>Transaction</th></tr></thead>
-              <tbody>
-                @for (t of s.recent; track t.txid) {
-                  <tr>
-                    <td><a [routerLink]="['/block', t.height]">{{ t.height | number }}</a></td>
-                    <td>@if (t.time) {<app-timestamp [unixTime]="t.time" [hideTimeSince]="true"></app-timestamp>} @else {<span class="muted">–</span>}</td>
-                    <td><span class="pill" [class.on]="t.kind !== 'shielded'">{{ t.kind === 'shield' ? 'shield' : t.kind === 'unshield' ? 'unshield' : 'fully shielded' }}</span></td>
-                    <td class="text-end"><app-l2-amount [sats]="t.valueBalance" [signed]="true"></app-l2-amount></td>
-                    <td class="text-end">{{ t.actions }}</td>
-                    <td class="text-end">{{ t.transparentIn }} / {{ t.transparentOut }}</td>
-                    <td class="text-end"><app-l2-amount [sats]="t.fee"></app-l2-amount></td>
-                    <td><a [routerLink]="['/tx', t.txid]" class="mono" [title]="t.txid">{{ shortId(t.txid) }}</a></td>
-                  </tr>
-                } @empty {<tr><td colspan="8" class="empty">No shielded transactions yet.</td></tr>}
-              </tbody>
-            </table>
+            <app-chain-table [rows]="s.recent" [columns]="recentCols" [filters]="kindFilters" [search]="txMatches" searchPlaceholder="Transaction…" sort="height"
+                empty="No shielded transactions yet.">
+              <ng-template cxCell="height" let-t><a [routerLink]="['/block', t.height]">{{ t.height | number }}</a></ng-template>
+              <ng-template cxCell="time" let-t>@if (t.time) {<app-timestamp [unixTime]="t.time" [hideTimeSince]="true"></app-timestamp>} @else {<span class="muted">–</span>}</ng-template>
+              <ng-template cxCell="kind" let-t><span class="pill" [class.on]="t.kind !== 'shielded'">{{ kindName(t.kind) }}</span></ng-template>
+              <ng-template cxCell="valueBalance" let-t><app-l2-amount [sats]="t.valueBalance" [signed]="true"></app-l2-amount></ng-template>
+              <ng-template cxCell="transparent" let-t>{{ t.transparentIn }} / {{ t.transparentOut }}</ng-template>
+              <ng-template cxCell="fee" let-t><app-l2-amount [sats]="t.fee"></app-l2-amount></ng-template>
+              <ng-template cxCell="txid" let-t><a [routerLink]="['/tx', t.txid]" class="mono" [title]="t.txid">{{ shortId(t.txid) }}</a></ng-template>
+            </app-chain-table>
           </div>
           <p class="note">An Orchard bundle's value balance is what it takes out of the pool (negative: what it puts in). Every action
             reveals a nullifier and adds a note commitment, padding actions included: actions do not count payments. Amounts and
@@ -86,12 +82,28 @@ export interface ShieldedView {
 export class ZsideShieldedPage implements OnInit {
   view$: Observable<Loaded<ShieldedView> | 'unavailable'>;
   shortId = shortId;
+  recentCols: CxColumn<ShieldedTx>[] = [
+    { key: 'height', label: 'Block', sort: true },
+    { key: 'time', label: 'Time', sort: true, hide: 'md' },
+    { key: 'kind', label: 'Kind', sort: true },
+    { key: 'valueBalance', label: 'Value balance', align: 'right', sort: true, nowrap: true },
+    { key: 'actions', label: 'Actions', align: 'right', sort: true },
+    { key: 'transparent', label: 'Transparent in / out', align: 'right', sort: t => t.transparentIn + t.transparentOut, hide: 'md' },
+    { key: 'fee', label: 'Fee', align: 'right', sort: true, hide: 'md' },
+    { key: 'txid', label: 'Transaction' },
+  ];
+  kindFilters: CxFilter<ShieldedTx>[] = [{ options: (['shield', 'unshield', 'shielded'] as const).map(k => ({ label: this.kindName(k), test: t => t.kind === k })) }];
+  txMatches = (t: ShieldedTx, q: string) => t.txid.toLowerCase().includes(q);
 
   constructor(private api: L2ApiService, private seo: SeoService) {}
 
   ngOnInit(): void {
     this.seo.setTitle('Shielded pool');
     this.view$ = featureData$(this.api, 'shielded', () => this.api.feature$<ShieldedView>('shielded'));
+  }
+
+  kindName(k: ShieldedTx['kind']): string {
+    return k === 'shield' ? 'shield' : k === 'unshield' ? 'unshield' : 'fully shielded';
   }
 
   poolSeries(s: ShieldedView): ChartSeries[] {

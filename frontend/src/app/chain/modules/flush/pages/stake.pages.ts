@@ -1,6 +1,8 @@
 import { ChangeDetectionStrategy, Component, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { Observable, map, shareReplay, startWith, switchMap, tap, timer } from 'rxjs';
+import { PROFILE } from '@app/chain/profiles';
+import { CxColumn, CxFilter } from '@app/chain/components/chain-table/chain-table.component';
 import { SeoService } from '@app/services/seo.service';
 import { FlushApiService, FlushLoaded, flushLoaded, flushResult } from '../flush-api.service';
 import { FLUSH_PAGE_IMPORTS, STAKE_TABS } from '../flush-kit';
@@ -24,13 +26,13 @@ export function keyColor(k: string): string {
   standalone: true,
   imports: [...FLUSH_PAGE_IMPORTS],
   styleUrls: STYLES,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [`
     .strip { display: flex; gap: 2px; flex-wrap: wrap; }
     .strip .s { width: 14px; height: 22px; border-radius: 3px; display: inline-block; }
     .strip .s.past { opacity: 0.35; } .strip .s.now { outline: 2px solid var(--fg); }
     .strip .s.banned { background: repeating-linear-gradient(45deg, #ff6b6b55, #ff6b6b55 3px, transparent 3px, transparent 6px); }
     .strip .s.none { background: #ffffff14; }
-    .share { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: #ffffff10; margin: 6px 0; .b { background: #f5b83d; } .v { background: var(--chain-accent, #7d94ab); } }
   `],
   template: `
   <div class="container-xl mp">
@@ -53,21 +55,15 @@ export function keyColor(k: string): string {
           @if (vals$ | async; as vs) {
             <app-flush-state [state]="vs" what="Validators" [height]="200"></app-flush-state>
             @if (vs.data; as vd) {
-              <table class="table table-borderless table-sm">
-                <thead><tr><th>Validator</th><th class="r">Stake</th><th>Share of stake</th><th class="r">Pool share</th><th class="r">Slots led</th><th>Status</th></tr></thead>
-                <tbody>
-                  @for (x of vd.validators; track x.pubkey) {
-                    <tr>
-                      <td><span class="me-1" [style.color]="color(x.pubkey)">●</span><a [routerLink]="['/validator', x.pubkey]" class="mono" [title]="x.pubkey">{{ fx.shortId(x.pubkey, 10) }}</a></td>
-                      <td class="r nowrap">{{ fx.amount(x.stake / 1e8) }} <span class="muted">ECX</span></td>
-                      <td class="progress-cell"><div class="bar"><div class="fill" [style.width.%]="100 * x.stake / (vd.totalstake || 1)"></div></div><div class="t">{{ fx.pct(100 * x.stake / (vd.totalstake || 1), 1) }}</div></td>
-                      <td class="r">{{ fx.pct(100 * poolShare(p, x.pubkey), 2) }}</td>
-                      <td class="r">{{ x.slots | number }}</td>
-                      <td>@if (x.banned) {<span class="pill bad">banned</span>} @else if (x.jaileduntilepoch && x.jaileduntilepoch > vd.epoch) {<span class="pill warn">jailed until epoch {{ x.jaileduntilepoch | number }}</span>} @else {<span class="pill ok">active</span>}</td>
-                    </tr>
-                  } @empty {<tr><td colspan="6" class="empty">{{ vd.known ? 'No validator in this epoch\\'s set.' : 'The set of this epoch is not known yet (its seed is not on record).' }}</td></tr>}
-                </tbody>
-              </table>
+              <app-chain-table [rows]="vd.validators" [columns]="valCols" [filters]="valFilters(vd.epoch)" [search]="valMatches" searchPlaceholder="Validator key" sort="stake"
+                  [pageSize]="25" [empty]="vd.known ? 'No validator in this epoch\\'s set.' : 'The set of this epoch is not known yet (its seed is not on record).'" [trackBy]="trackKey">
+                <ng-template cxCell="pubkey" let-x><span class="me-1" [style.color]="color(x.pubkey)">●</span><a [routerLink]="['/validator', x.pubkey]" class="mono" [title]="x.pubkey">{{ fx.shortId(x.pubkey, 10) }}</a></ng-template>
+                <ng-template cxCell="stake" let-x>{{ fx.amount(x.stake / 1e8) }} <span class="muted">ECX</span></ng-template>
+                <ng-template cxCell="share" let-x><div class="progress-cell"><div class="bar"><div class="fill" [style.width.%]="100 * x.stake / (vd.totalstake || 1)"></div></div><div class="t">{{ fx.pct(100 * x.stake / (vd.totalstake || 1), 1) }}</div></div></ng-template>
+                <ng-template cxCell="pool" let-x>{{ fx.pct(100 * poolShare(p, x.pubkey), 2) }}</ng-template>
+                <ng-template cxCell="slots" let-x>{{ x.slots | number }}</ng-template>
+                <ng-template cxCell="status" let-x>@if (x.banned) {<span class="pill bad">banned</span>} @else if (x.jaileduntilepoch && x.jaileduntilepoch > vd.epoch) {<span class="pill warn">jailed until epoch {{ x.jaileduntilepoch | number }}</span>} @else {<span class="pill ok">active</span>}</ng-template>
+              </app-chain-table>
             }
           }
         </div>
@@ -100,12 +96,14 @@ export function keyColor(k: string): string {
                   <tr><th>Skipped commitments</th><td>{{ ad.skipped?.length ?? 0 }} <span class="muted">(on record, not acknowledged by this chain)</span></td></tr>
                   <tr><th>Tickets known</th><td>{{ (ad.tickets?.length ?? ad.tickets ?? 0) | number }}</td></tr>
                 </tbody></table>
-                <table class="table table-borderless table-sm mt-2"><thead><tr><th>Block</th><th>Kind</th><th>Anchors</th><th>eCash</th></tr></thead><tbody>
-                  @for (r of (ad.recent ?? []).slice(0, 12); track r.block) {
-                    <tr><td><a [routerLink]="['/block', r.block]">{{ r.height | number }}</a></td><td><span class="pill" [class.on]="r.kind === 'bmm'">{{ r.kind === 'bmm' ? 'BMM block' : 'ticket' }}</span></td>
-                      <td><a [routerLink]="['/block', r.anchored]">{{ r.anchoredheight | number }}</a></td><td><app-flush-ecash kind="block" [id]="r.mainheight" [text]="(r.mainheight | number) + ''"></app-flush-ecash></td></tr>
-                  }
-                </tbody></table>
+                <div class="mt-3">
+                  <app-chain-table [rows]="ad.recent" [columns]="anchorCols" [filters]="anchorKinds" sort="height" [pageSize]="10" empty="No anchor yet." [trackBy]="trackBlock">
+                    <ng-template cxCell="height" let-r><a [routerLink]="['/block', r.block]">{{ r.height | number }}</a></ng-template>
+                    <ng-template cxCell="kind" let-r><span class="pill" [class.on]="r.kind === 'bmm'">{{ r.kind === 'bmm' ? 'BMM block' : 'ticket' }}</span></ng-template>
+                    <ng-template cxCell="anchored" let-r><a [routerLink]="['/block', r.anchored]">{{ r.anchoredheight | number }}</a></ng-template>
+                    <ng-template cxCell="mainheight" let-r><app-flush-ecash kind="block" [id]="r.mainheight" [text]="(r.mainheight | number) + ''"></app-flush-ecash></ng-template>
+                  </app-chain-table>
+                </div>
               } @else if (!a.loading) {<p class="muted mb-0">Not available.</p>}
             }
           </div>
@@ -120,15 +118,16 @@ export function keyColor(k: string): string {
                 <tr><th>Validator pool</th><td>{{ fx.amount(fs.pool) }} ECX this epoch</td></tr>
               </tbody></table>
             }
+            <p class="hint mb-0"><a routerLink="/fees">Where every fee on {{ profile.name }} goes →</a></p>
             <h3 class="mt-3">Evidence <span class="hint">leaders that signed two blocks for a slot</span></h3>
             @if (evidence$ | async; as e) {
               @if (e.data; as ed) {
-                <table class="table table-borderless table-sm"><thead><tr><th>Validator</th><th>Slot</th><th>Blocks</th></tr></thead><tbody>
-                  @for (x of ed; track $index) {
-                    <tr><td><a [routerLink]="['/validator', x.pubkey]" class="mono">{{ fx.shortId(x.pubkey, 6) }}</a></td><td>{{ x.slot | number }}</td>
-                      <td>@for (h of x.hashes; track h) {<a [routerLink]="['/block', h]" class="mono me-2">{{ fx.shortId(h, 5) }}</a>}</td></tr>
-                  } @empty {<tr><td colspan="3" class="empty">No evidence: no leader has signed twice.</td></tr>}
-                </tbody></table>
+                <app-chain-table [rows]="ed" [columns]="evidenceCols" [search]="evidenceMatches" searchPlaceholder="Validator key" sort="slot" [pageSize]="10"
+                    empty="No evidence: no leader has signed twice.">
+                  <ng-template cxCell="pubkey" let-x><a [routerLink]="['/validator', x.pubkey]" class="mono">{{ fx.shortId(x.pubkey, 6) }}</a></ng-template>
+                  <ng-template cxCell="slot" let-x>{{ x.slot | number }}</ng-template>
+                  <ng-template cxCell="hashes" let-x>@for (h of x.hashes; track h) {<a [routerLink]="['/block', h]" class="mono me-2">{{ fx.shortId(h, 5) }}</a>}</ng-template>
+                </app-chain-table>
               }
             }
           </div>
@@ -140,6 +139,33 @@ export function keyColor(k: string): string {
 export class FlushStakePage implements OnInit {
   tabs = STAKE_TABS;
   fx = F;
+  profile = PROFILE;
+  valCols: CxColumn<any>[] = [
+    { key: 'pubkey', label: 'Validator', nowrap: true },
+    { key: 'stake', label: 'Stake', align: 'right', sort: x => Number(x.stake), nowrap: true },
+    { key: 'share', label: 'Share of stake', sort: x => Number(x.stake), hide: 'sm' },
+    { key: 'pool', label: 'Pool share', align: 'right', sort: x => this.poolShare(this.pos, x.pubkey), hide: 'md' },
+    { key: 'slots', label: 'Slots led', align: 'right', sort: x => Number(x.slots) },
+    { key: 'status', label: 'Status', sort: x => x.banned ? 2 : x.jaileduntilepoch ? 1 : 0 },
+  ];
+  valMatches = (x: any, q: string) => String(x.pubkey).toLowerCase().includes(q);
+  anchorCols: CxColumn<any>[] = [
+    { key: 'height', label: 'Block', sort: r => Number(r.height) },
+    { key: 'kind', label: 'Kind', sort: r => r.kind },
+    { key: 'anchored', label: 'Anchors', sort: r => Number(r.anchoredheight) },
+    { key: 'mainheight', label: 'eCash', sort: r => Number(r.mainheight) },
+  ];
+  anchorKinds: CxFilter<any>[] = [{ label: 'Kind', options: [{ label: 'BMM block', test: r => r.kind === 'bmm' }, { label: 'ticket', test: r => r.kind !== 'bmm' }] }];
+  evidenceCols: CxColumn<any>[] = [
+    { key: 'pubkey', label: 'Validator' },
+    { key: 'slot', label: 'Slot', sort: x => Number(x.slot) },
+    { key: 'hashes', label: 'Blocks' },
+  ];
+  evidenceMatches = (x: any, q: string) => String(x.pubkey).toLowerCase().includes(q);
+  trackKey = (x: any) => x.pubkey;
+  trackBlock = (r: any) => r.block;
+  private pos: any = null;
+  private statusFilters: { epoch: number; filters: CxFilter<any>[] } | null = null;
   shown = SCHEDULE_SHOWN;
   color = keyColor;
   pos$: Observable<FlushLoaded<any>>;
@@ -153,11 +179,23 @@ export class FlushStakePage implements OnInit {
   ngOnInit(): void {
     this.seo.setTitle('Flush stake: validators and anchors');
     const tick$ = timer(0, 30000);
-    this.pos$ = tick$.pipe(switchMap(() => flushResult(this.api.rpc$<any>('getposinfo'))), startWith({ loading: true } as FlushLoaded<any>), shareReplay(1));
+    this.pos$ = tick$.pipe(switchMap(() => flushResult(this.api.rpc$<any>('getposinfo'))), tap(v => this.pos = v.data ?? this.pos), startWith({ loading: true } as FlushLoaded<any>), shareReplay(1));
     this.vals$ = flushLoaded(this.api.rpc$<any>('getvalidators')).pipe(shareReplay(1));
     this.sched$ = tick$.pipe(switchMap(() => flushResult(this.api.rpc$<any>('getleaderschedule'))), startWith({ loading: true } as FlushLoaded<any>));
     this.anchors$ = tick$.pipe(switchMap(() => flushResult(this.api.rpc$<any>('getanchorinfo', 20))), startWith({ loading: true } as FlushLoaded<any>));
     this.evidence$ = flushLoaded(this.api.rpc$<any[]>('listevidence'));
+  }
+
+  /** the validators' status as chips (one array per epoch, so the table keeps its choice) */
+  valFilters(epoch: number): CxFilter<any>[] {
+    if (this.statusFilters?.epoch !== epoch) {
+      this.statusFilters = { epoch, filters: [{ label: 'Status', options: [
+        { label: 'active', test: x => !x.banned && !(x.jaileduntilepoch && x.jaileduntilepoch > epoch) },
+        { label: 'jailed', test: x => !x.banned && !!x.jaileduntilepoch && x.jaileduntilepoch > epoch },
+        { label: 'banned', test: x => !!x.banned },
+      ] }] };
+    }
+    return this.statusFilters.filters;
   }
 
   poolShare(p: any, key: string): number {
@@ -209,11 +247,11 @@ export class FlushStakePage implements OnInit {
               </tbody></table>
             </div>
             <div class="card-box"><h3>Unbonds <span class="hint">paid at an anchor count</span></h3>
-              <table class="table table-borderless table-sm"><thead><tr><th class="r">Amount</th><th class="r">Paid at anchor</th></tr></thead><tbody>
-                @for (u of b.unbonds; track $index) {<tr><td class="r">{{ fx.amount(u.amount) }} ECX</td><td class="r">{{ u.releaseanchor | number }}</td></tr>}
-                @empty {<tr><td colspan="2" class="empty">No unbond waiting.</td></tr>}
-              </tbody></table>
-              <p class="hint mb-0">Unbonded coins wait {{ (pos$ | async)?.data?.staking?.unbondinganchors ?? '–' }} anchors before they are paid to the owner.</p>
+              <app-chain-table [rows]="b.unbonds" [columns]="unbondCols" sort="anchor" [asc]="true" [pageSize]="10" empty="No unbond waiting.">
+                <ng-template cxCell="amount" let-u>{{ fx.amount(u.amount) }} ECX</ng-template>
+                <ng-template cxCell="anchor" let-u>{{ u.releaseanchor | number }}</ng-template>
+              </app-chain-table>
+              <p class="hint mt-2 mb-0">Unbonded coins wait {{ (pos$ | async)?.data?.staking?.unbondinganchors ?? '–' }} anchors before they are paid to the owner.</p>
             </div>
           </div>
         }
@@ -230,9 +268,12 @@ export class FlushStakePage implements OnInit {
         @if (evidence$ | async; as e) {
           @if (e.data?.length) {
             <h2>Evidence against it</h2>
-            <div class="box"><table class="table table-borderless table-sm"><thead><tr><th>Slot</th><th>The two blocks</th></tr></thead><tbody>
-              @for (x of e.data; track $index) {<tr><td>{{ x.slot | number }}</td><td>@for (h of x.hashes; track h) {<a [routerLink]="['/block', h]" class="mono me-2">{{ fx.shortId(h) }}</a>}</td></tr>}
-            </tbody></table></div>
+            <div class="box">
+              <app-chain-table [rows]="e.data" [columns]="evidenceCols" sort="slot" [pageSize]="10">
+                <ng-template cxCell="slot" let-x>{{ x.slot | number }}</ng-template>
+                <ng-template cxCell="hashes" let-x>@for (h of x.hashes; track h) {<a [routerLink]="['/block', h]" class="mono me-2">{{ fx.shortId(h) }}</a>}</ng-template>
+              </app-chain-table>
+            </div>
           }
         }
       }
@@ -242,6 +283,11 @@ export class FlushStakePage implements OnInit {
 export class FlushValidatorPage implements OnInit {
   tabs = STAKE_TABS;
   fx = F;
+  unbondCols: CxColumn<any>[] = [
+    { key: 'amount', label: 'Amount', align: 'right', sort: u => Number(u.amount) },
+    { key: 'anchor', label: 'Paid at anchor', align: 'right', sort: u => Number(u.releaseanchor) },
+  ];
+  evidenceCols: CxColumn<any>[] = [{ key: 'slot', label: 'Slot', sort: x => Number(x.slot) }, { key: 'hashes', label: 'The two blocks' }];
   key = '';
   view$: Observable<FlushLoaded<any>>;
   pos$: Observable<FlushLoaded<any>>;

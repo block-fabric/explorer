@@ -37,7 +37,7 @@ interface PegEvent {
     .cell.on { background: var(--ec); }
     .cell.contested { background: #ff6b6b; }
     .kv { width: 100%; font-size: 0.85rem; margin: 0; td { padding: 3px 4px; vertical-align: middle; } td:first-child { color: var(--transparent-fg); } }
-    .share { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: #ffffff10; margin: 4px 0 10px; .fill { background: var(--chain-accent, #E6A849); } }
+    .bar { margin: 4px 0 10px; }
     .g-cells { flex-wrap: nowrap; }
     .cell { max-width: none; }
     .big-row { flex-wrap: wrap; }
@@ -97,14 +97,14 @@ interface PegEvent {
                   <div class="big"><div class="big-value"><app-l2-amount [sats]="d.s.wealth" [compact]="true"></app-l2-amount></div><div class="big-label">held on {{ profile.name }}</div></div>
                   <div class="big"><div class="big-value">{{ pct(share(d.s), 2) }}</div><div class="big-label">of the escrow</div></div>
                 </div>
-                @if (d.s.escrow) {<div class="share" [title]="pct(share(d.s), 2) + ' of the escrow is held on the sidechain'"><span class="fill" [style.width.%]="share(d.s) * 100"></span></div>}
+                @if (d.s.escrow) {<div class="bar" [title]="pct(share(d.s), 2) + ' of the escrow is held on the sidechain'"><div class="fill" [style.width.%]="share(d.s) * 100"></div></div>}
                 <table class="kv"><tbody>
                   @if (d.s.escrow; as e) {
-                    <tr><td>Escrow output</td><td><app-l2-main-link kind="tx" [id]="e.txid" [short]="true"></app-l2-main-link> <span class="muted">· sequence {{ e.sequence | number }}</span></td></tr>
+                    <tr><td>Escrow output</td><td><app-l2-main-link kind="tx" [id]="e.txid" [short]="true"></app-l2-main-link><span class="muted ms-1">· sequence {{ e.sequence | number }}</span></td></tr>
                     <tr><td>Escrow − wealth</td><td><app-l2-amount [sats]="e.amount - d.s.wealth" [signed]="true"></app-l2-amount></td></tr>
                   }
-                  <tr><td>Deposited</td><td><app-l2-amount [sats]="d.s.deposits.amount" [compact]="true"></app-l2-amount> <span class="muted">· {{ d.s.deposits.count | number }} deposits</span></td></tr>
-                  <tr><td>Withdrawn</td><td><app-l2-amount [sats]="d.s.withdrawals.amount" [compact]="true"></app-l2-amount> <span class="muted">· {{ d.s.withdrawals.count | number }} withdrawals</span></td></tr>
+                  <tr><td>Deposited</td><td><app-l2-amount [sats]="d.s.deposits.amount" [compact]="true"></app-l2-amount><span class="muted ms-1">· {{ d.s.deposits.count | number }} deposits</span></td></tr>
+                  <tr><td>Withdrawn</td><td><app-l2-amount [sats]="d.s.withdrawals.amount" [compact]="true"></app-l2-amount><span class="muted ms-1">· {{ d.s.withdrawals.count | number }} withdrawals</span></td></tr>
                 </tbody></table>
                 <a class="more" [routerLink]="['/deposits' | relativeUrl]">Deposits and withdrawals →</a>
               }
@@ -144,7 +144,7 @@ interface PegEvent {
                   <table class="kv"><tbody>
                     <tr><td>M6 id</td><td>@if (b.m6id) {<span class="mono" [title]="b.m6id">{{ shortId(b.m6id, 10) }}</span>} @else {<span class="muted">not yet proposed</span>}</td></tr>
                     @for (p of b.payouts.slice(0, 4); track $index) {
-                      <tr><td><app-l2-main-link kind="address" [id]="p.address" [text]="shortId(p.address, 6)"></app-l2-main-link></td><td class="text-end"><app-l2-amount [sats]="p.amount"></app-l2-amount> <span class="muted">· fee {{ p.fee | number }}</span></td></tr>
+                      <tr><td><app-l2-main-link kind="address" [id]="p.address" [text]="shortId(p.address, 6)"></app-l2-main-link></td><td class="text-end"><app-l2-amount [sats]="p.amount"></app-l2-amount><span class="muted ms-1">· fee {{ p.fee | number }}</span></td></tr>
                     }
                   </tbody></table>
                   @if (b.payouts.length > 4) {<div class="muted small">and {{ b.payouts.length - 4 }} more</div>}

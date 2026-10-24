@@ -18,3 +18,6 @@
 .pill.accent { background: color-mix(in srgb, var(--chain-accent, #E6A849) 30%, transparent); }
 .pos { color: #3bd16f; } .neg { color: #ff6b6b; }
 section + section { margin-top: 14px; border-top: 1px solid var(--secondary); padding-top: 10px; }
+
+// the shared look (last, so it wins)
+@import '../../components/chain-ui';
