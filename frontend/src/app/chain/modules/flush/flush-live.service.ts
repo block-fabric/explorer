@@ -39,7 +39,7 @@ export class FlushLiveService {
   private waiting = new Map<string, ReplaySubject<FlushBlockMark | null>>(); // replays: a late subscriber still gets its answer
   private timer: ReturnType<typeof setTimeout> | null = null;
 
-  private anchors: { at: number; obs: Observable<Map<string, FlushAnchor>> } | null = null;
+  private anchors: { at: number; obs: Observable<{ anchored: Map<string, FlushAnchor>; finalAnchors: number | null }> } | null = null;
 
   constructor(private api: FlushApiService) {}
 
@@ -48,17 +48,29 @@ export class FlushLiveService {
    * the eCash block of the ticket or BMM block that anchored it
    */
   anchored$(hash: string): Observable<FlushAnchor | null> {
+    return this.anchorInfo$().pipe(map(i => i.anchored.get(hash) ?? null));
+  }
+
+  /** how many anchors make a block final (getanchorinfo's finalanchors; null: not known) */
+  finalAnchors$(): Observable<number | null> {
+    return this.anchorInfo$().pipe(map(i => i.finalAnchors));
+  }
+
+  private anchorInfo$(): Observable<{ anchored: Map<string, FlushAnchor>; finalAnchors: number | null }> {
     const now = Date.now();
     if (!this.anchors || now - this.anchors.at > 60000) {
       const obs = this.api.rpc$<any>('getanchorinfo', ANCHORS).pipe(
-        map(info => new Map<string, FlushAnchor>((info?.recent ?? []).filter((a: any) => a?.anchored)
-          .map((a: any) => [a.anchored, { kind: a.kind, mainheight: a.mainheight, by: a.block, byHeight: a.height }]))),
-        catchError(() => of(new Map<string, FlushAnchor>())),
+        map(info => ({
+          anchored: new Map<string, FlushAnchor>((info?.recent ?? []).filter((a: any) => a?.anchored)
+            .map((a: any) => [a.anchored, { kind: a.kind, mainheight: a.mainheight, by: a.block, byHeight: a.height }])),
+          finalAnchors: Number(info?.finalanchors) || null,
+        })),
+        catchError(() => of({ anchored: new Map<string, FlushAnchor>(), finalAnchors: null })),
         shareReplay(1),
       );
       this.anchors = { at: now, obs };
     }
-    return this.anchors.obs.pipe(map(m => m.get(hash) ?? null));
+    return this.anchors.obs;
   }
 
   mark$(hash: string): Observable<FlushBlockMark | null> {

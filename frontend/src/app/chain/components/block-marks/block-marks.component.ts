@@ -97,16 +97,17 @@ import { FreebankApiService } from '@app/chain/modules/freebank/freebank-api.ser
         <ng-container *ngIf="fAnchored"> · anchored by <app-sidechain-label chain="ecash" name="eCash"></app-sidechain-label> {{ fAnchored.mainheight | number }}</ng-container>
         · {{ fMark.finality?.status || 'not on the active chain' }}
       </span>
-      <!-- the ribbon: what the block is, and the eCash block that ties it to eCash (a BMM block's carrier, the ticket an
-           anchor acknowledges, the anchor that anchored it) -->
-      <div *ngIf="mode === 'below' || mode === 'inline'" class="marks" [class.inline]="mode === 'inline'" [title]="fTitle">
-        <span class="icons">
-          <span class="fk" [class.fk-tie]="fKind !== 'PoS'">{{ fKind }}</span>
-          <ng-container *ngIf="fMain"><app-svg-images name="chain-mark" fill="ecash" width="11" height="11" class="fe"></app-svg-images><span class="fmain">{{ fMain | number }}</span></ng-container>
+      <!-- the ribbon and the blocks list: what the block is (a chip: Stake, BMM with the eCash block that carried it, Anchor
+           with the eCash block whose ticket it acknowledges) and its finality (a ring: soft empty, anchored filling with its
+           anchors against those that make it final, final full and green) -->
+      <div *ngIf="mode === 'below' || mode === 'inline'" class="fmarks" [class.inline]="mode === 'inline'" [title]="fTitle">
+        <span class="fchip" [ngClass]="'fchip-' + fKindId">
+          <app-svg-images *ngIf="fKindId !== 'stake'" name="chain-mark" fill="ecash" width="10" height="10" class="fchip-mark"></app-svg-images>
+          {{ fKindLabel }}<b *ngIf="fMain">{{ fMain | number }}</b>
         </span>
-        <!-- finality: soft (a block of stake alone), anchored (an eCash anchor covers it, n of them so far), final (enough
-             anchors: it cannot be reorganised) -->
-        <span class="ffin" [ngClass]="'ffin-' + (fMark.finality?.status || 'none')">{{ fFinality }}</span>
+        <span class="ffin2" [ngClass]="'ff-' + fStatus">
+          <i class="ring" [style.--p]="fProgress"></i>{{ fFinality }}
+        </span>
       </div>
     </ng-container>
 
@@ -186,6 +187,22 @@ import { FreebankApiService } from '@app/chain/modules/freebank/freebank-api.ser
     .dep { color: #3bd16f; } .wd { color: #ff6b6b; } .bn { color: #ffd166; } .pr { color: #5aa6ff; }
     .none { color: var(--transparent-fg); }
     .fk { font-weight: 700; font-size: 11px; color: var(--transparent-fg); }
+    .fmarks { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; line-height: 1.2; }
+    .fmarks.inline { flex-direction: row; justify-content: flex-start; gap: 8px; }
+    .fchip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 99px; font-size: 10.5px; font-weight: 600;
+      letter-spacing: 0.02em; white-space: nowrap; border: 1px solid #ffffff22; background: #ffffff0a; color: #ffffffcc; }
+    .fchip b { font-weight: 600; margin-left: 2px; font-variant-numeric: tabular-nums; }
+    .fchip-bmm { border-color: #e6a84966; background: #e6a8491f; color: #ffd99a; }
+    .fchip-anchor { border-color: color-mix(in srgb, var(--chain-accent) 60%, transparent); background: color-mix(in srgb, var(--chain-accent) 18%, transparent); color: var(--fg); }
+    .fchip-mark { display: inline-flex; color: #E6A849; }
+    .ffin2 { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--transparent-fg); white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .ring { --c: var(--transparent-fg); width: 10px; height: 10px; border-radius: 50%; flex: none; display: inline-block;
+      background: conic-gradient(var(--c) calc(var(--p, 0) * 1turn), #ffffff1f 0);
+      -webkit-mask: radial-gradient(farthest-side, transparent 52%, #000 56%); mask: radial-gradient(farthest-side, transparent 52%, #000 56%); }
+    .ff-soft .ring { --c: #ffffff66; box-shadow: inset 0 0 0 1.5px #ffffff3d; }
+    .ff-anchored { color: color-mix(in srgb, var(--chain-accent) 75%, white); } .ff-anchored .ring { --c: var(--chain-accent); }
+    .ff-final { color: #3bd16f; font-weight: 600; } .ff-final .ring { --c: #3bd16f; -webkit-mask: none; mask: none; box-shadow: 0 0 8px #3bd16f66; }
+    .ff-none { color: #ff8a8a; } .ff-none .ring { --c: #ff6b6b; }
     .fk-tie { color: var(--fg); background: color-mix(in srgb, var(--chain-accent) 30%, transparent); padding: 0 4px; border-radius: 3px; }
     .fe { margin-left: 4px; vertical-align: -1px; }
     .ffin { display: block; font-size: 10.5px; line-height: 1.3; color: var(--transparent-fg); }
@@ -226,6 +243,11 @@ export class ChainBlockMarksComponent implements OnChanges, OnDestroy {
   fMain: number | null = null;
   fAnchored: FlushAnchor | null = null;
   fFinality = '';
+  fKindId: 'stake' | 'bmm' | 'anchor' = 'stake';
+  fKindLabel = 'Stake';
+  fStatus: 'soft' | 'anchored' | 'final' | 'none' = 'soft';
+  /** the finality ring's fill, 0 to 1 */
+  fProgress = 0;
   fTitle = '';
   fColor = 'transparent';
   l2Mark: L2Mark | null | undefined;
@@ -246,18 +268,25 @@ export class ChainBlockMarksComponent implements OnChanges, OnDestroy {
         return;
       }
       const live = this.injector.get(FlushLiveService);
-      this.sub = combineLatest([live.mark$(this.hash), live.anchored$(this.hash)]).subscribe(([m, anchored]) => {
+      this.sub = combineLatest([live.mark$(this.hash), live.anchored$(this.hash), live.finalAnchors$()]).subscribe(([m, anchored, need]) => {
         this.fMark = m;
         this.fAnchored = anchored;
+        // the chip: what the block is; the ring: how final it is (anchors of those that make it final)
+        this.fKindId = m?.kind === 'bmm' ? 'bmm' : m?.ack ? 'anchor' : 'stake';
+        this.fKindLabel = this.fKindId === 'bmm' ? 'BMM' : this.fKindId === 'anchor' ? 'Anchor' : 'Stake';
+        const status = m?.finality?.status;
+        const anchors = m?.finality?.anchors ?? 0;
+        this.fStatus = !m ? 'none' : status === 'final' ? 'final' : status === 'anchored' ? 'anchored' : status === 'soft' ? 'soft' : 'none';
+        this.fProgress = this.fStatus === 'final' ? 1 : this.fStatus === 'anchored' ? Math.min(0.95, need ? anchors / need : 0.5) : 0;
         // a BMM block, else a block acking an eCash ticket (an anchor), else one an anchor anchored, else a block of stake
         [this.fKind, this.fMain] = m?.kind === 'bmm' ? ['BMM', m.mainheight ?? null]
           : m?.ack ? ['⚓ Anchor', m.ack.mainheight ?? null]
-          : anchored ? ['Anchored', anchored.mainheight]
+          : anchored ? ['Anchored', null] // (which anchor: in the title; the ring shows it anchored)
           : ['PoS', null];
         const st = m?.finality?.status;
         const n = m?.finality?.anchors ?? 0;
-        this.fFinality = st === 'final' ? '✓ final' : st === 'anchored' ? `anchored · ${n} anchor${n === 1 ? '' : 's'}`
-          : st === 'soft' ? 'soft' : m ? 'not on the active chain' : '';
+        this.fFinality = st === 'final' ? 'final' : st === 'anchored' ? (need ? `${n}/${need} anchors` : `${n} anchor${n === 1 ? '' : 's'}`)
+          : st === 'soft' ? 'soft' : m ? 'off the active chain' : '';
         this.fColor = st === 'final' ? '#3bd16f' : st === 'anchored' ? (PROFILE.color) : 'transparent';
         this.fTitle = m ? (m.kind === 'pos' ? `Block of stake, slot ${m.slot}` + (m.proposer ? `, signed by ${m.proposer}` : '')
           : 'BMM block' + (m.mainheight ? `, committed to by eCash block ${m.mainheight}` : ''))
