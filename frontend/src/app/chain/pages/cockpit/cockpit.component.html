@@ -273,8 +273,8 @@
             <ng-template cxCell="height" let-b>{{ b.height | number }}</ng-template>
             <ng-template cxCell="state" let-b>
               @if (b.payable) {<span class="pill ok">payable</span>}
-              @else if (bundleProgress(b).canMake) {<span class="pill">needs {{ bundleProgress(b).needed | number }} more votes</span>}
-              @else {<span class="pill bad">cannot reach the threshold in time</span>}
+              @else if (bundleProgress(b).canMake) {<span class="pill" [title]="'needs ' + (bundleProgress(b).needed | number) + ' more votes'">{{ bundleProgress(b).needed | number }} to go</span>}
+              @else {<span class="pill bad" title="cannot reach the threshold in time">out of time</span>}
             </ng-template>
           </app-chain-table>
         </div>
