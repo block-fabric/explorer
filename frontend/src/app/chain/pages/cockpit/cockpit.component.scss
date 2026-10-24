@@ -29,10 +29,6 @@ h5 small, .card-box h3 small { color: var(--cx-ink-3); font-size: 0.75rem; font-
   background: linear-gradient(180deg, #ffffff07, transparent 55%), var(--cx-plate);
   border: 1px solid var(--cx-rule); border-radius: var(--cx-radius); padding: 16px 18px 14px;
   transition: border-color 0.2s, box-shadow 0.2s;
-  &::before {
-    content: ''; position: absolute; left: 18px; right: 18px; top: 0; height: 1px;
-    background: linear-gradient(90deg, transparent, var(--sc), transparent);
-  }
   &:hover { border-color: #ffffff26; box-shadow: 0 10px 30px -18px #000c; }
   &.on { border-color: color-mix(in srgb, var(--sc) 55%, transparent); }
 }

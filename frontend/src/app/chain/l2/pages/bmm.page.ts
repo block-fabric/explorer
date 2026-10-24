@@ -373,7 +373,7 @@ export class L2BmmPage implements OnInit, AfterViewInit, OnDestroy {
     this.charts = {
       ...this.charts,
       economics: baseChart({
-        grid: { left: 56, right: 56, top: 30, bottom: 28 },
+        grid: { left: 56, right: 56, top: 48, bottom: 28 },
         xAxis: { type: 'category', data: asc.map(r => r.height), ...axisStyle() },
         yAxis: [
           { type: 'value', name: 'sats', nameTextStyle: { color: '#ffffff88', fontSize: 10 }, ...axisStyle() },

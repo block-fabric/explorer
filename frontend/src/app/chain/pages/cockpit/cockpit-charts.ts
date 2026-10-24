@@ -25,9 +25,9 @@ export function baseChart(extra: any = {}): any {
   return {
     animation: false,
     backgroundColor: 'transparent',
-    grid: { left: 52, right: 16, top: 30, bottom: 28 },
+    grid: { left: 52, right: 16, top: 48, bottom: 28 },
     tooltip: { trigger: 'axis', backgroundColor: 'rgba(17,19,31,0.95)', borderColor: '#000', textStyle: { color: '#fff', fontSize: 12 }, confine: true },
-    legend: { top: 0, textStyle: { color: '#ffffffcc', fontSize: 11 }, icon: 'roundRect', itemWidth: 10, itemHeight: 10 },
+    legend: { type: 'scroll', top: 0, left: 8, right: 8, textStyle: { color: '#ffffffcc', fontSize: 11 }, icon: 'roundRect', itemWidth: 10, itemHeight: 10, pageIconColor: '#ffffffcc', pageIconInactiveColor: '#ffffff33', pageIconSize: 10, pageTextStyle: { color: '#ffffff99', fontSize: 10 } },
     ...extra,
   };
 }

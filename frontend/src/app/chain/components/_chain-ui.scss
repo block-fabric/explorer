@@ -25,10 +25,6 @@ h2, .cp-h2 { font-weight: 500; letter-spacing: -0.02em; }
   background: linear-gradient(180deg, #ffffff07, transparent 55%), var(--cx-plate);
   border: 1px solid var(--cx-rule); border-radius: var(--cx-radius); padding: 14px 16px 13px;
   transition: border-color 0.2s, box-shadow 0.2s;
-  &::before { // a thread of the chain's colour along the top
-    content: ''; position: absolute; left: 16px; right: 16px; top: 0; height: 1px;
-    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--cx-accent) 70%, transparent), transparent);
-  }
   &:hover { border-color: #ffffff26; box-shadow: 0 10px 30px -18px #000c; }
   .l, .k-label { font-size: 0.74rem; text-transform: none; letter-spacing: 0.01em; color: var(--cx-ink-3); }
   .v, .k-value { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; margin: 3px 0 2px; line-height: 1.2; }
@@ -152,3 +148,20 @@ h2, .cp-h2 { font-weight: 500; letter-spacing: -0.02em; }
 }
 .table > tbody > tr:hover > td:first-child { box-shadow: inset 2px 0 0 var(--cx-accent); }
 .chip.on, .cp-chip.on, .pill.on { box-shadow: 0 0 14px -4px color-mix(in srgb, var(--sc, var(--cx-accent)) 70%, transparent); }
+
+// edges: a gradient hairline round every card, lit at the top left and fading round it, with a breath of the chain's
+// colour at the far corner (a masked ::after, so the plate's own border stays a quiet rule beneath it)
+.kpi, .card-box, .chart-box, .box, .sc-card { position: relative; }
+.kpi::after, .card-box::after, .chart-box::after, .box::after, .sc-card::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none;
+  background: linear-gradient(150deg, #ffffff3d 0%, #ffffff12 22%, #ffffff05 50%, #ffffff08 75%,
+    color-mix(in srgb, var(--sc, var(--cx-accent)) 32%, transparent) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  transition: opacity 0.2s;
+}
+.kpi, .card-box, .chart-box, .box { border-color: #ffffff0d !important; }
+.kpi:hover::after, .sc-card:hover::after {
+  background: linear-gradient(150deg, #ffffff5c 0%, #ffffff1c 24%, #ffffff08 50%, #ffffff0d 75%,
+    color-mix(in srgb, var(--sc, var(--cx-accent)) 55%, transparent) 100%);
+}

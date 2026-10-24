@@ -231,8 +231,9 @@ export class ChainMiningComponent implements OnInit, OnDestroy {
     const tags = [...d.topTags, ...(s.some(b => b.pools.Other) ? ['Other'] : [])];
 
     this.charts.dominance = {
-      animation: false, backgroundColor: 'transparent', grid: { left: 44, right: 12, top: 30, bottom: 28 },
-      legend: { top: 0, textStyle: { color: '#ffffffcc', fontSize: 11 }, icon: 'roundRect', itemWidth: 10, itemHeight: 10 },
+      animation: false, backgroundColor: 'transparent', grid: { left: 44, right: 12, top: 48, bottom: 28 },
+      // one scrolling legend line above the plot: the pools' names never cover it
+      legend: { type: 'scroll', top: 0, left: 8, right: 8, textStyle: { color: '#ffffffcc', fontSize: 11 }, icon: 'roundRect', itemWidth: 10, itemHeight: 10, pageIconColor: '#ffffffcc', pageIconInactiveColor: '#ffffff33', pageIconSize: 10, pageTextStyle: { color: '#ffffff99', fontSize: 10 } },
       tooltip: this.tooltip({ valueFormatter: (v: number) => (v ?? 0).toFixed(1) + '%' }), xAxis, yAxis: yv('%', { max: 100 }),
       series: tags.map(t => ({ name: this.nameOf(t), type: 'line', stack: 'dom', symbol: 'none', areaStyle: { opacity: 0.8, color: this.colorOf(t) }, lineStyle: { width: 0 }, itemStyle: { color: this.colorOf(t) },
         data: s.map(b => b.blocks ? 100 * (b.pools[t] ?? 0) / b.blocks : 0) })),
