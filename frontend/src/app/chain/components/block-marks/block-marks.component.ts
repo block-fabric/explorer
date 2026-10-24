@@ -124,7 +124,7 @@ import { FreebankApiService } from '@app/chain/modules/freebank/freebank-api.ser
           <span *ngIf="voteCount(s, 'downvote')" class="down">▼{{ voteCount(s, 'downvote') }}</span>
         </ng-container>
         <ng-template #noVote><span class="none">–</span></ng-template>
-        <span *ngIf="s.proposals || s.acks" class="pr" [title]="(s.proposals ? s.proposals + ' sidechain proposal(s)' : '') + (s.proposals && s.acks ? ', ' : '') + (s.acks ? s.acks + ' ack(s)' : '')">✦</span>
+        <span *ngIf="s.proposals" class="pr" [title]="s.proposals + ' sidechain proposal(s)'">✦</span>
       </span>
     </ng-container>
   `,
@@ -282,7 +282,8 @@ export class ChainBlockMarksComponent implements OnChanges, OnDestroy {
 
   votesTitle(s: any): string {
     const cast = (s.votes ?? []).filter((v: any) => v.vote !== 'abstain');
-    return cast.length ? 'Bundle votes: ' + cast.map((v: any) => `${v.vote} ${v.name}`).join(', ') : 'No bundle vote in this block (abstained)';
+    return (cast.length ? 'Bundle votes: ' + cast.map((v: any) => `${v.vote} ${v.name}`).join(', ') : 'No bundle vote in this block (abstained)')
+      + (s.acks ? ` · ${s.acks} ack(s) of sidechain proposals` : '');
   }
 
   colorOf(slot: number): string {
