@@ -100,7 +100,7 @@ items, with the full count beside them.
 | unreadable | a tagged object that does not decode | error |
 
 ## A block's BMM fields: GET /api/v1/freebank/block/:hash, /api/v1/freebank/blocks?hashes=a,b,… (≤ 30)
-`{ hash, height, mainblock: "<eCash block hash>" | null, withdrawalbundle: "<hash>" | null, onChain: bool }`, from
+`{ hash, height, mainblock: "<eCash block hash>" | null, withdrawalbundle: "<hash>" | null, onChain: bool, credit: { <family>: n } | null }` (credit: the block's credit operations by family from the activity index, null until it has read the block), from
 the 136-byte header (version, prev, merkle root, time, hashWithdrawalBundle, hashMainBlock). The batch answers
 `{ <hash>: fields | null }`.
 

@@ -120,6 +120,20 @@ export class FreebankActivity {
     return { low: any ? this.low : null, high: any ? this.high : null, tip: this.tip, complete: any && this.low === 0 };
   }
 
+  /** A block's credit operations and asset geneses by family; null: the index has not read that block (or another
+   * block is at its height) */
+  countsAt(height: number, hash: string): Record<string, number> | null {
+    const b = this.blocks.get(height);
+    if (!b || b.hash !== hash) {
+      return null;
+    }
+    const out: Record<string, number> = {};
+    for (const it of b.items) {
+      out[it.family] = (out[it.family] ?? 0) + 1;
+    }
+    return out;
+  }
+
   /** Items newest first, and the cursor of the next page (null: none) */
   query(q: ActivityQuery): { items: ActivityItem[]; next: string | null } {
     const out: ActivityItem[] = [];

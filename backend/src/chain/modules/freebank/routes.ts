@@ -174,7 +174,9 @@ class FreebankRoutes {
     if (!HEX64.test(hash)) {
       throw new RouteError(400, 'Invalid block hash');
     }
-    this.send(res, await this.blockFields(hash));
+    const fields = JSON.parse(String((await this.blockFields(hash)).body));
+    res.setHeader('Cache-Control', 'public, max-age=5');
+    res.json({ ...fields, credit: activity.countsAt(fields.height, hash) });
   };
 
   /** GET freebank/blocks?hashes=a,b,…: the BMM fields of up to MAX_BLOCKS blocks at once, by hash */
@@ -187,7 +189,8 @@ class FreebankRoutes {
     const out: Record<string, unknown> = {};
     for (const h of hashes) { // one at a time: each is cached, and the node's request slots stay for others
       try {
-        out[h] = JSON.parse((await this.blockFields(h)).body);
+        const fields = JSON.parse((await this.blockFields(h)).body);
+        out[h] = { ...fields, credit: activity.countsAt(fields.height, h) };
       } catch (e) {
         out[h] = null;
       }

@@ -25,6 +25,14 @@
         <th *ngIf="isMempoolModule" class="txs text-end" i18n="dashboard.txs" [ngClass]="{'widget': widget, 'legacy': !isMempoolModule}"
           i18n-ngbTooltip="dashboard.txs" ngbTooltip="TXs" placement="bottom" #txs [disableTooltip]="!isEllipsisActive(txs)">TXs</th>
         <th *ngIf="!isMempoolModule" class="txs text-end" i18n="dashboard.txs" [ngClass]="{'widget': widget, 'legacy': !isMempoolModule}">Transactions</th>
+        <ng-container *ngIf="l2 && !widget">
+          <th class="dc text-end" title="The time since the block before">Interval</th>
+          <th *ngIf="sideBmm" class="dc text-end" title="The bid paid to the eCash miner that carried this block">Bid</th>
+          <th *ngIf="sideBmm" class="dc text-end" title="The block's fees minus its bid, sats">Margin</th>
+          <th *ngIf="sidePeg" class="dc" title="Deposits from eCash credited in this block">Peg</th>
+          <th *ngIf="sideCredit" class="dc" title="The block's credit operations by family">Credit</th>
+          <th *ngIf="flushKind" class="dc" title="The validator that signed this block of stake">Proposer</th>
+        </ng-container>
         <ng-container *ngIf="drivechain && !widget">
           <th class="dc dc-bmm" title="The sidechain blocks this block carried (blind merged mining)">BMM</th>
           <th class="dc text-end" title="The BMM bids this block's miner earned">Bids</th>
@@ -70,10 +78,10 @@
             </ng-template>
           </td>
           <td *ngIf="isMempoolModule" class="reward text-end" [ngClass]="{'widget': widget, 'legacy': !isMempoolModule}">
-            <app-amount [satoshis]="block.extras.reward" [noFiat]="true" digitsInfo="1.2-2"></app-amount>
+            <app-amount [satoshis]="block.extras.reward" [noFiat]="true" [digitsInfo]="amountDigits"></app-amount>
           </td>
           <td *ngIf="isMempoolModule && !auditAvailable || isMempoolModule && !widget" class="fees text-end" [class]="isMempoolModule ? '' : 'legacy'">
-            <app-amount [satoshis]="block.extras.totalFees" [noFiat]="true" digitsInfo="1.2-2"></app-amount>
+            <app-amount [satoshis]="block.extras.totalFees" [noFiat]="true" [digitsInfo]="amountDigits"></app-amount>
           </td>
           <td *ngIf="auditAvailable" class="fee-delta" [ngClass]="{'widget': widget, 'legacy': !isMempoolModule}">
             <span *ngIf="block.extras.feeDelta" class="difference" [class.positive]="block.extras.feeDelta >= 0" [class.negative]="block.extras.feeDelta < 0">
@@ -83,6 +91,14 @@
           <td class="txs text-end" [ngClass]="{'widget': widget, 'legacy': !isMempoolModule}">
             {{ block.tx_count | number }}
           </td>
+          <ng-container *ngIf="l2 && !widget">
+            <td class="dc text-end interval">{{ interval(blocks, i) }}</td>
+            <td *ngIf="sideBmm" class="dc text-end"><app-chain-block-marks [hash]="block.id" mode="bid"></app-chain-block-marks></td>
+            <td *ngIf="sideBmm" class="dc text-end"><app-chain-block-marks [hash]="block.id" mode="margin" [fees]="block.extras?.totalFees ?? null"></app-chain-block-marks></td>
+            <td *ngIf="sidePeg" class="dc"><app-chain-block-marks [hash]="block.id" mode="l2peg"></app-chain-block-marks></td>
+            <td *ngIf="sideCredit" class="dc"><app-chain-block-marks [hash]="block.id" mode="credit"></app-chain-block-marks></td>
+            <td *ngIf="flushKind" class="dc"><app-chain-block-marks [hash]="block.id" mode="proposer"></app-chain-block-marks></td>
+          </ng-container>
           <ng-container *ngIf="drivechain && !widget">
             <td class="dc dc-bmm"><app-chain-block-marks [hash]="block.id" mode="bmm" [size]="14"></app-chain-block-marks></td>
             <td class="dc text-end"><app-chain-block-marks [hash]="block.id" mode="bids"></app-chain-block-marks></td>
@@ -126,6 +142,7 @@
               <span class="skeleton-loader" style="max-width: 75px"></span>
             </td>
             <td *ngIf="drivechain && !widget" class="dc" colspan="4"><span class="skeleton-loader"></span></td>
+            <td *ngIf="l2 && !widget" class="dc" [attr.colspan]="1 + (sideBmm ? 2 : 0) + (sidePeg || sideCredit || flushKind ? 1 : 0)"><span class="skeleton-loader"></span></td>
             <td class="size" *ngIf="!widget" [class]="isMempoolModule ? '' : 'legacy'">
               <span class="skeleton-loader"></span>
             </td>

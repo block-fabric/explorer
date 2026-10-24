@@ -30,6 +30,13 @@ export class BlocksList implements OnInit {
   flushKind = PROFILE.kind === 'flush'; // eCash Explorer: a sidechain explorer (chain/l2/full)
   /** eCash Explorer: eCash's blocks list carries each block's drivechain columns (BMM, bids, peg, votes) */
   drivechain = PROFILE.kind === 'l1';
+  /** a sidechain's blocks list columns: BMM chains the bid and margin, sidechain-API chains the deposits, FreeBank its
+   * credit operations, Flush the proposer; every sidechain the time since the block before */
+  sideBmm = PROFILE.kind !== 'l1' && PROFILE.kind !== 'flush';
+  sidePeg = PROFILE.kind === 'l2';
+  sideCredit = PROFILE.kind === 'freebank';
+  /** a sidechain's amounts are small: more decimals than eCash's two */
+  amountDigits = PROFILE.kind === 'l1' ? '1.2-2' : '1.2-6';
   auditAvailable = false;
   isLoading = true;
   fromBlockHeight = undefined;
@@ -191,6 +198,17 @@ export class BlocksList implements OnInit {
 
   pageChange(page: number): void {
     this.router.navigate([this.relativeUrlPipe.transform('/blocks/'), page]);
+  }
+
+  /** the time since the block before (the next row: newest first), in words; '' for the page's last row */
+  interval(blocks: any[], i: number): string {
+    const a = blocks[i]?.timestamp;
+    const b = blocks[i + 1]?.timestamp;
+    if (!a || !b) {
+      return '';
+    }
+    const s = Math.max(0, a - b);
+    return s < 60 ? `${s} s` : s < 3600 ? `${Math.round(s / 60)} min` : `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min`;
   }
 
   trackByBlock(index: number, block: BlockExtended): number {

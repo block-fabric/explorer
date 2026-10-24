@@ -51,6 +51,40 @@ import { FreebankApiService } from '@app/chain/modules/freebank/freebank-api.ser
       </ng-container>
     </ng-container>
 
+    <!-- a sidechain's blocks list columns: the bid paid on eCash, the margin (fees − bid), the deposits credited, FreeBank's
+         credit operations -->
+    <ng-container *ngIf="l2 && l2Mark !== undefined">
+      <span *ngIf="mode === 'bid'" class="col">
+        <ng-container *ngIf="l2Mark?.bmm?.bid !== null && l2Mark?.bmm?.bid !== undefined; else noBid2">{{ l2Mark.bmm.bid | number }}<span class="u">sats</span></ng-container>
+        <ng-template #noBid2><span class="none" title="No bid known for this block">–</span></ng-template>
+        <span *ngIf="l2Mark?.bmm?.contested" class="beaten" title="Other BMM requests for this slot in that eCash block">⚔</span>
+      </span>
+      <span *ngIf="mode === 'margin'" class="col">
+        <ng-container *ngIf="l2Mark?.bmm?.bid !== null && l2Mark?.bmm?.bid !== undefined && fees !== null; else noMargin">
+          <span [class.up]="fees - l2Mark.bmm.bid >= 0" [class.down]="fees - l2Mark.bmm.bid < 0" [title]="(fees | number) + ' sats of fees − ' + (l2Mark.bmm.bid | number) + ' sats of bid'">{{ fees - l2Mark.bmm.bid > 0 ? '+' : '' }}{{ fees - l2Mark.bmm.bid | number }}</span>
+        </ng-container>
+        <ng-template #noMargin><span class="none">–</span></ng-template>
+      </span>
+      <span *ngIf="mode === 'l2peg'" class="col">
+        <span *ngIf="l2Mark?.deposits; else noPeg" class="dep" [title]="l2Mark.deposits + ' deposit(s) from eCash credited'">↓ {{ l2Mark.deposits }}</span>
+        <ng-template #noPeg><span class="none">–</span></ng-template>
+      </span>
+      <span *ngIf="mode === 'credit'" class="col">
+        <ng-container *ngIf="creditList.length; else noCredit">
+          <span *ngFor="let c of creditList" class="cr" [title]="c.n + ' ' + c.family + ' operation(s)'">{{ c.n }}<i>{{ c.family }}</i></span>
+        </ng-container>
+        <ng-template #noCredit><span class="none" [title]="fbCredit === null ? 'Not read yet by the credit history' : 'No credit operation in this block'">{{ fbCredit === null ? '…' : '–' }}</span></ng-template>
+      </span>
+    </ng-container>
+
+    <!-- Flush: who signed a block of stake -->
+    <ng-container *ngIf="flush && fMark && mode === 'proposer'">
+      <span class="col">
+        <a *ngIf="fMark.proposer; else noProposer" [routerLink]="['/validator', fMark.proposer]" class="mono" [title]="fMark.proposer">{{ fMark.proposer | slice:0:8 }}…{{ fMark.proposer | slice:-4 }}</a>
+        <ng-template #noProposer><span class="none" [title]="fMark.kind === 'bmm' ? 'A BMM block: its bidder, not a validator, made it' : ''">{{ fMark.kind === 'bmm' ? 'BMM' : '–' }}</span></ng-template>
+      </span>
+    </ng-container>
+
     <!-- Flush (chain/modules/flush): a block of stake or a BMM block, and its finality (GET /api/v1/flush/block/:hash) -->
     <ng-container *ngIf="flush && fMark">
       <div *ngIf="mode === 'stripe'" class="stripe" [title]="fTitle">
@@ -135,6 +169,9 @@ import { FreebankApiService } from '@app/chain/modules/freebank/freebank-api.ser
     .col .beaten { margin-left: 6px; font-size: 0.78em; color: #ff9b9b; }
     .col .dep { color: #3bd16f; } .col .wd { color: #ff6b6b; } .col .bn { color: #ffd166; }
     .col .up { color: #3bd16f; } .col .down { color: #ff6b6b; } .col .pr { color: #a585ff; }
+    .col .cr { display: inline-flex; align-items: baseline; gap: 2px; padding: 0 6px; border-radius: 99px; border: 1px solid #ffffff1f; font-size: 0.92em; }
+    .col .cr i { font-style: normal; color: var(--transparent-fg); font-size: 0.85em; }
+    .col .mono { font-family: monospace; font-size: 0.92em; }
     :host { display: block; }
     .miner-badge { background: color-mix(in srgb, var(--chain-accent, #E6A849) 25%, transparent); color: var(--fg); font-size: 0.85em; }
     .stripe { display: flex; gap: 1px; height: 4px; margin: 4px 8px 0; border-radius: 2px; overflow: hidden; }
@@ -168,7 +205,10 @@ import { FreebankApiService } from '@app/chain/modules/freebank/freebank-api.ser
 export class ChainBlockMarksComponent implements OnChanges, OnDestroy {
   @Input() hash: string;
   /** stripe, below, inline, miner: the ribbon's and the lists' marks; bmm, bids, peg, votes: one column each of the blocks list */
-  @Input() mode: 'stripe' | 'below' | 'inline' | 'miner' | 'bmm' | 'bids' | 'peg' | 'votes' = 'below';
+  @Input() mode: 'stripe' | 'below' | 'inline' | 'miner' | 'bmm' | 'bids' | 'peg' | 'votes'
+    | 'bid' | 'margin' | 'l2peg' | 'credit' | 'proposer' = 'below';
+  /** a sidechain block's fees (sats), for its margin: fees − bid */
+  @Input() fees: number | null = null;
   @Input() size: string | number = 13;
   get px(): string { return String(this.size); }
 
@@ -189,6 +229,9 @@ export class ChainBlockMarksComponent implements OnChanges, OnDestroy {
   fTitle = '';
   fColor = 'transparent';
   l2Mark: L2Mark | null | undefined;
+  /** FreeBank: the block's credit operations by family (null: not read yet by the activity index) */
+  fbCredit: Record<string, number> | null = null;
+  creditList: { family: string; n: number }[] = [];
   l2Title = '';
   ecashColor = PROFILES['ecash']?.color ?? '#E6A849';
   mainBase$: Observable<string | null>;
@@ -235,6 +278,8 @@ export class ChainBlockMarksComponent implements OnChanges, OnDestroy {
       this.sub = this.injector.get(FreebankLiveService).bmm$(this.hash).subscribe(({ mark, mainHeight, bid }) => {
         const mb = mark?.mainblock ? { hash: mark.mainblock, height: mainHeight as number } : null; // (height null: not among the recent BMM events)
         this.l2Mark = mark ? { height: mark.height, hash: mark.hash, mainBlock: mb, bmm: bid !== null ? { bid } as any : null, deposits: 0 } : null;
+        this.fbCredit = mark?.credit ?? null;
+        this.creditList = Object.entries(this.fbCredit ?? {}).map(([family, n]) => ({ family, n })).sort((a, b) => b.n - a.n);
         this.l2Title = mb
           ? `Mined in eCash block ${mainHeight ?? mb.hash} (blind merged mining)` + (bid !== null ? `, bid ${bid} sats paid to its miner` : '')
           : (mark ? 'No eCash block named in this block\'s header' : '');

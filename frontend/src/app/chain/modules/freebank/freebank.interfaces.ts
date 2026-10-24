@@ -193,4 +193,6 @@ export interface FreebankBlockMark {
   mainblock: string | null;
   withdrawalbundle: string | null;
   onChain: boolean;
+  /** its credit operations by family, from the activity index (null: not read yet) */
+  credit?: Record<string, number> | null;
 }
