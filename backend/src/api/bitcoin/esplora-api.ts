@@ -570,7 +570,7 @@ class ElectrsApi implements AbstractBitcoinApi {
     throw new Error('Method not implemented.');
   }
 
-  $sendRawTransaction(rawTransaction: string): Promise<string> {
+  $sendRawTransaction(rawTransaction: string, maxfeerate?: number, maxburnamount?: number): Promise<string> {
     throw new Error('Method not implemented.');
   }
 

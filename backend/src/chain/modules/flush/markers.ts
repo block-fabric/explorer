@@ -228,6 +228,160 @@ export function hasAssetMarker(tx: any): boolean {
   });
 }
 
+/** Reads the bitassets marker, which is more compact than Bitcoin's CompactSize: integers in base 128, high bit first. */
+class MarkerReader {
+  private at: number;
+  constructor(private readonly data: Buffer, at = 0) {
+    this.at = at;
+  }
+
+  private take(n: number): Buffer {
+    if (n < 0 || this.at + n > this.data.length) {
+      throw new Error('marker ends early');
+    }
+    const b = this.data.subarray(this.at, this.at + n);
+    this.at += n;
+    return b;
+  }
+
+  u8(): number { return this.take(1)[0]; }
+  u16(): number { return this.take(2).readUInt16LE(0); }
+  i32(): number { return this.take(4).readInt32LE(0); }
+  u64(): number { return Number(this.take(8).readBigUInt64LE(0)); }
+  bytes(n: number): void { this.take(n); }
+
+  /** VARINT: 7 bits a byte, high bit: more follow, and the value carries (as ReadVarInt) */
+  varint(): number {
+    let n = 0;
+    for (;;) {
+      const ch = this.u8();
+      if (n > Math.floor(Number.MAX_SAFE_INTEGER / 128)) throw new Error('varint too large');
+      n = n * 128 + (ch & 0x7f);
+      if ((ch & 0x80) === 0) return n;
+      n += 1;
+    }
+  }
+
+  /** std::vector's and std::string's CompactSize */
+  compact(): number {
+    const first = this.u8();
+    if (first < 0xfd) return first;
+    const n = first === 0xfd ? this.u16() : first === 0xfe ? this.take(4).readUInt32LE(0) : this.u64();
+    if (!Number.isSafeInteger(n)) throw new Error('compact size too large');
+    return n;
+  }
+
+  string(): string { return this.take(this.compact()).toString('utf8'); }
+  script(): string { return this.take(this.compact()).toString('hex'); }
+  optional(fn: () => void): void { if (this.u8()) fn(); }
+  vector(fn: () => void): void { for (let n = this.compact(); n > 0; --n) fn(); }
+  get done(): boolean { return this.at === this.data.length; }
+}
+
+/** AssetData (state.h): an optional commitment, ipv4, ipv6, encryption key, signing key and info. */
+function skipAssetData(r: MarkerReader): void {
+  r.optional(() => r.bytes(32));
+  r.optional(() => r.bytes(6));
+  r.optional(() => r.bytes(18));
+  r.optional(() => r.bytes(33));
+  r.optional(() => r.bytes(32));
+  r.optional(() => { r.string(); });
+}
+
+/** Register (state.h): name, nonce, supply, decimals, data, optional text; a logo kind adds the logo. */
+function skipRegister(r: MarkerReader): void {
+  r.bytes(32);
+  r.bytes(32);
+  r.varint();
+  r.u8();
+  skipAssetData(r);
+  r.optional(() => { r.string(); });
+}
+
+function skipOutputs(r: MarkerReader): void {
+  r.vector(() => {
+    r.varint();
+    const kind = r.u8();
+    if (kind !== 0xff) {
+      r.bytes(32);
+      if (kind === 0 || kind === 3) r.varint();
+    }
+  });
+  if (!r.done) throw new Error('marker has bytes left');
+}
+
+/** Where the operation pays CHN back, for the kinds that have a chn_to at the end (state.h); null for the others. */
+function readChnTo(r: MarkerReader, kind: number): string | null {
+  switch (kind) {
+  case 2: // register: no CHN output
+    return null;
+  case 6: // swap: asset_in, amount_in, asset_out, min_out, chn_to
+    r.bytes(32); r.varint(); r.bytes(32); r.varint(); return r.script();
+  case 8: // remove_liquidity: asset_a, asset_b, shares, min_a, min_b, chn_to
+    r.bytes(32); r.bytes(32); r.varint(); r.varint(); r.varint(); return r.script();
+  case 10: // bid: auction, quote_amount, min_base, chn_to
+    r.bytes(32); r.varint(); r.varint(); return r.script();
+  case 11: // collect: auction, chn_to
+    r.bytes(32); return r.script();
+  case 13: // route: path, amount_in, min_out, chn_to
+    r.vector(() => r.bytes(32)); r.varint(); r.varint(); return r.script();
+  case 20: // pool_withdraw: pool, shares, only, min0, min1, chn_to
+    r.bytes(32); r.varint(); r.u8(); r.varint(); r.varint(); return r.script();
+  case 21: // swap_pools: asset_in, pools, amount_in, min_out, chn_to
+    r.bytes(32); r.vector(() => r.bytes(32)); r.varint(); r.varint(); return r.script();
+  case 22: { // launch_token: its Register, logo, display name, creator, allocation, min/max/first buy, first min, chn_to
+    skipRegister(r);
+    r.vector(() => r.u8());
+    r.string();
+    r.script();
+    r.u16();
+    r.varint(); r.varint(); r.varint(); r.varint();
+    return r.script();
+  }
+  case 24: // open_position: pool, ticks, liquidity, max0, max1, chn_to
+    r.bytes(32); r.i32(); r.i32(); r.u64(); r.u64(); r.varint(); r.varint(); return r.script();
+  case 25: // change_position: position, add, liquidity, limits, collect, close, chn_to
+    r.bytes(32); r.u8(); r.u64(); r.u64(); r.varint(); r.varint(); r.u8(); r.u8(); return r.script();
+  case 27: // settle_order: order, cancel, chn_to
+    r.bytes(32); r.u8(); return r.script();
+  default:
+    return null;
+  }
+}
+
+/**
+ * The marker's kind byte (BAST, version, then the kind, so 2/33/35 for a Register where decodeassettx says 2) and, for
+ * the operations that have one, chn_to: the script the coinbase pays CHN change to. chnTo is null when the kind has none,
+ * or (with a node newer than this layout) when it cannot be read; markerKind is still given.
+ */
+export function assetMarker(tx: any): { markerKind: number; chnTo: string | null } | null {
+  for (const o of tx?.vout ?? []) {
+    const hex: string = o?.scriptPubKey?.hex ?? '';
+    if (!hasAssetMarker({ vout: [o] })) {
+      continue;
+    }
+    const push = taggedPush(Buffer.from(hex, 'hex'));
+    if (!push || push.length < 6 || push.subarray(0, 4).toString('hex') !== '42415354' || push[4] !== 0) {
+      return null;
+    }
+    const kind = push[5];
+    try {
+      const r = new MarkerReader(push, 6);
+      const chnTo = readChnTo(r, kind);
+      skipOutputs(r);
+      return { markerKind: kind, chnTo };
+    } catch {
+      return { markerKind: kind, chnTo: null };
+    }
+  }
+  return null;
+}
+
+/** The marker's operation kind byte; see assetMarker. */
+export function assetMarkerKind(tx: any): number | null {
+  return assetMarker(tx)?.markerKind ?? null;
+}
+
 /** The peg and stake markers of a verbose transaction (getrawtransaction's JSON), in output order */
 export function decodeMarkers(tx: any, ctx: AddressContext): { peg: PegOp[]; stake: StakeOp[] } {
   const peg: PegOp[] = [];

@@ -326,7 +326,9 @@ How the index looks as Bitcoin:
 The full backend's Esplora-style JSON keeps those fields: a tx's `data`, `shielded`, `peg`, `mainTxid`, `m6id`, `market`;
 a vin's `deposit`, `kind`; a vout's or prevout's `content`, `withdrawal`, `memo`. Addresses' balances equal the index's.
 The mempool (list_mempool) shows there too: `/api/mempool/txids`, the address's `mempool_stats`, its unconfirmed txs
-first in `/api/address/:address/txs`, and `/api/address/:address/txs/mempool` (as Esplora's).
+first in `/api/address/:address/txs`, and `/api/address/:address/txs/mempool` (as Esplora's). `/api/address/:address/txs/chain`
+and `/api/address/:address/txs/chain/:txid` answer confirmed txs only, and `/api/block/:hash/status` answers
+`{ in_best_chain, height, next_best }`, as Esplora's do.
 
 ## For wallets
 - **Which chain is this?** Ask for a block you know: `GET /api/v1/l2/block/:height` (`hash`) on the index, or

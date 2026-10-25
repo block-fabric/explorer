@@ -41,6 +41,13 @@ As for the l2 explorers (chains/L2-API.md), with `kind: "flush"`:
   "rpcMethods": ["getblockchaininfo", …] }                                     // the allowlist below
 ```
 
+## GET /api/v1/flush/status
+Whether the chain is halted, from getposinfo: `{ halted, posActive, stalled, slot, firstUnanchoredSlot,
+maxUnanchoredSlots, slotsSinceFirstUnanchored, slotsUntilHalt, haltAtSlot, lastAnchoredHeight, lastAnchored, anchorPoint,
+gap }`. `halted` is true when PoS is inactive, or when `slot - firstUnanchoredSlot >= maxUnanchoredSlots`: blocks of
+stake stop then (pos/hooks.cpp), whatever `stalled` says (that means a BMM block built now may carry transactions).
+`halted` is null if the node does not give the slot, max or PoS fields; no unanchored block (`firstUnanchoredSlot` -1) is not a halt. Cached 5 s.
+
 ## Node reads: GET /api/v1/flush/rpc/:method?args=<JSON array>
 The node's JSON returned as is. `args`: a JSON array (≤ 1024 characters of JSON; at most the method's own number of
 arguments; strings ≤ 256 characters without control characters, finite numbers, booleans, null, and objects (≤ 20
@@ -52,7 +59,9 @@ asset by its id as `0x<id>`, as the node takes it). Allowlist (backbone-flush sr
 - stake: getposinfo, getvalidators [epoch], getvalidator pubkey, getleaderschedule [epoch], getanchorinfo [count ≤ 100],
   listevidence
 - assets: getasset asset [height], listassets [count skip match], getassethistory asset, searchassets [options],
-  getbitassetsinfo, getassetindexinfo, getverifications asset [curators] [curator]
+  getbitassetsinfo, getassetindexinfo, getverifications asset [curators] [curator]. getasset's `registration` is the
+  txid of the asset's current registration and `registered` its height (a later registration of the same name is the
+  current one).
 - DEX: listpools [asset count skip], getpool a [b], searchpools [query filters…], getpooltwap pool [from seconds],
   getpoolcurve pool [points], getpoolticks pool [count], getpoolcandles id [interval from to] (assets-unified nodes
   only; elsewhere 404), getposition id, getbook a b [levels], getorder id, getdexinfo, gettreasury,
@@ -72,7 +81,8 @@ against the bytes' magic, ≤ 64 KB; `X-Content-Type-Options: nosniff`, `Content
 ## A transaction's Flush meaning: GET /api/v1/flush/tx/:txid
 ```
 { "txid": "…", "confirmed": true,
-  "asset": { "operation": {…}, "outputs": [{ "n", "carries": "asset|control|reservation|lp|receipt|result", "id"?, "amount"? }],
+  "asset": { "markerKind": n | null, "chn_to": "<script hex>" | null, "operation": {…},
+             "outputs": [{ "n", "carries": "asset|control|reservation|lp|receipt|result", "id"?, "amount"? }],
              "error": "bad-ba-marker" | null } | null,          // decodeassettx of a tx with a BAST marker, else null
   "peg":   [PegOp] | null,                                      // null: none (an array: a tx may carry several)
   "stake": [StakeOp] | null }
@@ -93,6 +103,31 @@ StakeOp =
 Markers (OP_RETURN, one push starting with the tag): D8 'WDR', D9 'RFN', DA 'BND' (sidechain/state.h), DB 'STK',
 DC 'UNB' (pos/bond.h), DD 'EVD' (pos/evidence.h), DE 'VPL', DE 'VPS' (pos/feesplit.h); decoded in
 `modules/flush/markers.ts`. Keys print in wire order, txids and hashes in display order. 404: unknown txid.
+
+`asset.markerKind` is the marker's own kind byte (BAST, version, kind), where `operation.kind` is decodeassettx's base
+kind: a Register is 2/33/35 (33 with a logo, 35 with a display name), a LaunchToken 22 or its newer variants.
+`asset.chn_to` is the output script the coinbase pays CHN change to, for operations that name one (swap, remove
+liquidity, bid, collect, route, pool withdraw, swap pools, launch, open/change position, settle order); it is null when
+the operation has none or when a newer node's layout cannot be read. It is a script in hex, not an address.
+
+## Several transactions at once: GET /api/v1/flush/txs?txids=a,b,… (1 to 30)
+The same fields, as `{ "<txid>": fields | null }` (null: unknown, or the node did not answer that one; duplicates dropped,
+ids that are not 64 hex ignored). 400 when no valid id is left or there are more than 30. Each tx is read and cached 10 s,
+as /flush/tx/:txid is.
+
+## A deposit by its eCash txid: GET /api/v1/flush/deposit/:txid
+An eCash transaction's deposit to this slot, from the eCash explorer's drivechain index (`CHAIN.MAINCHAIN_API`, or
+`CHAIN.MAINCHAIN_EXPLORER`): `{ txid, slot, address, destination, amount (sats), mainchain: { height, blockHash },
+explorer }`. A deposit's credit on Flush is a coinbase output to `address`; the eCash txid is not on Flush, so this is
+where to look one up by it. 404: no mainchain explorer, or the tx is not a deposit to this slot; 502: the eCash
+explorer did not answer.
+
+## Broadcasting a marker: POST /api/v1/tx?maxburnamount=
+The node's sendrawtransaction refuses any unspendable output by default (`maxburnamount` is 0), so a DEX transaction
+whose marker output carries CHN (a swap, a launch's first buy, …) is rejected unless the caller allows that amount.
+`POST /api/v1/tx?maxburnamount=<ECX>` (raw hex body) and `POST /api/v1/tx/push?maxburnamount=<ECX>` (form) pass it to
+sendrawtransaction; `maxfeerate` is optional too (`?maxfeerate=`). Both are amounts, not sats. A plain token transfer
+needs neither: its marker output is zero. Add the whole marker output value to `maxburnamount`.
 
 ## A block's stake fields: GET /api/v1/flush/block/:hash
 getblock's PosBlockFields: `{ hash, height, kind: "pos"|"bmm", slot, proposer, mainheight, ack: { ticket, anchored,

@@ -1,6 +1,6 @@
 import * as bitcoin from 'bitcoinjs-lib';
 import { bech32 } from 'bech32';
-import { AddressContext, TAGS, decodeMarkers, decodeOutput, hasAssetMarker, taggedPush } from '../../../chain/modules/flush/markers';
+import { AddressContext, TAGS, assetMarker, assetMarkerKind, decodeMarkers, decodeOutput, hasAssetMarker, taggedPush } from '../../../chain/modules/flush/markers';
 import { ArgsError, MAX_ARGS_TEXT, RPC_METHODS, logoAsset, parseRpcArgs } from '../../../chain/modules/flush/allowlist';
 import { rpcFailure } from '../../../chain/modules/flush/routes';
 
@@ -135,6 +135,12 @@ describe('Flush markers: stake (pos/bond.h, evidence.h, feesplit.h)', () => {
     expect(hasAssetMarker({ vout: [tx.vout[0], tx.vout[1]] })).toBe(false);
     expect(hasAssetMarker({ vout: [{ scriptPubKey: { hex: '6a4c0642415354aabb' } }] })).toBe(true);
     expect(hasAssetMarker({ vout: [{ scriptPubKey: { hex: '6a514241535400' } }] })).toBe(false);
+    expect(assetMarkerKind({ vout: [{ scriptPubKey: { hex: '6a4c06424153540015' } }] })).toBe(21);
+    expect(assetMarkerKind({ vout: [{ scriptPubKey: { hex: '6a4c06424153540021' } }] })).toBe(33);
+    expect(assetMarkerKind({ vout: [{ scriptPubKey: { hex: '6a4c0542415354' } }] })).toBeNull();
+    // betanet swap_pools 0944a245…: CHN in, one pool, 5 ECX in, a CHN destination, one result output
+    const swap = { vout: [{ scriptPubKey: { hex: '6a4c6a424153540015000000000000000000000000000000000000000000000000000000000000000001fa28c799cd0f705d0b9629e2d5324c824eb43a5ae50de27bbf426cc505ad1e6e81b09540879fd08d7b1600149c0bf667fb15c6221b25c7341091f55a66566d2e0100ff' } }] };
+    expect(assetMarker(swap)).toEqual({ markerKind: 21, chnTo: '00149c0bf667fb15c6221b25c7341091f55a66566d2e' });
   });
 });
 

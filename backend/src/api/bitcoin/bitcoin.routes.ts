@@ -98,9 +98,13 @@ class BitcoinRoutes {
           .get(config.MEMPOOL.API_URL_PREFIX + 'block/:hash/txids', this.getTxIdsForBlock)
           .get(config.MEMPOOL.API_URL_PREFIX + 'block/:hash/txs', this.getBlockTransactions)
           .get(config.MEMPOOL.API_URL_PREFIX + 'block/:hash/txs/:index', this.getBlockTransactions)
+          .get(config.MEMPOOL.API_URL_PREFIX + 'block/:hash/status', this.getBlockStatus)
           .get(config.MEMPOOL.API_URL_PREFIX + 'block-height/:height', this.getBlockHeight)
           .get(config.MEMPOOL.API_URL_PREFIX + 'address/:address', this.getAddress)
           .get(config.MEMPOOL.API_URL_PREFIX + 'address/:address/txs', this.getAddressTransactions)
+          // Chains Explorer: esplora's chain-only address history and its pagination by last seen txid
+          .get(config.MEMPOOL.API_URL_PREFIX + 'address/:address/txs/chain', this.getAddressChainTransactions)
+          .get(config.MEMPOOL.API_URL_PREFIX + 'address/:address/txs/chain/:txid', this.getAddressChainTransactions)
           // Chains Explorer: esplora's unconfirmed txs of an address (chain/address-index.ts: the backend's mempool)
           .get(config.MEMPOOL.API_URL_PREFIX + 'address/:address/txs/mempool', this.getAddressMempoolTransactions)
           .get(config.MEMPOOL.API_URL_PREFIX + 'address/:address/txs/summary', this.getAddressTransactionSummary)
@@ -503,6 +507,32 @@ class BitcoinRoutes {
     }
   }
 
+  /** Chains Explorer: GET block/:hash/status, as esplora: its height, whether it is in the best chain, and the next one */
+  private async getBlockStatus(req: Request, res: Response) {
+    if (!BLOCK_HASH_REGEX.test(req.params.hash)) {
+      handleError(req, res, 400, `Invalid block hash`);
+      return;
+    }
+    try {
+      const block = await bitcoinClient.getBlock(req.params.hash, 1);
+      const tip = await bitcoinClient.getBlockCount();
+      const height = block.height;
+      const inBestChain = block.confirmations >= 0;
+      let nextBest: string | null = null;
+      if (height < tip) {
+        try {
+          nextBest = await bitcoinClient.getBlockHash(height + 1);
+        } catch (e) {
+          nextBest = null;
+        }
+      }
+      res.setHeader('Expires', new Date(Date.now() + 1000 * (height < tip - 1 ? 3600 : 10)).toUTCString());
+      res.json({ in_best_chain: inBestChain, height, next_best: nextBest });
+    } catch (e) {
+      handleError(req, res, 404, 'Failed to get block status');
+    }
+  }
+
   private async getBlockHeader(req: Request, res: Response) {
     if (!BLOCK_HASH_REGEX.test(req.params.hash)) {
       handleError(req, res, 400, `Invalid block hash`);
@@ -759,6 +789,16 @@ class BitcoinRoutes {
   }
 
   private async getAddressTransactions(req: Request, res: Response): Promise<void> {
+    await this.$getAddressTransactions(req, res, false);
+  }
+
+  /** Chains Explorer: GET address/:address/txs/chain[/:txid], as esplora: the address's confirmed txs only */
+  private async getAddressChainTransactions(req: Request, res: Response): Promise<void> {
+    await this.$getAddressTransactions(req, res, true);
+  }
+
+  /** @asyncSafe: answers its errors */
+  private async $getAddressTransactions(req: Request, res: Response, confirmedOnly: boolean): Promise<void> {
     if (config.MEMPOOL.BACKEND === 'none' && !addressIndex.enabled) { // Chains Explorer: chain/address-index.ts
       handleError(req, res, 405, 'Address lookups cannot be used with bitcoind as backend.');
       return;
@@ -770,10 +810,15 @@ class BitcoinRoutes {
 
     try {
       let lastTxId: string = '';
-      if (req.query.after_txid && typeof req.query.after_txid === 'string') {
+      if (req.params.txid) {
+        lastTxId = req.params.txid;
+      } else if (req.query.after_txid && typeof req.query.after_txid === 'string') {
         lastTxId = req.query.after_txid;
       }
-      const transactions = await bitcoinApi.$getAddressTransactions(req.params.address, lastTxId);
+      let transactions = await bitcoinApi.$getAddressTransactions(req.params.address, lastTxId);
+      if (confirmedOnly) {
+        transactions = transactions.filter(t => t.status?.confirmed);
+      }
       res.json(transactions);
     } catch (e) {
       if (e instanceof Error && e.message === 'Invalid Bitcoin address') {
@@ -1237,15 +1282,32 @@ class BitcoinRoutes {
     }
   }
 
+  /** maxfeerate and maxburnamount: sendrawtransaction's, as amounts (ECX; a DEX marker burns what it takes in) */
+  private sendRawArgs(req: Request): { maxfeerate?: number; maxburnamount?: number } {
+    const arg = (name: string): number | undefined => {
+      const v = req.query[name];
+      if (v === undefined) {
+        return undefined;
+      }
+      const n = typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN;
+      if (!Number.isFinite(n) || n < 0) {
+        throw new Error(`Invalid ${name}`);
+      }
+      return n;
+    };
+    return { maxfeerate: arg('maxfeerate'), maxburnamount: arg('maxburnamount') };
+  }
+
   private async $postTransaction(req: Request, res: Response) {
     res.setHeader('content-type', 'text/plain');
     try {
       const rawTx = Common.getTransactionFromRequest(req, false);
-      const txIdResult = await bitcoinApi.$sendRawTransaction(rawTx);
+      const { maxfeerate, maxburnamount } = this.sendRawArgs(req);
+      const txIdResult = await bitcoinApi.$sendRawTransaction(rawTx, maxfeerate, maxburnamount);
       res.send(txIdResult);
     } catch (e: any) {
       handleError(req, res, 400, (e.message && e.code) ? 'sendrawtransaction RPC error: ' + JSON.stringify({ code: e.code })
-        : 'Failed to send raw transaction');
+        : /^Invalid max(feerate|burnamount)$/.test(e.message) ? e.message : 'Failed to send raw transaction');
     }
   }
 
@@ -1253,11 +1315,21 @@ class BitcoinRoutes {
     res.setHeader('content-type', 'text/plain');
     try {
       const txHex = Common.getTransactionFromRequest(req, true);
-      const txIdResult = await bitcoinClient.sendRawTransaction(txHex);
+      const { maxfeerate, maxburnamount } = this.sendRawArgs(req);
+      const args: any[] = [txHex];
+      if (maxfeerate !== undefined) {
+        args.push(maxfeerate);
+        if (maxburnamount !== undefined) {
+          args.push(maxburnamount);
+        }
+      } else if (maxburnamount !== undefined) {
+        args.push(0.1, maxburnamount); // sendrawtransaction's default maxfeerate (ECX/kvB)
+      }
+      const txIdResult = await bitcoinClient.sendRawTransaction(...args);
       res.send(txIdResult);
     } catch (e: any) {
       handleError(req, res, 400, (e.message && e.code) ? 'sendrawtransaction RPC error: ' + JSON.stringify({ code: e.code })
-        : 'Failed to send raw transaction');
+        : /^Invalid max(feerate|burnamount)$/.test(e.message) ? e.message : 'Failed to send raw transaction');
     }
   }
 

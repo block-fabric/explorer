@@ -273,6 +273,23 @@ export class StartComponent implements OnInit, AfterViewChecked, OnDestroy {
     }
   }
 
+  // vertical wheel over the ribbon walks its history: down is older, up is newer
+  onWheel(event: WheelEvent): void {
+    if (event.ctrlKey || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) {
+      return;
+    }
+    const scroller = this.blockchainContainer?.nativeElement;
+    const delta = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? event.deltaY * 16
+      : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? event.deltaY * this.chainWidth
+      : event.deltaY;
+    if (!scroller || !delta) {
+      return;
+    }
+    event.preventDefault();
+    this.scrollLeft = scroller.scrollLeft + (this.timeLtr ? -delta : delta);
+    this.applyScrollLeft();
+  }
+
   // We're catching the whole page event here because we still want to scroll blocks
   // even if the mouse leave the blockchain blocks container. Same idea for mouseup below.
   @HostListener('document:mousemove', ['$event'])

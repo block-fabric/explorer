@@ -10,7 +10,7 @@ import bitcoinClient from '../../../api/bitcoin/bitcoin-client';
 import DB from '../../../database';
 import { ArgsError, RPC_METHODS, logoAsset, logoMime, marketPath, marketQuery, parseRpcArgs } from './allowlist';
 import { BoundedCache } from './cache';
-import { AddressContext, decodeMarkers, hasAssetMarker } from './markers';
+import { AddressContext, assetMarker, decodeMarkers, hasAssetMarker } from './markers';
 
 // The Flush explorer's own routes (chains/FLUSH-API.md), next to upstream's API on the same Flush node (CORE_RPC).
 // Read-only; every node method and public API path on an allowlist (allowlist.ts); the node's and the API's error
@@ -18,9 +18,13 @@ import { AddressContext, decodeMarkers, hasAssetMarker } from './markers';
 // per key at a time, a few at once (more: 503).
 //
 //   GET chain                    this explorer's profile (kind flush, slot, features, links)
+//   GET flush/status             whether the chain is halted (PoS inactive, or max_unanchored_slots passed)
 //   GET flush/rpc/:method?args=  an allowlisted read RPC of the node, args a JSON array
 //   GET flush/logo/:asset        an asset's logo (PNG or JPEG), as getassetlogo has it
 //   GET flush/tx/:txid           what a transaction does on Flush: its asset operation, peg and stake markers
+//   GET flush/txs?txids=         the same for up to 30 transactions at once (by txid; unknown ones are null)
+//   GET flush/deposit/:txid      an eCash deposit to this slot, from the eCash explorer's drivechain index (its
+//                                destination address on Flush, amount in sats, and the eCash block it is in)
 //   GET flush/block/:hash        a block's stake fields (getblock's PosBlockFields)
 //   GET flush/blocks?hashes=     the same for up to 30 blocks at once (block strips)
 //   GET flush/block-fees?range=&page=&size=&fees=   the blocks of a range (24h, 48h, 7d, 30d) and their fees, a page at a
@@ -61,6 +65,8 @@ export function rpcFailure(e: any): FlushError {
 const HEX64 = /^[0-9a-f]{64}$/;
 /** The most blocks one flush/blocks request asks for */
 const MAX_BLOCKS = 30;
+/** The most transactions one flush/txs request asks for */
+const MAX_TXS = 30;
 /** Requests upstream at once (cache misses) per kind; more answer 503 */
 const SLOTS = { node: 8, quote: 2, market: 8 };
 /** The node's network (getblockchaininfo.chain) -> Flush's bech32 prefix there */
@@ -92,9 +98,12 @@ class FlushRoutes {
     const prefix = config.MEMPOOL.API_URL_PREFIX;
     app
       .get(prefix + 'chain', this.wrap(this.$getChain))
+      .get(prefix + 'flush/status', this.wrap(this.$getStatus))
       .get(prefix + 'flush/rpc/:method', this.wrap(this.$getRpc))
       .get(prefix + 'flush/logo/:asset', this.wrap(this.$getLogo))
       .get(prefix + 'flush/tx/:txid', this.wrap(this.$getTx))
+      .get(prefix + 'flush/txs', this.wrap(this.$getTxs))
+      .get(prefix + 'flush/deposit/:txid', this.wrap(this.$getDeposit))
       .get(prefix + 'flush/block/:hash', this.wrap(this.$getBlock))
       .get(prefix + 'flush/blocks', this.wrap(this.$getBlocks))
       .get(prefix + 'flush/block-fees', this.wrap(this.$getBlockFees))
@@ -206,6 +215,41 @@ class FlushRoutes {
     res.type(a.type).send(a.body);
   }
 
+  /**
+   * GET flush/status: whether the chain is halted, as the node's own gap says. getposinfo.stalled is another thing
+   * (whether a BMM block built now may carry transactions): blocks of stake stop once slot - firstunanchoredslot
+   * reaches maxunanchoredslots (pos/hooks.cpp), and no PoS chain runs with PoS inactive.
+   */
+  /** @asyncUnsafe: wrap() answers its errors */
+  private $getStatus = async (_req: Request, res: Response): Promise<void> => {
+    const a = await this.nodeJson('status', 5000, 'node', /** @asyncUnsafe: nodeJson() passes its errors on */ async () => {
+      const p: any = await this.node('getposinfo');
+      const slot = Number(p?.slot);
+      const first = Number(p?.firstunanchoredslot);
+      const max = Number(p?.maxunanchoredslots);
+      const known = Number.isSafeInteger(slot) && Number.isSafeInteger(first) && Number.isSafeInteger(max) && max > 0;
+      const unanchored = known && first >= 0;
+      const since = unanchored ? slot - first : null;
+      const left = unanchored ? Math.max(0, max - since!) : null;
+      return {
+        halted: known && typeof p?.active === 'boolean' ? !p.active || (unanchored && since! >= max) : null,
+        posActive: p?.active ?? null,
+        stalled: p?.stalled ?? null,
+        slot: Number.isSafeInteger(slot) ? slot : null,
+        firstUnanchoredSlot: Number.isSafeInteger(first) ? first : null,
+        maxUnanchoredSlots: Number.isSafeInteger(max) ? max : null,
+        slotsSinceFirstUnanchored: since,
+        slotsUntilHalt: left,
+        haltAtSlot: unanchored ? first + max : null,
+        lastAnchoredHeight: p?.lastanchoredheight ?? null,
+        lastAnchored: p?.lastanchored ?? null,
+        anchorPoint: p?.anchorpoint ?? null,
+        gap: p?.gap ?? null,
+      };
+    });
+    this.send(res, a);
+  };
+
   /** @asyncUnsafe: wrap() answers its errors */
   private $getRpc = async (req: Request, res: Response): Promise<void> => {
     const method = String(req.params.method);
@@ -258,22 +302,103 @@ class FlushRoutes {
     return ctx;
   }
 
+  /** The fields of one transaction, cached a few seconds (flush/tx and flush/txs) */
+  /** @asyncUnsafe: cached() passes its errors on */
+  private txAnswer(txid: string): Promise<Answer> {
+    return this.nodeJson('tx:' + txid, 10000, 'node', /** @asyncUnsafe: nodeJson() passes its errors on */ async () => {
+      const tx = await this.node('getrawtransaction', txid, true);
+      const { peg, stake } = decodeMarkers(tx, await this.addresses());
+      let asset: any = null;
+      if (hasAssetMarker(tx)) {
+        const d = await this.node('decodeassettx', tx.hex);
+        const marker = assetMarker(tx);
+        asset = d?.marker ? { markerKind: marker?.markerKind ?? null, chn_to: marker?.chnTo ?? null, operation: d.operation ?? null, outputs: d.outputs ?? [], error: d.error ?? null } : null;
+      }
+      return { txid, confirmed: (tx.confirmations ?? 0) > 0, asset, peg: peg.length ? peg : null, stake: stake.length ? stake : null };
+    });
+  }
+
   /** @asyncUnsafe: wrap() answers its errors */
   private $getTx = async (req: Request, res: Response): Promise<void> => {
     const txid = String(req.params.txid);
     if (!HEX64.test(txid)) {
       throw new FlushError(400, 'Invalid txid');
     }
-    this.send(res, await this.nodeJson('tx:' + txid, 10000, 'node', /** @asyncUnsafe: cached() passes its errors on */ async () => {
-      const tx = await this.node('getrawtransaction', txid, true);
-      const { peg, stake } = decodeMarkers(tx, await this.addresses());
-      let asset: any = null;
-      if (hasAssetMarker(tx)) {
-        const d = await this.node('decodeassettx', tx.hex);
-        asset = d?.marker ? { operation: d.operation ?? null, outputs: d.outputs ?? [], error: d.error ?? null } : null;
+    this.send(res, await this.txAnswer(txid));
+  };
+
+  /** The eCash explorer's base URL (CHAIN.MAINCHAIN_API, or the public MAINCHAIN_EXPLORER), or null */
+  private mainchainApi(): string | null {
+    const base = config.CHAIN.MAINCHAIN_API || config.CHAIN.MAINCHAIN_EXPLORER;
+    if (!base) {
+      return null;
+    }
+    return base.replace(/\/+$/, '') + (base.endsWith('/api/v1') || base.endsWith('/api/v1/') ? '/' : '/api/v1/');
+  }
+
+  /**
+   * GET flush/deposit/:txid: an eCash transaction's deposit to this slot, from the eCash explorer's drivechain index.
+   * Its credit on Flush is a coinbase output to `address` (sidechain/state.cpp); the eCash txid is not on Flush, so
+   * this is where a deposit is looked up by it. The eCash API's deposit has the amount in sats.
+   */
+  /** @asyncUnsafe: wrap() answers its errors */
+  private $getDeposit = async (req: Request, res: Response): Promise<void> => {
+    const txid = String(req.params.txid);
+    if (!HEX64.test(txid)) {
+      throw new FlushError(400, 'Invalid txid');
+    }
+    const api = this.mainchainApi();
+    if (!api) {
+      throw new FlushError(404, 'This explorer has no eCash drivechain index');
+    }
+    this.send(res, await this.nodeJson('deposit:' + txid, 10000, 'node', async () => {
+      let r: any;
+      try {
+        r = await axios.get(api + 'drivechain/tx/' + txid, { timeout: 15000, validateStatus: () => true, maxContentLength: MAX_REPLY });
+      } catch (e) {
+        throw new FlushError(502, 'The eCash explorer did not answer', e instanceof Error ? e.message : String(e));
       }
-      return { txid, confirmed: (tx.confirmations ?? 0) > 0, asset, peg: peg.length ? peg : null, stake: stake.length ? stake : null };
+      if (r.status === 404) {
+        throw new FlushError(404, 'Not a deposit to this chain');
+      }
+      if (r.status !== 200) {
+        throw new FlushError(502, 'The eCash explorer did not answer', `eCash explorer API drivechain/tx/${txid}: HTTP ${r.status}`);
+      }
+      const d = r.data?.deposit;
+      if (!d || d.slot !== PROFILE.slot || !Number.isSafeInteger(d.amount) || d.amount < 0) {
+        throw new FlushError(404, 'Not a deposit to this chain');
+      }
+      const m = /^s(\d+)_([a-z0-9]+)_([0-9a-f]+)$/i.exec(String(d.destination ?? ''));
+      const explorer = config.CHAIN.MAINCHAIN_EXPLORER?.replace(/\/+$/, '');
+      return {
+        txid,
+        slot: d.slot,
+        address: m && Number(m[1]) === d.slot ? m[2] : null,
+        destination: d.destination,
+        amount: d.amount,
+        mainchain: { height: r.data.height ?? null, blockHash: r.data.blockHash ?? null },
+        explorer: explorer ? `${explorer}/tx/${txid}` : null,
+      };
     }));
+  };
+
+  /** GET flush/txs?txids=a,b,…: the fields of up to MAX_TXS transactions at once, by txid (unknown ones are null) */
+  /** @asyncUnsafe: wrap() answers its errors */
+  private $getTxs = async (req: Request, res: Response): Promise<void> => {
+    const txids = [...new Set(String(req.query.txids ?? '').split(',').filter(t => HEX64.test(t)))];
+    if (!txids.length || txids.length > MAX_TXS) {
+      throw new FlushError(400, `From 1 to ${MAX_TXS} transaction ids`);
+    }
+    const out: Record<string, any> = {};
+    for (const txid of txids) { // one at a time: each is cached, and the node's request slots stay for others
+      try {
+        out[txid] = JSON.parse(String((await this.txAnswer(txid)).body));
+      } catch (e) {
+        out[txid] = null; // unknown here, or the node did not answer
+      }
+    }
+    res.setHeader('Cache-Control', 'public, max-age=5');
+    res.json(out);
   };
 
   /** @asyncUnsafe: wrap() answers its errors */

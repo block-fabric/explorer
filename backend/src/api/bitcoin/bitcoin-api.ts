@@ -258,8 +258,17 @@ class BitcoinApi implements AbstractBitcoinApi {
     return Object.keys(found);
   }
 
-  $sendRawTransaction(rawTransaction: string): Promise<string> {
-    return this.bitcoindClient.sendRawTransaction(rawTransaction);
+  $sendRawTransaction(rawTransaction: string, maxfeerate?: number, maxburnamount?: number): Promise<string> {
+    const args: any[] = [rawTransaction];
+    if (maxfeerate !== undefined) {
+      args.push(maxfeerate);
+      if (maxburnamount !== undefined) {
+        args.push(maxburnamount);
+      }
+    } else if (maxburnamount !== undefined) {
+      args.push(0.1, maxburnamount); // sendrawtransaction's default maxfeerate (ECX/kvB)
+    }
+    return this.bitcoindClient.sendRawTransaction(...args);
   }
 
   async $testMempoolAccept(rawTransactions: string[], maxfeerate?: number): Promise<TestMempoolAcceptResult[]> {
