@@ -23,6 +23,8 @@ export const L2_ROUTES: Routes = [
       { path: 'withdrawals', data: { peg: 'withdrawals' }, loadComponent: () => import('@app/chain/l2/pages/bmm.page').then(m => m.L2BmmPage) },
       // BMM and the peg on eCash, from the eCash explorer's drivechain index (GET /api/v1/l2/bmm/*)
       { path: 'bmm', loadComponent: () => import('@app/chain/l2/pages/bmm.page').then(m => m.L2BmmPage) },
+      // the API docs: the chain and sidechain API of this explorer (chain-api-docs.ts leaves upstream's docs out here)
+      { path: 'docs', loadChildren: () => import('@app/docs/docs.module').then(m => m.DocsModule) },
       // the chain's own feature pages (its module's routes, chain/modules/<chain>/), ahead of the generic ones they replace
       ...(MODULE.routes ?? []),
       // the feature pages: each chain's header shows those its backend serves (GET /api/v1/chain features)

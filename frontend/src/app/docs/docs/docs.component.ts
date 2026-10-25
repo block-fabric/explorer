@@ -4,6 +4,7 @@ import { Env, StateService } from '@app/services/state.service';
 import { WebsocketService } from '@app/services/websocket.service';
 import { SeoService } from '@app/services/seo.service';
 import { OpenGraphService } from '@app/services/opengraph.service';
+import { L2_LEAN } from '@app/chain/profiles';
 
 @Component({
   selector: 'app-docs',
@@ -15,7 +16,7 @@ export class DocsComponent implements OnInit {
 
   activeTab = 0;
   env: Env;
-  showWebSocketTab = true;
+  showWebSocketTab = !L2_LEAN;
   showFaqTab = true;
   showElectrsTab = true;
 
@@ -30,7 +31,9 @@ export class DocsComponent implements OnInit {
   ) { }
 
   ngOnInit(): void {
-    this.websocket.want(['blocks']);
+    if (!L2_LEAN) {
+      this.websocket.want(['blocks']);
+    }
     this.env = this.stateService.env;
     this.showFaqTab = ( this.env.BASE_MODULE === 'mempool' ) ? true : false;
     this.showElectrsTab = this.stateService.env.OFFICIAL_MEMPOOL_SPACE;
