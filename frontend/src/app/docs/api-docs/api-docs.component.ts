@@ -4,6 +4,8 @@ import { Observable, merge, of, Subject, Subscription } from 'rxjs';
 import { tap, takeUntil } from 'rxjs/operators';
 import { ActivatedRoute } from '@angular/router';
 import { faqData, restApiDocsData, wsApiDocsData, electrumApiDocsData } from '@app/docs/api-docs/api-docs-data';
+import { restApiDocsFor } from '@app/docs/api-docs/chain-api-docs';
+import { PROFILE } from '@app/chain/profiles';
 import { FaqTemplateDirective } from '@app/docs/faq-template/faq-template.component';
 import { AddressTypeInfo } from '@app/shared/address-utils';
 import { convertTextToBuffer, extractTapLeaves, fillTapTree, TapLeaf } from '@app/shared/transaction.utils';
@@ -105,7 +107,7 @@ export class ApiDocsComponent implements OnInit, AfterViewInit {
     this.hostname = `${document.location.protocol}//${this.hostname}`;
 
     this.faq = faqData;
-    this.restDocs = restApiDocsData;
+    this.restDocs = restApiDocsFor(restApiDocsData);
     this.wsDocs = wsApiDocsData;
     this.electrumDocs = electrumApiDocsData;
 
@@ -177,6 +179,14 @@ export class ApiDocsComponent implements OnInit, AfterViewInit {
         endpointContentEl.classList.add( 'open' );
       }
     }
+  }
+
+  /** The service name in the docs intro: the running chain, or the network on the eCash mainchain */
+  apiTitle(network: string): string {
+    if (PROFILE.kind !== 'l1' || network === '') {
+      return PROFILE.name;
+    }
+    return network.charAt(0).toUpperCase() + network.slice(1);
   }
 
   wrapUrl(network: string, code: any, websocket: boolean = false) {

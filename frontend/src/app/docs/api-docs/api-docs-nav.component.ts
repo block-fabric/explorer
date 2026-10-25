@@ -3,6 +3,7 @@ import { Env, StateService } from '@app/services/state.service';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { restApiDocsData, wsApiDocsData, electrumApiDocsData } from '@app/docs/api-docs/api-docs-data';
+import { restApiDocsFor } from '@app/docs/api-docs/chain-api-docs';
 import { faqData } from '@app/docs/api-docs/api-docs-data';
 
 @Component({
@@ -37,7 +38,7 @@ export class ApiDocsNavComponent implements OnInit {
     });
     this.auditEnabled = this.env.AUDIT;
     if (this.whichTab === 'rest') {
-      this.tabData = restApiDocsData;
+      this.tabData = restApiDocsFor(restApiDocsData);
     } else if (this.whichTab === 'websocket') {
       this.tabData = wsApiDocsData;
     } else if (this.whichTab === 'faq') {

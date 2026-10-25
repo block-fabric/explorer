@@ -23,10 +23,10 @@ CHAIN.FLUSH = { PUBLIC_API: "http://host:port" | "", PUBLIC_API_HOST: "flush.mar
 ```
 `CHAIN.FLUSH.SLOT` is also set on the other explorers of the network (the eCash explorer names slot 99 Flush).
 
-Rules: read-only; every node RPC and public API path is on an allowlist; results cached a few seconds (logos 5 min) in
-a cache bounded in entries (1000) and bytes (32 MB), one upstream request per key at a time and at most 8 at once (2
-for quotes; more: 503); node or API error text is never returned: 400 malformed, 404 unknown, 502 upstream down,
-503 busy. Errors are `{ "error": "<fixed text>" }`. nginx rate-limits `/api/v1/flush/` per IP (5/s, burst 20).
+Rules: read-only; every node RPC and public API path is on an allowlist; results cached a few seconds (block fees 15 s,
+logos 5 min) in a cache bounded in entries (1000) and bytes (32 MB), one upstream request per key at a time and at most
+8 at once (2 for quotes; more: 503); node or API error text is never returned: 400 malformed, 404 unknown, 502 upstream
+down, 503 busy. Errors are `{ "error": "<fixed text>" }`. nginx rate-limits `/api/v1/flush/` per IP (5/s, burst 20).
 
 ## GET /api/v1/chain
 As for the l2 explorers (chains/L2-API.md), with `kind: "flush"`:
@@ -44,7 +44,8 @@ As for the l2 explorers (chains/L2-API.md), with `kind: "flush"`:
 ## Node reads: GET /api/v1/flush/rpc/:method?args=<JSON array>
 The node's JSON returned as is. `args`: a JSON array (≤ 1024 characters of JSON; at most the method's own number of
 arguments; strings ≤ 256 characters without control characters, finite numbers, booleans, null, and objects (≤ 20
-keys `[a-z_][a-z0-9_]*`) or arrays (≤ 20 items) of those, one level deep). Arguments go to the node as given (name an
+keys `[a-z_][a-z0-9_]{0,40}`, case-insensitive) or arrays (≤ 20 items) of those, two levels deep: the search RPCs'
+filters hold keyword lists). Arguments go to the node as given (name an
 asset by its id as `0x<id>`, as the node takes it). Allowlist (backbone-flush src/rpc/*.cpp):
 - chain and peg: getblockchaininfo (`anchored_tip`, `final_tip`), getmainchaininfo, getpeginfo, listwithdrawals,
   getwithdrawalbundle, getsidechainstate
@@ -97,6 +98,32 @@ DC 'UNB' (pos/bond.h), DD 'EVD' (pos/evidence.h), DE 'VPL', DE 'VPS' (pos/feespl
 getblock's PosBlockFields: `{ hash, height, kind: "pos"|"bmm", slot, proposer, mainheight, ack: { ticket, anchored,
 payee, mainheight } | null, evidence: [{ slot, hashes: [a, b] }], finality: { status: "soft"|"anchored"|"final",
 anchors } | null }` (null where the node gives nothing).
+
+## Several blocks' stake fields: GET /api/v1/flush/blocks?hashes=a,b,… (1 to 30)
+The same fields for up to 30 blocks at once, as `{ "<hash>": fields | null }` (null: an unknown hash, or the node did
+not answer that one; duplicates dropped, hashes that are not 64 hex ignored). 400 when no valid hash is left or there
+are more than 30. Each block is read on its own and cached 5 s, as /flush/block/:hash is.
+
+## Block fees: GET /api/v1/flush/block-fees?range=48h&page=0&size=25[&fees=1]
+The blocks of the last 24 h, 48 h, 7 days or 30 days and their fees, newest first, a page at a time, from this
+explorer's own block index (MariaDB `blocks`, stale blocks left out), not the node. `range` is one of `24h`, `48h`,
+`7d`, `30d` (default `48h`; another 400); `page` 0 to 100000 (default 0) and `size` 1 to 100 (default 25), decimal
+or 400, values outside clamped; `fees=1` keeps only blocks with fees. 404 when this explorer keeps no block index.
+```
+{ "range": "48h", "page": 0, "size": 25, "feesOnly": false,
+  "total": n,                                              // matching blocks (those with fees when fees=1)
+  "totals": { "blocks": n, "withFees": n, "fees": sats,    // the whole range
+              "fromHeight": h | null, "toHeight": h | null,
+              "byKind": { "pos": sats, "bmm": sats, "unknown": sats },
+              "unknownBlocks": n,                          // fee blocks whose kind is not known yet
+              "beyondKinds": n },                          // fee blocks after the first 500, not in byKind
+  "indexedFrom": { "height": h | null, "time": unix | null },   // the index's first block
+  "blocks": [{ "height", "hash", "time" (unix), "fees" (sats), "txs" (without the coinbase),
+               "kind": "pos"|"bmm"|null }] }                // kind null: not read from the node yet
+```
+Kinds come from getblock: a request reads at most 60 unknown ones and keeps each by hash once known, so a page's rows or
+`byKind` may leave some out (`unknownBlocks`, `beyondKinds`) until later requests fill them in; `byKind` counts only the
+range's first 500 fee blocks. Cached 15 s.
 
 ## Public DEX API: GET /api/v1/flush/market/<path>
 Allowlisted GETs of the public API's `/api/v1/<path>` (sent with `Host: CHAIN.FLUSH.PUBLIC_API_HOST`), its JSON as is
