@@ -89,8 +89,9 @@ export class FlushPoolsPage implements OnInit {
     const list = (kind: string, cursor: string): Observable<Page<Pool>> => q.cursor && !cursor ? of(none)
       : this.api.market$<Page<Pool>>('pools', { ...q, kind, cursor, limit: 50 });
     return combineLatest([list('', pc), list('launch', lc)]).pipe(map(([p, l]) => {
+      // as the table's columns sort (a launch curve's liquidity: its depth both ways)
       const key: Record<string, (x: Pool) => number> = {
-        liquidity: x => x.liquidity_ecx ?? 0, volume: x => x.volume_24h ?? 0, change: x => x.change_24h ?? -Infinity, newest: x => x.created ?? 0,
+        liquidity: x => x.liquidity_ecx || (x.depth_ecx ?? 0) * 2, volume: x => x.volume_24h ?? 0, change: x => x.change_24h ?? -Infinity, newest: x => x.created ?? 0,
       };
       const by = key[q.sort] ?? key.liquidity;
       const items = [...p.items, ...l.items].sort((a, b) => by(b) - by(a) || (b.created ?? 0) - (a.created ?? 0));
