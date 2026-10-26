@@ -76,7 +76,27 @@ export class FlushPoolsPage implements OnInit {
       this.set({ kind });
     }
     this.stats$ = flushLoaded(this.api.market$<FlushStats>('stats'));
-    this.view$ = this.q$.pipe(switchMap(q => flushLoaded(this.api.market$<Page<Pool>>('pools', { ...q, limit: 50 }))));
+    this.view$ = this.q$.pipe(switchMap(q => flushLoaded(q.kind ? this.api.market$<Page<Pool>>('pools', { ...q, limit: 50 }) : this.allKinds$(q))));
+  }
+
+  /**
+   * Every kind: the market API's pools without a kind leave out the launch curves (kind=launch lists only those), so both
+   * lists, merged in the sort's order; the cursor is the two lists' cursors, "<pools>|<launches>" (one empty: that list ended)
+   */
+  private allKinds$(q: typeof this.q): Observable<Page<Pool>> {
+    const [pc, lc] = q.cursor ? q.cursor.split('|') : ['', ''];
+    const none: Page<Pool> = { items: [], next_cursor: null, total: 0 };
+    const list = (kind: string, cursor: string): Observable<Page<Pool>> => q.cursor && !cursor ? of(none)
+      : this.api.market$<Page<Pool>>('pools', { ...q, kind, cursor, limit: 50 });
+    return combineLatest([list('', pc), list('launch', lc)]).pipe(map(([p, l]) => {
+      const key: Record<string, (x: Pool) => number> = {
+        liquidity: x => x.liquidity_ecx ?? 0, volume: x => x.volume_24h ?? 0, change: x => x.change_24h ?? -Infinity, newest: x => x.created ?? 0,
+      };
+      const by = key[q.sort] ?? key.liquidity;
+      const items = [...p.items, ...l.items].sort((a, b) => by(b) - by(a) || (b.created ?? 0) - (a.created ?? 0));
+      const next = p.next_cursor || l.next_cursor ? `${p.next_cursor ?? ''}|${l.next_cursor ?? ''}` : null;
+      return { items, next_cursor: next, total: Math.max(p.total, l.total), partial: p.partial || l.partial };
+    }));
   }
 
   set(p: Partial<typeof this.q>, paging = false): void {
