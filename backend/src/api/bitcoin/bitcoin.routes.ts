@@ -33,6 +33,58 @@ const SCRIPT_HASH_REGEX = /^([a-f0-9]{2})+$/i;
 const MAX_TRANSACTION_TIMES = 100;
 const JUST_NUMBERS_REGEX = /^[1-9]\d*$/;
 
+/** @asyncSafe: answers its errors; a module function, as express calls the routes' handlers unbound */
+async function addressTransactions(req: Request, res: Response, confirmedOnly: boolean): Promise<void> {
+  if (config.MEMPOOL.BACKEND === 'none' && !addressIndex.enabled) { // Chains Explorer: chain/address-index.ts
+    handleError(req, res, 405, 'Address lookups cannot be used with bitcoind as backend.');
+    return;
+  }
+  if (!ADDRESS_REGEX.test(req.params.address)) {
+    handleError(req, res, 400, `Invalid address`);
+    return;
+  }
+
+  try {
+    let lastTxId: string = '';
+    if (req.params.txid) {
+      lastTxId = req.params.txid;
+    } else if (req.query.after_txid && typeof req.query.after_txid === 'string') {
+      lastTxId = req.query.after_txid;
+    }
+    let transactions = await bitcoinApi.$getAddressTransactions(req.params.address, lastTxId);
+    if (confirmedOnly) {
+      transactions = transactions.filter(t => t.status?.confirmed);
+    }
+    res.json(transactions);
+  } catch (e) {
+    if (e instanceof Error && e.message === 'Invalid Bitcoin address') {
+      res.status(400).send(e.message);
+      return;
+    }
+    if (e instanceof Error && e.message && (e.message.indexOf('too long') > 0 || e.message.indexOf('confirmed status') > 0)) {
+      handleError(req, res, 413, e.message);
+      return;
+    }
+    handleError(req, res, 500, 'Failed to get address transactions');
+  }
+}
+
+/** maxfeerate and maxburnamount: sendrawtransaction's, as amounts (ECX; a DEX marker burns what it takes in) */
+function sendRawArgs(req: Request): { maxfeerate?: number; maxburnamount?: number } {
+  const arg = (name: string): number | undefined => {
+    const v = req.query[name];
+    if (v === undefined) {
+      return undefined;
+    }
+    const n = typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN;
+    if (!Number.isFinite(n) || n < 0) {
+      throw new Error(`Invalid ${name}`);
+    }
+    return n;
+  };
+  return { maxfeerate: arg('maxfeerate'), maxburnamount: arg('maxburnamount') };
+}
+
 class BitcoinRoutes {
   public initRoutes(app: Application) {
     app
@@ -789,49 +841,14 @@ class BitcoinRoutes {
   }
 
   private async getAddressTransactions(req: Request, res: Response): Promise<void> {
-    await this.$getAddressTransactions(req, res, false);
+    await addressTransactions(req, res, false);
   }
 
   /** Chains Explorer: GET address/:address/txs/chain[/:txid], as esplora: the address's confirmed txs only */
   private async getAddressChainTransactions(req: Request, res: Response): Promise<void> {
-    await this.$getAddressTransactions(req, res, true);
+    await addressTransactions(req, res, true);
   }
 
-  /** @asyncSafe: answers its errors */
-  private async $getAddressTransactions(req: Request, res: Response, confirmedOnly: boolean): Promise<void> {
-    if (config.MEMPOOL.BACKEND === 'none' && !addressIndex.enabled) { // Chains Explorer: chain/address-index.ts
-      handleError(req, res, 405, 'Address lookups cannot be used with bitcoind as backend.');
-      return;
-    }
-    if (!ADDRESS_REGEX.test(req.params.address)) {
-      handleError(req, res, 400, `Invalid address`);
-      return;
-    }
-
-    try {
-      let lastTxId: string = '';
-      if (req.params.txid) {
-        lastTxId = req.params.txid;
-      } else if (req.query.after_txid && typeof req.query.after_txid === 'string') {
-        lastTxId = req.query.after_txid;
-      }
-      let transactions = await bitcoinApi.$getAddressTransactions(req.params.address, lastTxId);
-      if (confirmedOnly) {
-        transactions = transactions.filter(t => t.status?.confirmed);
-      }
-      res.json(transactions);
-    } catch (e) {
-      if (e instanceof Error && e.message === 'Invalid Bitcoin address') {
-        res.status(400).send(e.message);
-        return;
-      }
-      if (e instanceof Error && e.message && (e.message.indexOf('too long') > 0 || e.message.indexOf('confirmed status') > 0)) {
-        handleError(req, res, 413, e.message);
-        return;
-      }
-      handleError(req, res, 500, 'Failed to get address transactions');
-    }
-  }
 
   /** Chains Explorer: GET address/:address/txs/mempool, as esplora: the address's unconfirmed txs, newest first */
   private async getAddressMempoolTransactions(req: Request, res: Response): Promise<void> {
@@ -1282,27 +1299,12 @@ class BitcoinRoutes {
     }
   }
 
-  /** maxfeerate and maxburnamount: sendrawtransaction's, as amounts (ECX; a DEX marker burns what it takes in) */
-  private sendRawArgs(req: Request): { maxfeerate?: number; maxburnamount?: number } {
-    const arg = (name: string): number | undefined => {
-      const v = req.query[name];
-      if (v === undefined) {
-        return undefined;
-      }
-      const n = typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN;
-      if (!Number.isFinite(n) || n < 0) {
-        throw new Error(`Invalid ${name}`);
-      }
-      return n;
-    };
-    return { maxfeerate: arg('maxfeerate'), maxburnamount: arg('maxburnamount') };
-  }
 
   private async $postTransaction(req: Request, res: Response) {
     res.setHeader('content-type', 'text/plain');
     try {
       const rawTx = Common.getTransactionFromRequest(req, false);
-      const { maxfeerate, maxburnamount } = this.sendRawArgs(req);
+      const { maxfeerate, maxburnamount } = sendRawArgs(req);
       const txIdResult = await bitcoinApi.$sendRawTransaction(rawTx, maxfeerate, maxburnamount);
       res.send(txIdResult);
     } catch (e: any) {
@@ -1315,7 +1317,7 @@ class BitcoinRoutes {
     res.setHeader('content-type', 'text/plain');
     try {
       const txHex = Common.getTransactionFromRequest(req, true);
-      const { maxfeerate, maxburnamount } = this.sendRawArgs(req);
+      const { maxfeerate, maxburnamount } = sendRawArgs(req);
       const args: any[] = [txHex];
       if (maxfeerate !== undefined) {
         args.push(maxfeerate);

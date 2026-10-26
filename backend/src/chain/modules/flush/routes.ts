@@ -71,6 +71,21 @@ const MAX_TXS = 30;
 const SLOTS = { node: 8, quote: 2, market: 8 };
 /** The node's network (getblockchaininfo.chain) -> Flush's bech32 prefix there */
 const FLUSH_HRP: Record<string, string> = { ecash: 'flx', ecashbeta: 'bflx', ecashtest: 'tflx', regtest: 'rsc' };
+
+/** a Flush address of this network (bech32 or bech32m, its checksum checked), lowercased; null when it is not one */
+function flushAddress(text: string): string | null {
+  const hrp = FLUSH_HRP[NETWORK.id];
+  const t = text.trim().toLowerCase();
+  if (!hrp || !t.startsWith(hrp + '1') || t.length > 90) {
+    return null;
+  }
+  try {
+    const { prefix } = bitcoin.address.fromBech32(t);
+    return prefix === hrp ? t : null;
+  } catch (e) {
+    return null;
+  }
+}
 /** JSON replies of the API are at most 4 MiB (doc/public-api.md, row 9); a logo far less */
 const MAX_REPLY = 4 * 1024 * 1024;
 const MAX_LOGO = 64 * 1024;
@@ -369,11 +384,13 @@ class FlushRoutes {
         throw new FlushError(404, 'Not a deposit to this chain');
       }
       const m = /^s(\d+)_([a-z0-9]+)_([0-9a-f]+)$/i.exec(String(d.destination ?? ''));
+      // the s<slot>_<address>_<checksum> form, else a bare Flush address (as Backbone's createsidechaindeposit writes it)
+      const bare = flushAddress(String(d.destination ?? ''));
       const explorer = config.CHAIN.MAINCHAIN_EXPLORER?.replace(/\/+$/, '');
       return {
         txid,
         slot: d.slot,
-        address: m && Number(m[1]) === d.slot ? m[2] : null,
+        address: m && Number(m[1]) === d.slot ? m[2] : bare,
         destination: d.destination,
         amount: d.amount,
         mainchain: { height: r.data.height ?? null, blockHash: r.data.blockHash ?? null },
