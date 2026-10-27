@@ -51,7 +51,7 @@ EXPLORERS = [
         'history_blocks': 4032,
         # address lookups: romanz electrs next to the node (see ELECTRS); 'serve' points the backend at it (MEMPOOL.BACKEND
         # electrum) once its first sync is done
-        'electrs': {'port': 50001, 'monitoring_port': 4224, 'serve': False},
+        'electrs': {'port': 50001, 'monitoring_port': 4224, 'serve': True},
     },
     {
         'id': 'betanet', 'path': 'betanet', 'kind': 'l1', 'profile': 'ecash', 'network': 'ecashbeta', 'api_port': 18950,
