@@ -182,14 +182,16 @@ describe('Flush: the node RPC allowlist', () => {
     expect(logoAsset('')).toBeNull();
   });
 
-  test('node errors: unknown 404, malformed 400, the rest 502, never the node\'s text', () => {
+  test('node errors: unknown 404, malformed 400, refused 501, the rest 503, never the node\'s text', () => {
     expect(rpcFailure({ code: -8, message: 'No such asset is registered' }).status).toBe(404);
     expect(rpcFailure({ code: -5, message: 'No such mempool or blockchain transaction' }).status).toBe(404);
     expect(rpcFailure({ code: -32601, message: 'Method not found' }).status).toBe(404);
     expect(rpcFailure({ code: -1, message: 'help text' }).status).toBe(400);
     expect(rpcFailure({ code: -3, message: 'Expected type number' }).status).toBe(400);
-    expect(rpcFailure({ code: -32602, message: 'Invalid params, response status code: 401' }).status).toBe(502);
-    expect(rpcFailure({ code: 'ECONNREFUSED', message: 'connect ECONNREFUSED 10.0.0.1:38994' }).status).toBe(502);
+    expect(rpcFailure({ code: -32602, message: 'Invalid params, response status code: 401' }).status).toBe(503);
+    // the node's rpcwhitelist refuses the method to our user
+    expect(rpcFailure({ code: -32602, message: 'Invalid params, response status code: 403' }).status).toBe(501);
+    expect(rpcFailure({ code: 'ECONNREFUSED', message: 'connect ECONNREFUSED 10.0.0.1:38994' }).status).toBe(503);
     expect(rpcFailure({ code: -28, message: 'Loading block index' }).publicMessage).not.toMatch(/index/);
   });
 });

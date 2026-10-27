@@ -39,13 +39,20 @@ export class FlushError extends Error {
   }
 }
 
-/** A node RPC error as the visitor sees it: unknown 404, malformed 400, anything else 502 */
+/**
+ * A node RPC error as the visitor sees it: unknown 404, malformed 400, a method the node's rpcwhitelist (or the method
+ * filter in front of it) refuses our user 501, anything else 503. Not 502: Cloudflare, in front of the site, puts its
+ * own plain-text body in place of an origin's 502, and a client would lose the JSON error.
+ */
 export function rpcFailure(e: any): FlushError {
   const code = typeof e?.code === 'number' ? e.code : null;
   const message = String(e?.message ?? e).slice(0, 300);
+  if (/^Invalid params, response status code: 403\b/.test(message)) {
+    return new FlushError(501, 'This node does not allow that method yet', message);
+  }
   // the RPC client's own codes for an answer that is not JSON-RPC (401, 503...): the node is not usable
   if (/^Invalid params, response status code|^Problem parsing JSON/.test(message)) {
-    return new FlushError(502, 'The Flush node did not answer', message);
+    return new FlushError(503, 'The Flush node did not answer', message);
   }
   switch (code) {
     case -5: // RPC_INVALID_ADDRESS_OR_KEY
@@ -58,7 +65,7 @@ export function rpcFailure(e: any): FlushError {
     case -32602:
       return new FlushError(400, 'Invalid arguments', message);
     default:
-      return new FlushError(502, 'The Flush node did not answer', message);
+      return new FlushError(503, 'The Flush node did not answer', message);
   }
 }
 
@@ -140,7 +147,7 @@ class FlushRoutes {
           return handleError(req, res, 400, 'Invalid request');
         }
         logger.warn(`Flush API ${req.path}: ${(e instanceof Error ? e.message : String(e)).slice(0, 300)}`);
-        handleError(req, res, 502, 'The Flush API did not answer');
+        handleError(req, res, 503, 'The Flush API did not answer');
       }
     };
   }
@@ -284,12 +291,12 @@ class FlushRoutes {
       const r: any = await this.node('getassetlogo', asset);
       const text = typeof r?.base64 === 'string' ? r.base64 : '';
       if (text.length > Math.ceil(MAX_LOGO / 3) * 4) {
-        throw new FlushError(502, 'The logo is not an image this explorer shows', `logo of ${asset}: ${text.length} base64 characters`);
+        throw new FlushError(503, 'The logo is not an image this explorer shows', `logo of ${asset}: ${text.length} base64 characters`);
       }
       const bytes = Buffer.from(text, 'base64');
       const mime = logoMime(r?.mime, bytes);
       if (!mime || bytes.length > MAX_LOGO) {
-        throw new FlushError(502, 'The logo is not an image this explorer shows', `logo of ${asset}: ${r?.mime}, ${bytes.length} bytes`);
+        throw new FlushError(503, 'The logo is not an image this explorer shows', `logo of ${asset}: ${r?.mime}, ${bytes.length} bytes`);
       }
       return { type: mime, body: bytes, length: bytes.length };
     });
@@ -371,13 +378,13 @@ class FlushRoutes {
       try {
         r = await axios.get(api + 'drivechain/tx/' + txid, { timeout: 15000, validateStatus: () => true, maxContentLength: MAX_REPLY });
       } catch (e) {
-        throw new FlushError(502, 'The eCash explorer did not answer', e instanceof Error ? e.message : String(e));
+        throw new FlushError(503, 'The eCash explorer did not answer', e instanceof Error ? e.message : String(e));
       }
       if (r.status === 404) {
         throw new FlushError(404, 'Not a deposit to this chain');
       }
       if (r.status !== 200) {
-        throw new FlushError(502, 'The eCash explorer did not answer', `eCash explorer API drivechain/tx/${txid}: HTTP ${r.status}`);
+        throw new FlushError(503, 'The eCash explorer did not answer', `eCash explorer API drivechain/tx/${txid}: HTTP ${r.status}`);
       }
       const d = r.data?.deposit;
       if (!d || d.slot !== PROFILE.slot || !Number.isSafeInteger(d.amount) || d.amount < 0) {
@@ -584,7 +591,7 @@ class FlushRoutes {
         validateStatus: () => true,
       });
     } catch (e) {
-      throw new FlushError(502, 'The Flush API did not answer', `${path}: ${(e instanceof Error ? e.message : String(e)).slice(0, 200)}`);
+      throw new FlushError(503, 'The Flush API did not answer', `${path}: ${(e instanceof Error ? e.message : String(e)).slice(0, 200)}`);
     }
     const data = Buffer.from(r.data);
     if (r.status === 400 || r.status === 404) {
@@ -594,12 +601,12 @@ class FlushRoutes {
       throw new FlushError(503, 'Busy: try again in a moment', `${path}: HTTP 429`);
     }
     if (r.status !== 200) {
-      throw new FlushError(502, 'The Flush API did not answer', `${path}: HTTP ${r.status} ${data.toString('utf8', 0, 200)}`);
+      throw new FlushError(503, 'The Flush API did not answer', `${path}: HTTP ${r.status} ${data.toString('utf8', 0, 200)}`);
     }
     if (kind === 'logo') {
       const mime = logoMime(String(r.headers['content-type'] ?? '').split(';')[0].trim(), data);
       if (!mime) {
-        throw new FlushError(502, 'The Flush API did not answer', `${path}: not a PNG or JPEG`);
+        throw new FlushError(503, 'The Flush API did not answer', `${path}: not a PNG or JPEG`);
       }
       return { type: mime, body: data, length: data.length };
     }
@@ -608,7 +615,7 @@ class FlushRoutes {
     try {
       body = JSON.stringify(JSON.parse(data.toString('utf8')));
     } catch (e) {
-      throw new FlushError(502, 'The Flush API did not answer', `${path}: not JSON`);
+      throw new FlushError(503, 'The Flush API did not answer', `${path}: not JSON`);
     }
     return { type: 'application/json', body, length: body.length };
   }

@@ -67,7 +67,7 @@ class FreebankRoutes {
           return handleError(req, res, 400, 'Invalid request');
         }
         logger.warn(`FreeBank API ${req.path}: ${(e instanceof Error ? e.message : String(e)).slice(0, 300)}`);
-        handleError(req, res, 502, 'The FreeBank node did not answer');
+        handleError(req, res, 503, 'The FreeBank node did not answer');
       }
     };
   }

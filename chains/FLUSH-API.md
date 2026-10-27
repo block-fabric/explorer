@@ -25,8 +25,9 @@ CHAIN.FLUSH = { PUBLIC_API: "http://host:port" | "", PUBLIC_API_HOST: "flush.mar
 
 Rules: read-only; every node RPC and public API path is on an allowlist; results cached a few seconds (block fees 15 s,
 logos 5 min) in a cache bounded in entries (1000) and bytes (32 MB), one upstream request per key at a time and at most
-8 at once (2 for quotes; more: 503); node or API error text is never returned: 400 malformed, 404 unknown, 502 upstream
-down, 503 busy. Errors are `{ "error": "<fixed text>" }`. nginx rate-limits `/api/v1/flush/` per IP (5/s, burst 20).
+8 at once (2 for quotes; more: 503); node or API error text is never returned: 400 malformed, 404 unknown, 501 a method
+the node's rpcwhitelist does not grant us yet, 503 upstream down or busy (never 502: Cloudflare, in front of the site,
+replaces a 502's body with its own plain text). Errors are `{ "error": "<fixed text>" }`. nginx rate-limits `/api/v1/flush/` per IP (5/s, burst 20).
 
 ## GET /api/v1/chain
 As for the l2 explorers (chains/L2-API.md), with `kind: "flush"`:
@@ -71,7 +72,8 @@ asset by its id as `0x<id>`, as the node takes it). Allowlist (backbone-flush sr
 - quotes (read-only maths, at most 2 at once, cached 3 s): quoteswap, getswapquote, quoteroute, quotelaunch, quotebid
 
 Node errors: -5 / -8 (unknown id, or a parameter the node refuses) 404 `Not found`; -32601 (an older node without the
-method) 404; -1 / -3 / -32602 400 `Invalid arguments`; anything else 502.
+method) 404; -1 / -3 / -32602 400 `Invalid arguments`; HTTP 403 (the node's rpcwhitelist does not grant the method to
+our user) 501 `This node does not allow that method yet`; anything else 503.
 
 ## Asset logos: GET /api/v1/flush/logo/:asset
 `:asset` a 64-hex id or a ticker. The PNG/JPEG bytes of getassetlogo (base64 decoded) with its mime type, checked
@@ -119,7 +121,7 @@ as /flush/tx/:txid is.
 An eCash transaction's deposit to this slot, from the eCash explorer's drivechain index (`CHAIN.MAINCHAIN_API`, or
 `CHAIN.MAINCHAIN_EXPLORER`): `{ txid, slot, address, destination, amount (sats), mainchain: { height, blockHash },
 explorer }`. A deposit's credit on Flush is a coinbase output to `address`; the eCash txid is not on Flush, so this is
-where to look one up by it. 404: no mainchain explorer, or the tx is not a deposit to this slot; 502: the eCash
+where to look one up by it. 404: no mainchain explorer, or the tx is not a deposit to this slot; 503: the eCash
 explorer did not answer.
 
 ## What an address's outputs carry: GET /api/v1/address/:address/utxo (and scripthash/:hash/utxo)
@@ -193,7 +195,7 @@ Query parameters, each once, ≤ 200 printable characters: filter sort q cursor 
 from_height to_height market kind fee_ppm ecx_only include_abandoned depth assets curators (others: 400, before the API
 is asked). Not served: quotes (`quote/*`, `launches/{id}/quote`), builds (`build/*`), `broadcast`.
 Logos (`…/logo`): PNG or JPEG after their magic bytes, ≤ 64 KB, nosniff, cached 5 min.
-The API's 400 and 404 come back as 400 `Invalid request` / 404 `Not found`, its 429 as 503, anything else 502.
+The API's 400 and 404 come back as 400 `Invalid request` / 404 `Not found`, anything else as 503.
 
 What the LIVE betanet API (photon-slot branch) answers, 2026-10-23: every path above but `assets`, `assets/{name}`
 (the assets-unified registry: 404 until that branch deploys); `assets/{name}/logo` and `launches/{name}/logo` exist.

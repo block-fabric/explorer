@@ -22,7 +22,7 @@ Addresses (chainparams, beta and main alike): base58 P2PKH version 75 (`X…`), 
 
 Rules: read-only; every node RPC on an allowlist; results cached 10 s in a cache bounded in entries (1000) and bytes
 (32 MB, 4 MB an entry), one upstream request per key at a time and at most 6 at once (more: 503); node error text is
-never returned: 400 malformed, 404 unknown, 502 node down, 503 busy. Errors are `{ "error": "<fixed text>" }`. nginx
+never returned: 400 malformed, 404 unknown, 501 a method the filter does not pass, 503 node down or busy. Errors are `{ "error": "<fixed text>" }`. nginx
 rate-limits `/api/v1/freebank/` per IP. The node is behind a method filter on the lab node (freebankd has no
 rpcwhitelist): it passes the allowlist below and what upstream mempool calls; anything else answers "method not
 allowed" (sendrawtransaction is not passed: the explorer cannot broadcast).

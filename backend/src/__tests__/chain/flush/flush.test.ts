@@ -180,17 +180,17 @@ describe('Flush: the proxy against a stand-in API', () => {
     expect(seen.length).toBe(before);
   });
 
-  test('the API\'s errors: 404 and 400 as such, the rest 502 or 503, its text never', async () => {
+  test('the API\'s errors: 404 and 400 as such, the rest 503 (Cloudflare replaces a 502\'s body), its text never', async () => {
     const nf = await get('flush/market/launches/NOPE');
     expect([nf.status, json(nf)]).toEqual([404, { error: 'Not found' }]);
     const bad = await get('flush/market/verifications');
     expect([bad.status, json(bad)]).toEqual([400, { error: 'Invalid request' }]);
     const down = await get('flush/market/treasury');
-    expect(down.status).toBe(502);
+    expect(down.status).toBe(503);
     expect(Buffer.from(down.data).toString()).not.toMatch(/secret/);
     expect((await get('flush/market/fees')).status).toBe(503);
     const html = await get('flush/market/stats');
-    expect(html.status).toBe(502);
+    expect(html.status).toBe(503);
     expect(Buffer.from(html.data).toString()).not.toMatch(/html/);
   });
 
@@ -200,8 +200,8 @@ describe('Flush: the proxy against a stand-in API', () => {
     expect(r.headers['content-type']).toBe('image/png');
     expect(r.headers['x-content-type-options']).toBe('nosniff');
     expect(Buffer.from(r.data).equals(PNG)).toBe(true);
-    expect((await get('flush/market/assets/FAKE/logo')).status).toBe(502);
-    expect((await get('flush/market/assets/BIG/logo')).status).toBe(502);
+    expect((await get('flush/market/assets/FAKE/logo')).status).toBe(503);
+    expect((await get('flush/market/assets/BIG/logo')).status).toBe(503);
   });
 
   test('no API configured: 404', async () => {
