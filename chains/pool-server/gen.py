@@ -49,6 +49,9 @@ EXPLORERS = [
         'mem': '1g', 'heap_mb': 768,
         # the drivechain index (mining pages) also reads the 4032 blocks before the fork, Bitcoin's (read once)
         'history_blocks': 4032,
+        # address lookups: romanz electrs next to the node (see ELECTRS); 'serve' points the backend at it (MEMPOOL.BACKEND
+        # electrum) once its first sync is done
+        'electrs': {'port': 50001, 'monitoring_port': 4224, 'serve': False},
     },
     {
         'id': 'betanet', 'path': 'betanet', 'kind': 'l1', 'profile': 'ecash', 'network': 'ecashbeta', 'api_port': 18950,
@@ -108,6 +111,15 @@ TX_BODY['flush'] = TX_BODY['freebank'] = TX_BODY['l1']
 # the public API counts this whole server as one client (-publicapirate, -publicapiburst): the backend's cache and
 # this keep us under its budget
 FLUSH_RATE, FLUSH_BURST = '5r/s', 20
+
+# An explorer's electrs (romanz/electrs v0.12.0, its image built from the release's Dockerfile as
+# ecash-explorer/electrs:0.12.0): the address index of upstream's electrum backend. It reads the node's blocks over its
+# REST interface (rest=1; /rest/spenttxouts and /rest/blockpart, core 31) and its JSON-RPC as the explorer's read-only
+# user (secrets/<network>.rpc: no submitpackage, which only package broadcasts need). Its index sits on / in
+# electrs/<explorer>/ (~7% of the chain's blocks, twice that before the first compaction). Its first sync reads every
+# block through the node ePool mines on: 2 CPUs, 2 threads, idle I/O class, and stopped whenever the pool's templates slow.
+ELECTRS_IMAGE = 'ecash-explorer/electrs:0.12.0'
+ELECTRS_MEM, ELECTRS_CPUS, ELECTRS_THREADS = '2g', 2.0, 2
 
 # The server has no swap: if memory runs out, the kernel must kill an explorer container before the pool's node or its
 # enforcer (which would stop mining). Positive scores make the explorer the OOM killer's first choice, the full sidechain
@@ -170,7 +182,29 @@ def backend_config(e, urls):
             'ADDRESS_INDEX': False,
             'FLUSH': flush_chain(e['network']),
         },
+        **electrum_config(e),
     }
+
+
+def electrum_config(e):
+    """An eCash explorer whose electrs serves: upstream's electrum backend on it (address and scripthash lookups)"""
+    x = e.get('electrs')
+    if not x or not x['serve']:
+        return {}
+    return {'ELECTRUM': {'HOST': '127.0.0.1', 'PORT': x['port'], 'TLS_ENABLED': False}}
+
+
+def electrs_toml(e):
+    """electrs's configuration (it holds the node's RPC password)"""
+    user, password = rpc_auth(e['network'])
+    x = e['electrs']
+    return '\n'.join([
+        '# Written by gen.py', 'network = "bitcoin"', 'db_dir = "/db"', f'daemon_rpc_addr = "127.0.0.1:{e["rpc_port"]}"',
+        f'auth = "{user}:{password}"', f'electrum_rpc_addr = "127.0.0.1:{x["port"]}"',
+        f'monitoring_addr = "127.0.0.1:{x["monitoring_port"]}"', f'db_parallelism = {ELECTRS_THREADS}',
+        # an address with more transactions than this answers an error rather than tie electrs up (Bitcoin's history
+        # has addresses with millions)
+        'index_lookup_limit = 20000', 'log_filters = "INFO"', ''])
 
 
 def flush_config(e, urls):
@@ -295,6 +329,14 @@ def main():
         return {key(x): urls[key(x)] for x in EXPLORERS if x['kind'] == 'l1' or x['network'] == e['network']}
 
     configs = [(e['id'], backend_config(e, urls_of(e))) for e in EXPLORERS]
+    for e in EXPLORERS:
+        if e.get('electrs'):
+            path = os.path.join(out, 'config', f"electrs-{e['id']}.toml")
+            with open(path, 'w') as f:
+                f.write(electrs_toml(e))
+            os.chmod(path, 0o600)
+            if os.geteuid() == 0:
+                os.chown(path, 1000, 1000)
     configs += [(f"{e['id']}-full", l2_full_config(e, urls_of(e))) for e in EXPLORERS if e['kind'] == 'l2']
     for name, c in configs:
         path = os.path.join(out, 'config', f"{name}.json")
@@ -346,6 +388,14 @@ def main():
             L += api(p, e, e['mem'], 0.5, e['heap_mb'], p, p, [])
             L += api(f'{p}-full', e, e['full_mem'], 0.5, e['full_heap_mb'], f'{p}-full', f'{p}-full',
                      [('db-setup', 'service_completed_successfully'), (f'api-{p}', 'service_started')])
+        if e.get('electrs'):
+            p = e['id']
+            L += [f'  electrs-{p}:', f'    image: {ELECTRS_IMAGE}', f'    container_name: ecash-explorer-electrs-{p}',
+                  '    restart: unless-stopped', '    network_mode: host', '    user: "1000:1000"', f'    mem_limit: {ELECTRS_MEM}',
+                  f'    cpus: {ELECTRS_CPUS}', f'    oom_score_adj: {OOM_SCORE_FULL}',
+                  '    environment:', f'      RAYON_NUM_THREADS: "{ELECTRS_THREADS}"',
+                  '    entrypoint: ["ionice", "-c3", "electrs", "--conf", "/config/electrs.toml"]',
+                  '    volumes:', f'      - ./config/electrs-{p}.toml:/config/electrs.toml:ro', f'      - ./electrs/{p}:/db']
     with open(os.path.join(out, 'docker-compose.yml'), 'w') as f:
         f.write('\n'.join(L) + '\n')
 
