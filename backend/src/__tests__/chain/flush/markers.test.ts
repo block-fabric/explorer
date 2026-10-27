@@ -151,7 +151,7 @@ describe('Flush: the node RPC allowlist', () => {
       'listwallets', 'dumpprivkey', '__proto__', 'constructor', 'toString', 'hasOwnProperty']) {
       expect(() => parseRpcArgs(m, undefined)).toThrow(ArgsError);
     }
-    expect(Object.keys(RPC_METHODS)).toEqual(expect.arrayContaining(['getlaunch', 'getpoolcandles', 'getposinfo', 'listwithdrawals', 'quoteroute']));
+    expect(Object.keys(RPC_METHODS)).toEqual(expect.arrayContaining(['getlaunch', 'getpoolcandles', 'getposinfo', 'gettxout', 'listwithdrawals', 'quoteroute']));
     expect(Object.keys(RPC_METHODS).some(m => /^(send|sign|set|create|submit|import|dump|stop|wallet)/.test(m))).toBe(false);
   });
 

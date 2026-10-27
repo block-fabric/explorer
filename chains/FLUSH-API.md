@@ -56,7 +56,8 @@ keys `[a-z_][a-z0-9_]{0,40}`, case-insensitive) or arrays (≤ 20 items) of thos
 filters hold keyword lists). Arguments go to the node as given (name an
 asset by its id as `0x<id>`, as the node takes it). Allowlist (backbone-flush src/rpc/*.cpp):
 - chain and peg: getblockchaininfo (`anchored_tip`, `final_tip`), getmainchaininfo, getpeginfo, listwithdrawals,
-  getwithdrawalbundle, getsidechainstate
+  getwithdrawalbundle, getsidechainstate, gettxout txid n [include_mempool] (an output's coins and `token`, the chain's
+  state: what a swap's or a launch's result output received; null when spent or unknown)
 - stake: getposinfo, getvalidators [epoch], getvalidator pubkey, getleaderschedule [epoch], getanchorinfo [count ≤ 100],
   listevidence
 - assets: getasset asset [height], listassets [count skip match], getassethistory asset, searchassets [options],

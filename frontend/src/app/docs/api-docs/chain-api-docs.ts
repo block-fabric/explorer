@@ -468,7 +468,8 @@ const flushDocs = (): ApiDoc[] => [
     description: 'An allowlisted read RPC of the Flush node, answered as the node answers it. <code>args</code> is a JSON array '
       + '(at most 1024 characters) with the method\'s arguments: strings up to 256 characters, finite numbers, booleans, null, '
       + 'and objects (up to 20 keys) or arrays (up to 20 items) of those, two levels deep. The allowlist covers chain and peg, '
-      + 'stake, assets, DEX, launches and read-only quote methods.',
+      + 'stake, assets, DEX, launches and read-only quote methods, and <code>gettxout</code> (<code>["&lt;txid&gt;", n]</code>): an '
+      + 'output\'s coins and its <code>token</code> as the chain\'s state has it, so what a swap\'s result output received.',
   }),
   endpoint({
     category: 'flush',

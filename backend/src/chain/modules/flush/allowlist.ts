@@ -20,6 +20,7 @@ export const RPC_METHODS: Record<string, { args: number; quote?: boolean }> = {
   listwithdrawals: { args: 0 },
   getwithdrawalbundle: { args: 0 },
   getsidechainstate: { args: 0 },
+  gettxout: { args: 3 },       // txid n include_mempool: an output's coins and its token (the chain's state)
   // stake
   getposinfo: { args: 0 },
   getvalidators: { args: 1 },
