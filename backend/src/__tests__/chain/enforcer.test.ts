@@ -99,6 +99,15 @@ describe('eCash rules', () => {
     expect(m).toMatchObject({ kind: 'M8', slot: 9, hash: side, prevMainBlock: prev });
   });
 
+  it('reads DATUM tags only from a text push', () => {
+    // OCEAN's: "< OCEAN.XYZ >" 0x0f "NiceHash", zeros after
+    const ocean = '0399da0e173c204f4345414e2e58595a203e0f4e696365486173680007209210431e965c0e3088b10cf00db882d2238dccb401';
+    expect(coinbaseTags(ocean)).toEqual({ datum: true, pool: 'OCEAN.XYZ', miner: 'NiceHash' });
+    // Foundry's extranonce push holds a 0x0f byte; F2Pool's merge-mining commitment does too
+    expect(coinbaseTags('038dda0e04c821ff0f2f466f756e6472792055534120506f6f6c202364726f70676f6c642f7bb321e6ab07000000000000').datum).toBe(false);
+    expect(coinbaseTags('0396da0e2cfabe6d6d29e73e6ea789361b0f7966f2c1b728ea37bb3918502c80de612ee936ccb45a3510000000f09f909f092f4632506f6f6c2f620000000000000000000000').datum).toBe(false);
+  });
+
   it('keeps HTML out of coinbase tags and text', () => {
     const tag = Buffer.from('<img src=x onerror=alert(1)>Pool').toString('hex');
     const script = '03' + 'aaaaaa' + (tag.length / 2).toString(16).padStart(2, '0') + tag;

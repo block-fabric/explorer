@@ -190,9 +190,14 @@ export function coinbaseTags(hex: string): { datum: boolean; pool: string | null
   const raw = b.subarray(i + 1, i + 1 + n);
   // printable ASCII only, without HTML's special characters: a miner writes this, and pages show it
   const clean = (x: Buffer) => x.toString('latin1').replace(/[^\x20-\x7e]|[<>&"']/g, '').trim() || null;
+  // DATUM's push is text alone (zeros after it): any other pool's push is binary (an extranonce, a merge-mining
+  // commitment) that holds a 0x0f byte as often as not
   const sep = raw.indexOf(0x0f);
-  if (sep >= 0) {
-    return { datum: true, pool: clean(raw.subarray(0, sep)), miner: clean(raw.subarray(sep + 1)) };
+  let end = raw.length;
+  while (end > 0 && raw[end - 1] === 0) { end--; }
+  const text = (x: Buffer) => x.every(c => c >= 0x20 && c <= 0x7e);
+  if (sep >= 0 && sep < end && text(raw.subarray(0, sep)) && text(raw.subarray(sep + 1, end))) {
+    return { datum: true, pool: clean(raw.subarray(0, sep)), miner: clean(raw.subarray(sep + 1, end)) };
   }
   return { datum: false, pool: clean(raw), miner: null };
 }
@@ -273,6 +278,8 @@ type PendingState = Map<number, PendingBundle[]>;
 class Drivechain {
   private blocks: Map<number, DrivechainBlock> = new Map();
   private byHash: Map<string, number> = new Map();
+  /** heights whose miner a cache from before the strict DATUM check called DATUM (recheckDatum) */
+  private datumRecheck: number[] = [];
   private byTxid: Map<string, number> = new Map();       // deposit / withdrawal / M8 txid -> mainchain height
   private sidechains: SidechainInfo[] = [];
   private chainInfo: ChainInfo | null = null;
@@ -314,6 +321,10 @@ class Drivechain {
       }
       this.genesis = raw.genesis;
       for (const b of raw.blocks as DrivechainBlock[]) {
+        // a cache from before the DATUM check was strict: its DATUM blocks read again (most were other pools')
+        if (!raw.datumChecked && b.miner?.datum) {
+          this.datumRecheck.push(b.height);
+        }
         // the cache predates the mining-pools list: fill in the pool names and logos it lacks
         if (b.miner) {
           const pool = poolFor(b.miner.tag);
@@ -337,7 +348,7 @@ class Drivechain {
     try {
       fs.mkdirSync(path.dirname(this.cacheFile()), { recursive: true });
       const tmp = this.cacheFile() + '.tmp';
-      fs.writeFileSync(tmp, JSON.stringify({ version: CACHE_VERSION, genesis: this.genesis, blocks: [...this.blocks.values()] }));
+      fs.writeFileSync(tmp, JSON.stringify({ version: CACHE_VERSION, datumChecked: true, genesis: this.genesis, blocks: [...this.blocks.values()] }));
       fs.renameSync(tmp, this.cacheFile());
     } catch (e) {
       logger.warn(`Drivechain index: cannot save the cache: ${e instanceof Error ? e.message : e}`);
@@ -421,6 +432,7 @@ class Drivechain {
       for (const h of [...this.blocks.keys()]) { this.remove(h); } // the cache started elsewhere
       top = from - 1;
     }
+    await this.recheckDatum();
     if (top >= tip) {
       return;
     }
@@ -435,6 +447,23 @@ class Drivechain {
       h = last + 1;
     }
     await this.checkPending();
+  }
+
+  /** The miner of each block datumRecheck holds, from its coinbase again */
+  private async recheckDatum(): Promise<void> {
+    if (!this.datumRecheck.length) {
+      return;
+    }
+    const heights = this.datumRecheck.filter(h => this.blocks.has(h));
+    logger.info(`Drivechain index: ${heights.length} DATUM blocks read again`);
+    await mapLimit(heights, 2, async (h) => {
+      const b = this.blocks.get(h);
+      if (b?.miner) {
+        b.miner = minerInfo(bitcoinjs.Block.fromHex(await bitcoinClient.getBlock(b.hash, 0)), h);
+      }
+    });
+    this.datumRecheck = [];
+    this.saveCache(true);
   }
 
   private name(slot: number): string {
