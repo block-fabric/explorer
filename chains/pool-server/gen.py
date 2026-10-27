@@ -395,8 +395,8 @@ def main():
 # on the method and the normalized path, whatever location serves it, so a trailing slash or another location cannot
 # get around it. Only the read-only POSTs the pages use (prevouts, cpfp) are exempt; GETs have an empty key.
 map "$request_method:$uri" $explorer_tx_key {{
-    "~^POST:/.+/api/(v1/)?(prevouts|cpfp)/?$"             "";
-    "~^POST:/.+/api/"                                     $binary_remote_addr;
+    "~^POST:(/.+)?/api/(v1/)?(prevouts|cpfp)/?$"          "";
+    "~^POST:(/.+)?/api/"                                  $binary_remote_addr;
     default                                               "";
 }}
 limit_req_zone $explorer_tx_key zone=explorer_tx:10m rate={TX_RATE};
