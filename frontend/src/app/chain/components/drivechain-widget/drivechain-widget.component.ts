@@ -3,6 +3,7 @@ import { Observable, catchError, of, switchMap, timer } from 'rxjs';
 import { ChainApiService } from '@app/chain/chain-api.service';
 import { DrivechainLiveService } from '@app/chain/drivechain-live.service';
 import { PROFILE, slotColor, slotMarkId } from '@app/chain/profiles';
+import { poolLogoFallback, poolLogoUrl } from '@app/chain/pool-logo';
 
 /**
  * Dashboard widgets of the drivechain (data: DrivechainLiveService, the cockpit over the newest 144 blocks):
@@ -44,12 +45,13 @@ export class DrivechainWidgetComponent implements OnInit {
     }
   }
 
-  logoUrl(logo: string): string {
-    return `/resources/pool-logos/${logo}`;
+  /** as /blocks shows it (chain/pool-logo.ts) */
+  logoUrl(logo: string | null, name: string | null): string {
+    return poolLogoUrl(logo, name);
   }
 
   hideLogo(event: Event): void {
-    (event.target as HTMLElement).style.display = 'none';
+    poolLogoFallback(event);
   }
 
   colorOf(slot: number): string {

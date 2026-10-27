@@ -7,6 +7,7 @@ import { cockpitCharts } from '@app/chain/pages/cockpit/cockpit-charts';
 import { CxColumn, CxFilter } from '@app/chain/components/chain-table/chain-table.component';
 import { SeoService } from '@app/services/seo.service';
 import { StateService } from '@app/services/state.service';
+import { poolLogoFallback, poolLogoUrl } from '@app/chain/pool-logo';
 
 /**
  * The cockpit (/drivechain): the drivechain of eCash at a glance, for every sidechain or one slot.
@@ -236,12 +237,13 @@ export class ChainCockpitComponent implements OnInit, OnDestroy {
 
   // --- helpers for the template ---------------------------------------------------------------------
 
-  logoUrl(logo: string): string {
-    return `/resources/pool-logos/${logo}`;
+  /** as /blocks shows it (chain/pool-logo.ts) */
+  logoUrl(logo: string | null, name: string | null): string {
+    return poolLogoUrl(logo, name);
   }
 
   hideLogo(event: Event): void {
-    (event.target as HTMLElement).style.display = 'none';
+    poolLogoFallback(event);
   }
 
   colorOf(slot: number): string {

@@ -1,6 +1,6 @@
 {
-    "name": "mempool",
-    "short_name": "mempool",
+    "name": "eCash Explorer",
+    "short_name": "eCash Explorer",
     "icons": [
         {
             "src": "/resources/favicons/android-chrome-192x192.png",

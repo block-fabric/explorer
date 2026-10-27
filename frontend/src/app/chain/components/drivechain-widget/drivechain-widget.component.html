@@ -103,7 +103,7 @@
         </div>
         <div class="list">
           <div class="li" *ngFor="let p of m.pools.slice(0, 5)">
-            <span class="nm" [title]="(p.name || p.tag) + ' · coinbase tag ' + p.tag"><img *ngIf="p.logo" class="pool-logo" [src]="logoUrl(p.logo)" (error)="hideLogo($event)" alt="">{{ p.name || p.tag }}</span>
+            <span class="nm" [title]="(p.name || p.tag) + ' · coinbase tag ' + p.tag"><img class="pool-logo" [src]="logoUrl(p.logo, p.name)" (error)="hideLogo($event)" alt="">{{ p.name || p.tag }}</span>
             <span class="bar"><span class="fill" [style.width.%]="100 * p.share"></span></span>
             <span class="num">{{ pct(p.share, 0) }}</span>
             <span class="flow">{{ p.datum ? 'DATUM · ' + p.miners.length + (p.miners.length === 1 ? ' miner' : ' miners') : p.blocks + ' blocks' }}</span>

@@ -8,6 +8,7 @@ import { escapeHtml } from '@app/chain/escape-html';
 import { CxColumn, CxFilter } from '@app/chain/components/chain-table/chain-table.component';
 import { SeoService } from '@app/services/seo.service';
 import { StateService } from '@app/services/state.service';
+import { poolLogoFallback, poolLogoUrl } from '@app/chain/pool-logo';
 
 // at 10 minutes per block
 const WINDOWS = [{ label: '1d', blocks: 144 }, { label: '1w', blocks: 1008 }, { label: '4w', blocks: 4032 }, { label: 'All', blocks: 0 }];
@@ -90,12 +91,13 @@ export class ChainMiningComponent implements OnInit, OnDestroy {
     return this.data?.pools?.find((p: any) => p.tag === tag)?.name || tag.replace(/^\/+|\/+$/g, '');
   }
 
-  logoUrl(logo: string): string {
-    return `/resources/pool-logos/${logo}`;
+  /** as /blocks shows it (chain/pool-logo.ts) */
+  logoUrl(logo: string | null, name: string | null): string {
+    return poolLogoUrl(logo, name);
   }
 
   hideLogo(event: Event): void {
-    (event.target as HTMLElement).style.display = 'none';
+    poolLogoFallback(event);
   }
 
   /** the pool dominance chart's own legend: a pool's band shown or hidden (the chart's legend action) */

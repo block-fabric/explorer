@@ -7,6 +7,7 @@ import { FlushAnchor, FlushBlockMark, FlushLiveService } from '@app/chain/module
 import { L2ApiService } from '@app/chain/l2/l2-api.service';
 import { FreebankLiveService } from '@app/chain/modules/freebank/freebank-live.service';
 import { FreebankApiService } from '@app/chain/modules/freebank/freebank-api.service';
+import { poolLogoFallback, poolLogoUrl } from '@app/chain/pool-logo';
 
 /**
  * A block's drivechain marks, wherever blocks are shown:
@@ -118,10 +119,10 @@ import { FreebankApiService } from '@app/chain/modules/freebank/freebank-api.ser
       </div>
 
       <!-- the miner alone (block and transaction pages) -->
-      <span *ngIf="mode === 'miner'" class="badge miner-badge" [title]="'From the coinbase of this block' + (s.datum ? ' (DATUM: pool tag and miner tag)' : '')"><img *ngIf="s.minerLogo" class="pool-logo" [src]="logoUrl(s.minerLogo)" (error)="hideLogo($event)" alt="">{{ s.miner || 'Unknown' }}{{ s.datum && s.minerTag ? ' · ' + s.minerTag : '' }}</span>
+      <span *ngIf="mode === 'miner'" class="badge miner-badge" [title]="'From the coinbase of this block' + (s.datum ? ' (DATUM: pool tag and miner tag)' : '')"><img class="pool-logo" [src]="logoUrl(s.minerLogo, s.miner)" (error)="hideLogo($event)" alt="">{{ s.miner || 'Unknown' }}{{ s.datum && s.minerTag ? ' · ' + s.minerTag : '' }}</span>
 
       <div *ngIf="mode === 'below' || mode === 'inline'" class="marks" [class.inline]="mode === 'inline'">
-        <span *ngIf="mode === 'below'" class="miner" [title]="'Mined by ' + (s.miner || 'an unknown miner') + (s.datum ? ', DATUM miner ' + (s.minerTag || 'without a tag') : '')"><img *ngIf="s.minerLogo" class="pool-logo" [src]="logoUrl(s.minerLogo)" (error)="hideLogo($event)" alt="">{{ s.miner || 'Unknown' }}</span>
+        <span *ngIf="mode === 'below'" class="miner" [title]="'Mined by ' + (s.miner || 'an unknown miner') + (s.datum ? ', DATUM miner ' + (s.minerTag || 'without a tag') : '')"><img class="pool-logo" [src]="logoUrl(s.minerLogo, s.miner)" (error)="hideLogo($event)" alt="">{{ s.miner || 'Unknown' }}</span>
         <span class="icons">
           <span *ngFor="let a of s.bmm" class="sc" [style.color]="colorOf(a.slot)" [title]="a.name + ' block carried' + (a.bid != null ? ', bid ' + a.bid + ' sats' : '')">
             <app-svg-images name="chain-mark" [fill]="markId(a.slot, a.name)" [width]="px" [height]="px"></app-svg-images>
@@ -368,12 +369,13 @@ export class ChainBlockMarksComponent implements OnChanges, OnDestroy {
     return slotMarkId(slot, name);
   }
 
-  logoUrl(logo: string): string {
-    return `/resources/pool-logos/${logo}`;
+  /** as /blocks shows it (chain/pool-logo.ts) */
+  logoUrl(logo: string | null, name: string | null): string {
+    return poolLogoUrl(logo, name);
   }
 
   hideLogo(event: Event): void {
-    (event.target as HTMLElement).style.display = 'none';
+    poolLogoFallback(event);
   }
 
   get profile() {

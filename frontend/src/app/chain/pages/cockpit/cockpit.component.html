@@ -313,7 +313,7 @@
       <div class="row-2">
         <div class="box table-box">
           <app-chain-table [rows]="d.miners" [columns]="minerCols" [search]="matchMiner" searchPlaceholder="Miner, tag…" sort="blocks" [pageSize]="10" empty="No block in this window.">
-            <ng-template cxCell="name" let-m><span class="miner" [title]="(m.name || m.tag) + ' · coinbase tag ' + m.tag"><img *ngIf="m.logo" class="pool-logo" [src]="logoUrl(m.logo)" (error)="hideLogo($event)" alt="">{{ m.name || m.tag }}</span></ng-template>
+            <ng-template cxCell="name" let-m><span class="miner" [title]="(m.name || m.tag) + ' · coinbase tag ' + m.tag"><img class="pool-logo" [src]="logoUrl(m.logo, m.name)" (error)="hideLogo($event)" alt="">{{ m.name || m.tag }}</span></ng-template>
             <ng-template cxCell="blocks" let-m>{{ m.blocks | number }}</ng-template>
             <ng-template cxCell="share" let-m>{{ pct(m.share) }}</ng-template>
             <ng-template cxCell="acceptsPerBlock" let-m>{{ m.acceptsPerBlock | number:'1.1-1' }}</ng-template>

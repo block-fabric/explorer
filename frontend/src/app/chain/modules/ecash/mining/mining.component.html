@@ -67,7 +67,7 @@
         <app-chain-table [rows]="d.pools" [columns]="poolCols" [filters]="poolFilters" [search]="matchPool" searchPlaceholder="Pool, tag, miner…"
             sort="blocks" [trackBy]="trackTag" empty="No block in this window.">
           <ng-template cxCell="name" let-p>
-            <div class="ln main"><span class="dot" [style.background]="colorOf(p.tag)"></span><img *ngIf="p.logo" class="pool-logo" [src]="logoUrl(p.logo)" (error)="hideLogo($event)" alt=""><b>{{ p.name || p.tag }}</b><span *ngIf="p.datum" class="datum" title="DATUM: miners build their own block templates; the coinbase carries the pool's tag and the miner's">DATUM</span></div>
+            <div class="ln main"><span class="dot" [style.background]="colorOf(p.tag)"></span><img class="pool-logo" [src]="logoUrl(p.logo, p.name)" (error)="hideLogo($event)" alt=""><b>{{ p.name || p.tag }}</b><span *ngIf="p.datum" class="datum" title="DATUM: miners build their own block templates; the coinbase carries the pool's tag and the miner's">DATUM</span></div>
             @for (m of p.miners.slice(0, 12); track $index) {<div class="ln sub miner">↳ {{ m.name || m.tag }}</div>}
           </ng-template>
           <ng-template cxCell="blocks" let-p>

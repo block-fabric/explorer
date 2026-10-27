@@ -31,6 +31,11 @@ while read -r id p profile network weight; do
   case $network in ecash) n="$c Explorer" ;; ecashbeta) n="$c Explorer (Betanet)" ;; ecashtest) n="$c Explorer (Testnet)" ;; *) n="$c Explorer ($network)" ;; esac
   sed -i -e "s/eCash Explorer/$n/g" \
     -e "s#content=\"resources/previews/#content=\"$u/resources/previews/#g" -e "s#rel=\"canonical\" href=\"./\"#rel=\"canonical\" href=\"$u/\"#" "$OUT/www/$p/index.html"
+  # a sidechain's link previews: its own picture and words, not eCash's
+  if [ "$profile" != ecash ]; then
+    [ -f "$OUT/www/resources/previews/chain-$profile.png" ] && sed -i "s#/resources/previews/chain-ecash.png#/resources/previews/chain-$profile.png#g" "$OUT/www/$p/index.html"
+    sed -i "s#Explore eCash (ECX) and its BIP300/301 drivechains: blocks, transactions, the mempool, blind merged mining, deposits and withdrawals.#Explore $c, a drivechain of eCash (ECX): its blocks, transactions and mempool, its peg and its blind merged mining on eCash.#g" "$OUT/www/$p/index.html"
+  fi
   docker run --rm -e CHAIN_PROFILE="$profile" -e CHAIN_NETWORK="$network" -e CHAIN_EXPLORER_URLS="$URLS" -e BLOCK_WEIGHT_UNITS="$weight" \
     -e MINING_DASHBOARD=false -e HISTORICAL_PRICE=false -e MEMPOOL_WEBSITE_URL= -e LIQUID_WEBSITE_URL= -e SERVICES_API= -e ACCELERATOR_BUTTON=false -e NGINX_PROTOCOL=https -e NGINX_PORT=443 \
     "$IMG" cat /var/www/mempool/browser/resources/config.js 2>/dev/null | sed '1{/^\/var\/www/d}' > "$OUT/www-config/$id.js"
