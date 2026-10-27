@@ -93,7 +93,7 @@
         <div class="chart" *browserOnly echarts [initOpts]="chartInitOptions" [options]="charts.hashrate"></div>
       </div>
       <div class="box">
-        <h5>Difficulty per block <small>retargets every 2016 blocks; orange: a test network's min-difficulty blocks</small></h5>
+        <h5>Difficulty per block <small>retargets every {{ d.retarget?.interval || 2016 }} blocks; orange: a test network's min-difficulty blocks</small></h5>
         <div class="chart" *browserOnly echarts [initOpts]="chartInitOptions" [options]="charts.difficulty"></div>
       </div>
     </div>
@@ -106,7 +106,7 @@
       <div class="box">
         <h5>Difficulty adjustment and epochs</h5>
         <div class="rules">
-          <div><span>Algorithm</span><b>Bitcoin's: every 2016 blocks, towards 10 min per block, at most 4× either way</b></div>
+          <div><span>Algorithm</span><b>{{ algorithm(d.retarget) }}</b></div>
           <ng-container *ngIf="d.retarget as r">
             <div><span>Period</span><b>blocks {{ r.periodStart | number }}–{{ r.nextRetarget - 1 | number }}</b></div>
             <div><span>Pace so far</span><b>{{ r.avgBlockTime !== null ? secs(r.avgBlockTime) + ' per block' : '–' }}</b></div>
@@ -123,8 +123,12 @@
             <div class="bar"><div class="fill" [style.width.%]="100 * d.halving.progress"></div></div>
             <small class="muted">{{ d.halving.blocksLeft | number }} blocks left at 10 min each</small></div>
         </div>
-        <p class="hint small mt-3 mb-0">Every 2016 blocks the difficulty is set so that the last period would have taken two weeks
-          at 10 minutes per block. The estimate above assumes the rest of the period keeps the pace so far.</p>
+        <p class="hint small mt-3 mb-0" *ngIf="d.retarget?.rule === 'dampened'; else bitcoinHint">Every 288 blocks the difficulty
+          moves a seventh of the way towards what would have made the last 288 blocks take two days at 10 minutes per block.
+          The estimate above assumes the rest of the period keeps the pace so far.</p>
+        <ng-template #bitcoinHint><p class="hint small mt-3 mb-0">Every 2016 blocks the difficulty is set so that the last period would have taken two weeks
+          at 10 minutes per block<ng-container *ngIf="d.retarget?.rule === 'fork'">, except at the fork block, whose difficulty is fixed</ng-container>.
+          The estimate above assumes the rest of the period keeps the pace so far.</p></ng-template>
       </div>
     </div>
   </ng-container>

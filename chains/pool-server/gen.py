@@ -47,6 +47,8 @@ EXPLORERS = [
         'id': 'mainnet', 'path': '', 'kind': 'l1', 'profile': 'ecash', 'network': 'ecash', 'api_port': 18959,
         'rpc_port': 8532, 'enforcer': 'http://127.0.0.1:8133', 'weight': 4000000,
         'mem': '1g', 'heap_mb': 768,
+        # the drivechain index (mining pages) also reads the 4032 blocks before the fork, Bitcoin's (read once)
+        'history_blocks': 4032,
     },
     {
         'id': 'betanet', 'path': 'betanet', 'kind': 'l1', 'profile': 'ecash', 'network': 'ecashbeta', 'api_port': 18950,
@@ -163,6 +165,7 @@ def backend_config(e, urls):
         'CHAIN': {
             'PROFILE': e['profile'], 'NETWORK': e['network'],
             'ENFORCER': {'URL': e['enforcer'], 'TIMEOUT': 60000, 'MAX_CONCURRENT': 2},
+            'HISTORY_BLOCKS': e.get('history_blocks', 0),
             'EXPLORER_URLS': urls,
             'ADDRESS_INDEX': False,
             'FLUSH': flush_chain(e['network']),

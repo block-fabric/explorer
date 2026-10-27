@@ -260,7 +260,7 @@ class L2Routes {
   }
 
   private $getBmmCockpit = async (req: Request, res: Response): Promise<void> => {
-    const window = intParam(req.query.window, 1440, 0, 1e7) as number;
+    const window = intParam(req.query.window, 144, 0, 1e7) as number;
     res.json(await this.l1Cockpit(window));
   };
 

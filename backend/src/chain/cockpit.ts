@@ -95,7 +95,7 @@ export function cockpit(window: number, slot: number | null, escrowNow: Record<n
 }
 
 function compute(tip: number, window: number, slotFilter: number | null, escrowNow: Record<number, number>): any {
-  const from = window > 0 ? Math.max(drivechain.firstHeight(), tip - window + 1) : drivechain.firstHeight();
+  const from = window > 0 ? Math.max(drivechain.drivechainFirstHeight(), tip - window + 1) : drivechain.drivechainFirstHeight();
   const blocks = drivechain.range(from, tip);
   const n = blocks.length;
   const own = (x: { slot: number }) => slotFilter === null || x.slot === slotFilter;

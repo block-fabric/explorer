@@ -2,18 +2,21 @@ import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnIni
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subject, Subscription, catchError, merge, of, switchMap, timer } from 'rxjs';
 import { ChainApiService } from '@app/chain/chain-api.service';
+import { RetargetState } from '@app/chain/chain.interfaces';
 import { PROFILE } from '@app/chain/profiles';
 import { escapeHtml } from '@app/chain/escape-html';
 import { CxColumn, CxFilter } from '@app/chain/components/chain-table/chain-table.component';
 import { SeoService } from '@app/services/seo.service';
 import { StateService } from '@app/services/state.service';
 
-const WINDOWS = [{ label: '6h', blocks: 360 }, { label: '1d', blocks: 1440 }, { label: '1w', blocks: 10080 }, { label: 'All', blocks: 0 }];
+// at 10 minutes per block
+const WINDOWS = [{ label: '1d', blocks: 144 }, { label: '1w', blocks: 1008 }, { label: '4w', blocks: 4032 }, { label: 'All', blocks: 0 }];
 const PALETTE = [PROFILE.color, '#5aa6ff', '#ff8a3d', '#f26b9c', '#a585ff', '#2bc79a', '#f5b83d', '#9aa4b2'];
 
 /**
  * eCash mining (/mining): pools by coinbase tag with DATUM pools split into their miners, hashrate and difficulty,
- * the 2016-block retarget and the estimated next difficulty, block times, halving epochs
+ * the retarget (Bitcoin's 2016 blocks, the fork's reset, mainnet's dampened 288) and the estimated next difficulty,
+ * block times, halving epochs
  * (GET /api/v1/drivechain/mining).
  */
 @Component({
@@ -26,7 +29,7 @@ const PALETTE = [PROFILE.color, '#5aa6ff', '#ff8a3d', '#f26b9c', '#a585ff', '#2b
 export class ChainMiningComponent implements OnInit, OnDestroy {
   profile = PROFILE;
   windows = WINDOWS;
-  window = 1440;
+  window = 1008;
   data: any = null;
   error: string | null = null;
   charts: Record<string, any> = {};
@@ -123,6 +126,19 @@ export class ChainMiningComponent implements OnInit, OnDestroy {
   }
 
   pct(x: number, d = 1): string { return ((x || 0) * 100).toFixed(d) + '%'; }
+
+  /** The difficulty rule in force, in words (chain/retarget.ts on the backend) */
+  algorithm(r: RetargetState | null): string {
+    const dampened = 'eCash\'s: every 288 blocks, towards 10 min per block, dampened: the new target is (6 × the old one + the measured one) / 7, from about −30% to +12% each time';
+    if (r?.rule === 'dampened') {
+      return dampened;
+    }
+    if (r?.rule === 'fork') {
+      return `Bitcoin's until the fork: block ${r.nextRetarget.toLocaleString()} resets the difficulty to ${this.diff(r.nextDifficulty)}`
+        + (r.nextInterval && r.nextInterval !== 2016 ? `; then ${dampened.charAt(0).toLowerCase()}${dampened.slice(1)}` : '; then Bitcoin\'s');
+    }
+    return 'Bitcoin\'s: every 2016 blocks, towards 10 min per block, at most 4× either way';
+  }
 
   secs(s: number): string {
     const a = Math.abs(s);

@@ -1,13 +1,15 @@
 import drivechain, { DrivechainBlock } from './drivechain';
-import { BLOCK_SPACING, HALVING_INTERVAL, RETARGET_INTERVAL } from './networks';
+import { BLOCK_SPACING, HALVING_INTERVAL, NETWORK, RETARGET_INTERVAL } from './networks';
 import { normalizeTag } from './pools';
+import { estimateFactor, forkDifficulty, interval, nextRetarget, periodStart } from './retarget';
 
 /**
  * Mining statistics of eCash, over a window of blocks of the drivechain index (which reads every coinbase): pools by
  * coinbase tag (DATUM pools with their miners), hashrate and difficulty, the retarget, block times, halving epochs.
  *
- * Difficulty: Bitcoin's, retargeting every 2016 blocks to 10-minute blocks (at most 4x either way); the next
- * difficulty is estimated from the current period's pace. eCash reset the difficulty once, at its fork height.
+ * Difficulty (chain/retarget.ts): Bitcoin's, retargeting every 2016 blocks to 10-minute blocks (at most 4x either way),
+ * up to the network's fork block, which resets it; from there mainnet's dampened retarget every 288 blocks. The next
+ * difficulty is estimated from the current period's pace (the fork's is known).
  */
 
 export interface RetargetParams {
@@ -27,21 +29,28 @@ const median = (xs: number[]): number => {
 };
 
 /**
- * Where the chain is in its retarget period after `tip`, and the difficulty the next period would get at the pace so
- * far. `periodStart` is the first block of the period (its height a multiple of 2016), when indexed.
+ * Where the chain is in its retarget period after `tip`, and the difficulty the next retarget would set at the pace so
+ * far. `start` is the first block of the period (periodStart), when indexed. `rule` names the next retarget's rule:
+ * 'bitcoin', 'fork' (the fork block's reset to a fixed difficulty) or 'dampened' (mainnet's from the fork).
  */
 export function retargetState(p: RetargetParams, tip: { height: number; time: number; difficulty: number },
-  periodStart: { height: number; time: number } | null): any {
-  const start = tip.height - (tip.height % RETARGET_INTERVAL);
-  const next = start + RETARGET_INTERVAL;
-  const done = tip.height - start; // block intervals in the period so far
-  const pace = periodStart && done > 0 ? (tip.time - periodStart.time) / done : null;
-  const factor = pace ? Math.max(0.25, Math.min(4, BLOCK_SPACING / pace)) : null;
+  start: { height: number; time: number } | null): any {
+  const first = periodStart(tip.height);
+  const next = nextRetarget(tip.height);
+  const length = next - first;
+  const done = tip.height - first; // block intervals in the period so far
+  const pace = start && done > 0 ? (tip.time - start.time) / done : null;
+  const fork = forkDifficulty(next);
+  const factor = fork !== null || pace ? estimateFactor(next, pace ?? BLOCK_SPACING, tip.difficulty) : null;
   return {
-    periodStart: start,
+    periodStart: first,
     nextRetarget: next,
+    interval: length,
+    rule: fork !== null ? 'fork' : interval(next) !== RETARGET_INTERVAL ? 'dampened' : 'bitcoin',
+    forkHeight: NETWORK.fork?.height ?? null,
+    nextInterval: interval(next),
     blocksLeft: next - tip.height,
-    progress: done / RETARGET_INTERVAL,
+    progress: done / length,
     avgBlockTime: pace,
     nextDifficulty: factor ? tip.difficulty * factor : null,
     change: factor ? factor - 1 : null,
@@ -147,7 +156,7 @@ export function miningStats(window: number, retarget: RetargetParams): any {
     histogram,
     difficulty,
     retarget: last ? retargetState(retarget, { height: last.height, time: last.time, difficulty: regular(blocks) ?? last.miner!.difficulty },
-      drivechain.range(last.height - (last.height % RETARGET_INTERVAL), last.height - (last.height % RETARGET_INTERVAL))[0] ?? null) : null,
+      drivechain.range(periodStart(last.height), periodStart(last.height))[0] ?? null) : null,
     halving: {
       epoch, subsidy: 50 / Math.pow(2, epoch), nextHalving, blocksLeft: nextHalving - tip,
       progress: (tip - epoch * HALVING_INTERVAL) / HALVING_INTERVAL, eta: last ? last.time + (nextHalving - tip) * BLOCK_SPACING : null,

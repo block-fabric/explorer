@@ -21,10 +21,11 @@ import { L2TransfersPage } from '@app/chain/l2/pages/transfers.page';
  * are the eCash explorer's cockpit's (pages/cockpit/cockpit-charts.ts), for this slot only.
  */
 
+// eCash blocks, at 10 minutes each
 const WINDOWS = [
-  { label: '1h', blocks: 60 },
-  { label: '1d', blocks: 1440 },
-  { label: '1w', blocks: 10080 },
+  { label: '6h', blocks: 36 },
+  { label: '1d', blocks: 144 },
+  { label: '1w', blocks: 1008 },
   { label: 'All', blocks: 0 },
 ];
 const FEEDS = [
@@ -109,7 +110,7 @@ export class L2BmmPage implements OnInit, AfterViewInit, OnDestroy {
   sideLists = PROFILE.kind === 'l2';
   windows = WINDOWS;
   feeds = FEEDS;
-  window = 1440;
+  window = 144;
   feed = 'bmm';
   /** the peg list's first tab; set when the page was opened as /deposits or /withdrawals */
   pegKind: 'deposits' | 'withdrawals' = 'deposits';

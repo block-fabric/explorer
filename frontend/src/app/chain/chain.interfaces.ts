@@ -219,10 +219,21 @@ export interface CockpitLive {
   bundles: WithdrawalBundle[];
 }
 
-/** Where the chain is in its 2016-block retarget period (GET drivechain/mining: retarget) */
+/**
+ * Where the chain is in its retarget period (GET drivechain/mining: retarget): Bitcoin's 2016 blocks up to the
+ * network's fork block, which resets the difficulty; from there mainnet's dampened 288-block retarget
+ */
 export interface RetargetState {
   periodStart: number;
   nextRetarget: number;
+  /** blocks in this period */
+  interval?: number;
+  /** the next retarget's rule: Bitcoin's, the fork block's reset, or eCash's dampened one */
+  rule?: 'bitcoin' | 'fork' | 'dampened';
+  /** the network's fork block (null: none) */
+  forkHeight?: number | null;
+  /** the period length from the next retarget on */
+  nextInterval?: number;
   blocksLeft: number;
   /** 0..1 through the period */
   progress: number;

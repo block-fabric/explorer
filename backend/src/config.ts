@@ -183,6 +183,10 @@ interface IConfig {
       TIMEOUT: number;
       MAX_CONCURRENT: number;
     };
+    // The drivechain index (chain/drivechain.ts) starts this many blocks before the BIP300 activation height: their
+    // coinbases (pools, difficulty, block times) for the mining pages, nothing of BIP300 (it starts at activation). A
+    // network that inherits Bitcoin's chain (mainnet before its fork); read once, from the node only
+    HISTORY_BLOCKS: number;
     // Public URLs of the other explorers, for cross links (profile id -> URL); empty = no link
     EXPLORER_URLS: { [profile: string]: string };
     // address and scripthash lookups from our own index when MEMPOOL.BACKEND is none (chain/address-index.ts). Off
@@ -398,6 +402,7 @@ const defaults: IConfig = {
       'TIMEOUT': 60000,
       'MAX_CONCURRENT': 2,
     },
+    'HISTORY_BLOCKS': 0,
     'EXPLORER_URLS': {},
     'ADDRESS_INDEX': false,
     'SIDECHAIN_RPC': {

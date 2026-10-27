@@ -1,5 +1,6 @@
 import config from '../config';
 import { l2Role, nodeSidechain } from '../chain/profile';
+import * as retarget from '../chain/retarget';
 import { IDifficultyAdjustment } from '../mempool.interfaces';
 import blocks from './blocks';
 
@@ -88,26 +89,34 @@ export function calcDifficultyAdjustment(
   previousRetarget: number,
   network: string,
   latestBlockTimestamp: number,
+  difficulty = 0,
 ): DifficultyAdjustment {
-  const EPOCH_BLOCK_LENGTH = 2016; // Bitcoin mainnet
+  // eCash Explorer: the period the next block is in (chain/retarget.ts): Bitcoin's 2016 blocks, or mainnet's 288 from
+  // its fork block; `difficulty` (the tip's) gives the change the fork block's fixed difficulty makes
+  const EPOCH_BLOCK_LENGTH = blockHeight >= 0 ? retarget.nextRetarget(blockHeight) - retarget.periodStart(blockHeight) : 2016;
   const BLOCK_SECONDS_TARGET = 600; // Bitcoin mainnet
   const TESTNET_MAX_BLOCK_SECONDS = 1200; // Bitcoin testnet
 
   const diffSeconds = Math.max(0, nowSeconds - DATime);
-  const blocksInEpoch = (blockHeight >= 0) ? blockHeight % EPOCH_BLOCK_LENGTH : 0;
+  const blocksInEpoch = (blockHeight >= 0) ? blockHeight - retarget.periodStart(blockHeight) : 0;
   const progressPercent = (blockHeight >= 0) ? blocksInEpoch / EPOCH_BLOCK_LENGTH * 100 : 100;
   const remainingBlocks = EPOCH_BLOCK_LENGTH - blocksInEpoch;
   const nextRetargetHeight = (blockHeight >= 0) ? blockHeight + remainingBlocks : 0;
   const expectedBlocks = diffSeconds / BLOCK_SECONDS_TARGET;
-  const actualTimespan = (blocksInEpoch === 2015 ? latestBlockTimestamp : nowSeconds) - DATime;
+  const actualTimespan = (blocksInEpoch === EPOCH_BLOCK_LENGTH - 1 ? latestBlockTimestamp : nowSeconds) - DATime;
 
   let difficultyChange = 0;
   let timeAvgSecs = blocksInEpoch ? diffSeconds / blocksInEpoch : BLOCK_SECONDS_TARGET;
   let adjustedTimeAvgSecs = timeAvgSecs;
 
-  // for the first 504 blocks of the epoch, calculate the expected avg block interval
-  // from a sliding window over the last 504 blocks
-  if (quarterEpochTime && blocksInEpoch < 503) {
+  // eCash Explorer: the fork block's reset, or mainnet's dampened retarget: eCash's rule at the pace so far
+  const ecashRule = blockHeight >= 0 && (retarget.forkDifficulty(nextRetargetHeight) !== null || EPOCH_BLOCK_LENGTH !== 2016);
+  if (ecashRule) {
+    const pace = actualTimespan / (blocksInEpoch + 1);
+    difficultyChange = (retarget.estimateFactor(nextRetargetHeight, pace, difficulty) - 1) * 100;
+  } else if (quarterEpochTime && blocksInEpoch < 503) {
+    // for the first 504 blocks of the epoch, calculate the expected avg block interval
+    // from a sliding window over the last 504 blocks
     const timeLastEpoch = DATime - quarterEpochTime;
     const adjustedTimeLastEpoch = timeLastEpoch * (1 + (previousRetarget / 100));
     const adjustedTimeSpan = diffSeconds + adjustedTimeLastEpoch;
@@ -117,12 +126,12 @@ export function calcDifficultyAdjustment(
     difficultyChange = (BLOCK_SECONDS_TARGET / (actualTimespan / (blocksInEpoch + 1)) - 1) * 100;
   }
 
-  // Max increase is x4 (+300%)
-  if (difficultyChange > 300) {
+  // Max increase is x4 (+300%) (eCash's rule has its own bounds)
+  if (!ecashRule && difficultyChange > 300) {
     difficultyChange = 300;
   }
   // Max decrease is /4 (-75%)
-  if (difficultyChange < -75) {
+  if (!ecashRule && difficultyChange < -75) {
     difficultyChange = -75;
   }
 
@@ -176,7 +185,7 @@ class DifficultyAdjustmentApi {
 
     const da = calcDifficultyAdjustment(
       DATime, quarterEpochBlockTime, nowSeconds, blockHeight, previousRetarget,
-      config.MEMPOOL.NETWORK, latestBlock.timestamp
+      config.MEMPOOL.NETWORK, latestBlock.timestamp, latestBlock.difficulty
     );
     // Chains Explorer: a sidechain has no difficulty (its blocks come with its BMM on eCash; the Core view gives
     // difficulty 1 throughout; Flush's are blocks of stake): the epoch's timing stays, no difficulty change is foreseen

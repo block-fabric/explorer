@@ -91,7 +91,7 @@
       </ng-container>
     </ng-container>
 
-    <!-- mining: hashrate, the 2016-block retarget, pools by coinbase tag, halving -->
+    <!-- mining: hashrate, the retarget, pools by coinbase tag, halving -->
     <ng-container *ngIf="kind === 'mining'">
       <ng-container *ngIf="mining$ | async as m; else loading">
         <div class="big-row">

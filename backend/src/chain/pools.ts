@@ -1,4 +1,5 @@
 import { createHash } from 'crypto';
+import { BITCOIN_POOLS, BitcoinPool } from './bitcoin-pools';
 import { NETWORK, NetworkId } from './networks';
 import { PROFILE } from './profile';
 
@@ -9,6 +10,9 @@ import { PROFILE } from './profile';
  * A pool stamps its `coinbase_tag` into the coinbase of every block it finds; that tag is the only attribution key
  * the chain gives us, so it is what we match on. The names and logos are copied from that repository (the logos into
  * frontend/src/resources/pool-logos/); update this table when the list changes.
+ *
+ * Mainnet and betanet are Bitcoin's chain up to their fork block: there Bitcoin's pools (chain/bitcoin-pools.ts,
+ * mempool's list) attribute the blocks eCash's list does not, by their tags and payout addresses, as upstream does.
  */
 
 export interface PoolMeta {
@@ -84,14 +88,41 @@ function chainPools(): PoolMeta[] {
   return PROFILE.kind === 'flush' ? [] : PROFILE.kind === 'freebank' ? FREEBANK_PRODUCERS : POOLS[NETWORK.id] ?? [];
 }
 
+/** Bitcoin's pools on this explorer's chain: the eCash explorer of a network with Bitcoin's history (a fork block) */
+function bitcoinPools(): BitcoinPool[] {
+  return PROFILE.kind === 'l1' && NETWORK.fork ? BITCOIN_POOLS : [];
+}
+
+/** Compiled tags of Bitcoin's pools (a tag that is not a valid regular expression never matches) */
+const bitcoinTags = new Map<BitcoinPool, RegExp[]>();
+function tagsOf(p: BitcoinPool): RegExp[] {
+  let res = bitcoinTags.get(p);
+  if (!res) {
+    res = p.tags.flatMap(t => { try { return [new RegExp(t)]; } catch { return []; } });
+    bitcoinTags.set(p, res);
+  }
+  return res;
+}
+
+/**
+ * The Bitcoin pool of a coinbase on this network, as upstream attributes it: its text matches one of the pool's tags,
+ * or it pays one of the pool's addresses
+ */
+export function bitcoinPoolFor(coinbaseText: string, payouts: string[]): BitcoinPool | null {
+  const pools = bitcoinPools();
+  return pools.find(p => tagsOf(p).some(re => re.test(coinbaseText)))
+    ?? pools.find(p => p.addresses.some(a => payouts.includes(a))) ?? null;
+}
+
 /**
  * This network's pools in mempool's pools-v2.json format, for upstream's block attribution (tasks/pools-updater.ts
- * imports it instead of mempool.space's Bitcoin list): the coinbase tag, escaped, is the regex its blocks match.
+ * imports it instead of mempool.space's Bitcoin list): the coinbase tag, escaped, is the regex its blocks match; then
+ * Bitcoin's pools as mempool's list has them
  */
 export function poolsJson(): { id: number; name: string; link: string; addresses: string[]; tags: string[] }[] {
-  return chainPools().map(p => ({
+  return [...chainPools().map(p => ({
     id: p.id, name: p.name, link: '', addresses: [], tags: [p.tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')],
-  }));
+  })), ...bitcoinPools().map(p => ({ id: p.id, name: p.name, link: p.link, addresses: p.addresses, tags: p.tags }))];
 }
 
 /** A version stamp of this network's pool list (stands in for the GitHub sha of pools-v2.json) */
@@ -101,5 +132,5 @@ export function poolsSha(): string {
 
 /** The pools-table unique ids this network's list uses */
 export function poolIds(): number[] {
-  return chainPools().map(p => p.id);
+  return [...chainPools(), ...bitcoinPools()].map(p => p.id);
 }

@@ -72,8 +72,9 @@ import { l2FeatureNav } from '@app/chain/l2/l2-nav';
         the peg and BMM from the eCash explorer of the same network.</p>
     </ng-container>
     <ng-container *ngIf="!l2 && !flush && !freebank">
-    <p>eCash ({{ profile.unit }}) is a fork of Bitcoin with Bitcoin's own formats: the same addresses, 8-decimal amounts, 10-minute blocks,
-      difficulty retargets every 2016 blocks and halvings every 210,000 blocks. It adds drivechains (BIP300 and BIP301): sidechains that
+    <p>eCash ({{ profile.unit }}) is a fork of Bitcoin with Bitcoin's own formats: the same addresses, 8-decimal amounts, 10-minute blocks
+      and halvings every 210,000 blocks. Its main network is Bitcoin's chain up to block 973,728, which resets the difficulty; from there
+      the difficulty retargets every 288 blocks, dampened (Bitcoin's retarget is every 2016 blocks). It adds drivechains (BIP300 and BIP301): sidechains that
       lock {{ profile.unit }} in an escrow on eCash, have their blocks committed by eCash miners through blind merged mining, and send coins
       back through withdrawal bundles that miners vote on before they can be paid.</p>
     <p>Besides blocks, transactions and the mempool, this explorer shows everything the drivechain does: which sidechain blocks each

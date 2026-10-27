@@ -6,7 +6,7 @@ import logger from '../logger';
 import bitcoinClient from '../api/bitcoin/bitcoin-client';
 import { PROFILE, profileBySlot } from './profile';
 import { HALVING_INTERVAL } from './networks';
-import { normalizeTag, poolFor } from './pools';
+import { bitcoinPoolFor, normalizeTag, poolFor } from './pools';
 import enforcer, { BundleEvent, ChainInfo, HeaderInfo, PegBlock, SidechainInfo } from './enforcer';
 import { Bip300Message, VOTE_ABSTAIN, VOTE_DOWNVOTE, VOTE_FORMS, isDrivechainScript, parseBip300Script } from './bip300';
 
@@ -230,6 +230,13 @@ function minerInfo(block: bitcoinjs.Block, height: number): MinerInfo {
   if (!tag && runs.length) {
     tag = runs.reduce((a, r) => r.length > a.length ? r : a, '').slice(0, 32);
   }
+  // a block eCash's list does not know: Bitcoin's pools (Bitcoin's history below the fork), named as upstream names them
+  if (!poolFor(tag) && !KNOWN_TAGS.some(([, name]) => name === tag)) {
+    const bitcoinPool = bitcoinPoolFor(runs.join(' '), payouts(cb));
+    if (bitcoinPool) {
+      tag = bitcoinPool.name;
+    }
+  }
   const pool = poolFor(tag);
   const reward = cb.outs.reduce((a, o) => a + o.value, 0);
   const subsidy = subsidyAt(height);
@@ -240,6 +247,11 @@ function minerInfo(block: bitcoinjs.Block, height: number): MinerInfo {
     difficulty: difficultyOf(block.bits), bits: block.bits.toString(16).padStart(8, '0'), minDifficulty: block.bits === POW_LIMIT_BITS,
     datum: tags.datum, poolTag: tags.pool, minerTag: normalizeTag(tags.miner),
   };
+}
+
+/** The addresses a coinbase pays (Bitcoin's formats, those of every eCash network but testnet's) */
+function payouts(cb: bitcoinjs.Transaction): string[] {
+  return cb.outs.flatMap(o => { try { return [bitcoinjs.address.fromOutputScript(o.script, bitcoinjs.networks.bitcoin)]; } catch { return []; } });
 }
 
 async function mapLimit<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R>): Promise<R[]> {
@@ -402,7 +414,9 @@ class Drivechain {
       this.remove(top);
       top--;
     }
-    const from = this.chainInfo.activationHeight;
+    // from the activation, or HISTORY_BLOCKS before it (their coinbases only: the mining pages)
+    const activation = this.chainInfo.activationHeight;
+    const from = Math.max(0, activation - Math.max(0, config.CHAIN.HISTORY_BLOCKS || 0));
     if (top < from - 1) {
       for (const h of [...this.blocks.keys()]) { this.remove(h); } // the cache started elsewhere
       top = from - 1;
@@ -413,9 +427,12 @@ class Drivechain {
     if (tip - top > 10) {
       logger.info(`Drivechain index: blocks ${top + 1} to ${tip}`);
     }
-    for (let h = top + 1; h <= tip; h += STEP) {
-      await this.scanRange(h, Math.min(tip, h + STEP - 1));
-      this.saveCache(h + STEP > tip);
+    // a range is either before the activation or not (scanRange asks the enforcer for the latter only)
+    for (let h = top + 1; h <= tip;) {
+      const last = Math.min(tip, h + STEP - 1, h < activation ? activation - 1 : Infinity);
+      await this.scanRange(h, last);
+      this.saveCache(last >= tip);
+      h = last + 1;
     }
     await this.checkPending();
   }
@@ -432,12 +449,14 @@ class Drivechain {
 
   private async scanRange(first: number, last: number): Promise<void> {
     const lastHash: string = await bitcoinClient.getBlockHash(last);
-    const headers: HeaderInfo[] = (await enforcer.getHeaders(lastHash, last - first + 2)).reverse(); // first - 1 .. last
+    // before the activation (HISTORY_BLOCKS): the node's blocks alone, the enforcer has nothing of them
+    const before = last < (this.chainInfo?.activationHeight ?? 0);
+    const headers: HeaderInfo[] = before ? [] : (await enforcer.getHeaders(lastHash, last - first + 2)).reverse(); // first - 1 .. last
     const prevHash = headers[0]?.height === first - 1 ? headers[0].hash : null;
 
     // per sidechain: deposits, bundle events, BMM; keyed by height then slot
     const peg = new Map<number, Map<number, PegBlock>>();
-    for (const s of this.sidechains.filter(x => x.activationHeight <= last)) {
+    for (const s of this.sidechains.filter(x => !before && x.activationHeight <= last)) {
       for (const p of await enforcer.getPegData(s.slot, prevHash, lastHash)) {
         if (!peg.has(p.header.height)) { peg.set(p.header.height, new Map()); }
         peg.get(p.header.height)!.set(s.slot, p);
@@ -695,6 +714,11 @@ class Drivechain {
 
   firstHeight(): number {
     return this.blocks.size ? this.minH : 0;
+  }
+
+  /** The first indexed block from the BIP300 activation on (those before it, CHAIN.HISTORY_BLOCKS, carry no drivechain) */
+  drivechainFirstHeight(): number {
+    return Math.max(this.firstHeight(), this.chainInfo?.activationHeight ?? 0);
   }
 
   getSidechains(): SidechainInfo[] {

@@ -10,7 +10,7 @@ import { PROFILE, slotColor, slotMarkId } from '@app/chain/profiles';
  *   bmm       the newest blocks x sidechains, coverage and bids
  *   bundles   the pending withdrawal bundles: their votes against the threshold, the blocks they have left
  *   peg       the latest deposits and withdrawals
- *   mining    hashrate, the 2016-block retarget, pools by coinbase tag, the halving
+ *   mining    hashrate, the retarget, pools by coinbase tag, the halving
  */
 @Component({
   selector: 'app-drivechain-widget',

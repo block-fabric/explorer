@@ -547,6 +547,182 @@ const flushDocs = (): ApiDoc[] => [
       + '<code>launches</code>, <code>pools</code>, <code>positions</code>, <code>books</code>, <code>tickers</code>, '
       + '<code>addresses</code>, <code>verifications</code> and <code>assets</code>. 404 when the public API is not configured.',
   }),
+  endpoint({
+    category: 'flush',
+    fragment: 'flush-assets',
+    title: 'GET Assets',
+    url: '/v1/flush/market/assets',
+    curl: '/api/v1/flush/market/assets?sort=newest&limit=1',
+    description: 'The asset registry, a page at a time: each asset\'s id, ticker, display name, info text, decimals, supply (as a '
+      + 'number of whole units and exactly, in base units, as <code>supply_units</code>), holders, whether the supply is fixed, '
+      + 'its registration (height and txid), whether it was launched, its controller, and its market: <code>status</code> (the '
+      + 'first of <code>curve</code>, <code>pool</code>, <code>book</code>, <code>auction</code>, <code>none</code>), '
+      + '<code>progress</code> towards graduation (0 to 1) on a curve, the counts of pools, books and auctions, the price in ECX '
+      + 'and the 24-hour volume. Query: <code>q</code> (search), <code>sort</code> (<code>newest</code>, <code>oldest</code>, '
+      + '<code>name</code>, <code>supply</code>, <code>volume</code>, <code>holders</code>, <code>activity</code>), '
+      + '<code>market</code> (<code>all</code>, <code>none</code>, <code>curve</code>, <code>pool</code>, <code>book</code>, '
+      + '<code>auction</code>; it filters the page: go on with <code>next_cursor</code>), <code>cursor</code>, <code>limit</code> '
+      + '(at most 100). <code>logo</code> is a path of the DEX API: its logo is at <code>/api/v1/flush/market</code> followed by '
+      + 'that path without its <code>/api/v1</code>, or at <i>GET Asset Logo</i>.',
+    response: `{
+  "items": [
+    {
+      "id": "1b17d8e71787ea5cb91bbae670e8f2a9001fac0bdf6958291551e0fc83c2c4b8",
+      "ticker": "ECASH",
+      "display_name": "eCash",
+      "info": "eCash on eCash via Flush. …",
+      "decimals": 6,
+      "supply": 100,
+      "supply_units": "100000000",
+      "holders": 0,
+      "logo": "/api/v1/assets/1b17d8e71787ea5cb91bbae670e8f2a9001fac0bdf6958291551e0fc83c2c4b8/logo?v=3ef95d5eec88",
+      "fixed_supply": true,
+      "registered_height": 19157,
+      "registration_txid": "822e95fa79cde1dbaf40f1f82ddc2503096c8f18a16e8631f0113807e1eb73d4",
+      "launched": true,
+      "market": {
+        "status": "curve",
+        "kinds": ["curve"],
+        "progress": 0,
+        "pools": 0,
+        "books": 0,
+        "auctions": 0,
+        "price_ecx": 0.4444444444444444,
+        "volume_24h_ecx": 0
+      },
+      "controller": null,
+      "seq": 13
+    }
+  ],
+  "next_cursor": "0141530200a06ffffffff2",
+  "total": 14
+}`,
+  }),
+  endpoint({
+    category: 'flush',
+    fragment: 'flush-asset',
+    title: 'GET Asset',
+    url: '/v1/flush/market/assets/:asset',
+    curl: '/api/v1/flush/market/assets/1b17d8e71787ea5cb91bbae670e8f2a9001fac0bdf6958291551e0fc83c2c4b8',
+    description: 'One asset by 64-hex id or ticker: everything <i>GET Assets</i> gives, plus its whole '
+      + 'description and links, its launch (bonding curve: state, raised and sold amounts, price, market cap, graduation '
+      + 'target, fee and its split), its pools (at most 10), books (at most 10) and open auctions (at most 20), and '
+      + '<code>can_curve</code>: whether it may still be put on a launch curve, and why not. 404 when there is no such asset.',
+    response: `{
+  "id": "1b17d8e71787ea5cb91bbae670e8f2a9001fac0bdf6958291551e0fc83c2c4b8",
+  "ticker": "ECASH",
+  "display_name": "eCash",
+  "decimals": 6,
+  "supply": 100,
+  "supply_units": "100000000",
+  "fixed_supply": true,
+  "market": { "status": "curve", "price_ecx": 0.4444444444444444, … },
+  "links": [],
+  "launch": {
+    "state": "curve",
+    "creator": "bflx1qx9vl7xr5p9z20rq5ynh6a3rzx46dxj6kgvwuhk",
+    "created_height": 19157,
+    "raised_ecx": 0,
+    "price_ecx": 0.4444444444444444,
+    "mcap_ecx": 44.44444444444444,
+    "graduation_ecx": 100,
+    "curve_supply": 75,
+    "pool_supply": 25,
+    "fee_bps": 115,
+    "fee_split": [{ "to": "creator", "bps": 7500, "kind": "creator", "paid_ecx": 0, "owed_ecx": 0 }],
+    …
+  },
+  "pools": [],
+  "books": [],
+  "auctions": [],
+  "can_curve": { "allowed": false, "reason": "it was launched or put on a curve already" },
+  …
+}`,
+  }),
+  endpoint({
+    category: 'flush',
+    fragment: 'flush-asset-record',
+    title: 'GET Asset Record (node)',
+    url: '/v1/flush/rpc/getasset',
+    curl: '/api/v1/flush/rpc/getasset?args=%5B%220x1b17d8e71787ea5cb91bbae670e8f2a9001fac0bdf6958291551e0fc83c2c4b8%22%5D',
+    description: 'The node\'s own record of an asset (<i>GET Flush RPC</i> <code>getasset</code>; name it by '
+      + 'its id as <code>0x&lt;id&gt;</code>, or by its name, optionally with a height): name, display name, decimals, supply, '
+      + 'minted and burned amounts, whether it is fixed, its registration (<code>registered</code> height and '
+      + '<code>registration</code> txid), its data fields, its control output (an asset that can still mint) and its logo\'s '
+      + 'hash, type and size. The other asset reads of the node: <code>listassets</code> [count skip match], '
+      + '<code>searchassets</code> [options], <code>getassethistory</code> asset (every data field\'s values, with the '
+      + 'transaction and height that set each), <code>getverifications</code> asset [curators] [curator].',
+    response: `{
+  "asset": "1b17d8e71787ea5cb91bbae670e8f2a9001fac0bdf6958291551e0fc83c2c4b8",
+  "name": "ECASH",
+  "display_name": "eCash",
+  "label": "ECASH",
+  "seq": "2730-0320",
+  "decimals": 6,
+  "supply": 100,
+  "minted": 100,
+  "burned": 0,
+  "fixed": true,
+  "registered": 19157,
+  "registration": "822e95fa79cde1dbaf40f1f82ddc2503096c8f18a16e8631f0113807e1eb73d4",
+  "data": { "info": "eCash on eCash via Flush. …" },
+  "releasable": false,
+  "logo": {
+    "hash": "3ef95d5eec88e25e50d1e4d4d1c52e355aa8729b1bb875aedaf0c65837c6358e",
+    "mime": "image/png",
+    "size": 5464,
+    "height": 19157,
+    "txid": "822e95fa79cde1dbaf40f1f82ddc2503096c8f18a16e8631f0113807e1eb73d4"
+  }
+}`,
+  }),
+  endpoint({
+    category: 'flush',
+    fragment: 'flush-holdings',
+    title: 'GET Address Holdings',
+    url: '/v1/flush/market/addresses/:address/holdings',
+    curl: '/api/v1/flush/market/addresses/bflx1qx9vl7xr5p9z20rq5ynh6a3rzx46dxj6kgvwuhk/holdings',
+    description: 'What a Flush address holds besides ECX: its assets (with their value in ECX), LP shares, liquidity positions '
+      + 'and open orders; each with its ticker, asset id, kind (<code>asset</code>, <code>lp</code>, <code>position</code>, '
+      + '<code>order</code>), amount, and exact amount in base units (<code>amount_units</code>).',
+  }),
+  endpoint({
+    category: 'flush',
+    fragment: 'flush-verifications',
+    title: 'GET Asset Verifications',
+    url: '/v1/flush/market/verifications',
+    description: 'Which assets curators verified: <code>assets</code> takes 1 to 50 comma-separated asset ids and '
+      + '<code>curators</code> 1 to 20 comma-separated curator ids, the client\'s own list (both required). Each asset comes with '
+      + 'whether it is verified and the word of each curator (name, verified, round, height).',
+  }),
+  endpoint({
+    category: 'flush',
+    fragment: 'flush-utxo-tokens',
+    title: 'GET Address UTXO (with tokens)',
+    url: '/address/:address/utxo',
+    curl: '/api/address/bflx1ql8lnext2t57s7e3yv986mdem844x9anccn3wyy/utxo',
+    description: 'An address\'s unspent outputs, as on Bitcoin, each with what it carries besides its ECX: <code>token</code> '
+      + 'is <code>{ kind, id, amount_units }</code> (kind: 0 asset, 1 control, 2 reservation, 3 LP, 4 receipt, 5 position, '
+      + '6 order; <code>amount_units</code> an integer as a string) or <code>null</code> for plain ECX; and '
+      + '<code>spendable</code>. A confirmed output\'s token is the node\'s own state (the results of swaps and launches '
+      + 'included); an unconfirmed one\'s is its transaction\'s, and an output whose token is not known until its block '
+      + 'applies it (an order\'s result) has <code>token: null, spendable: false</code>. No <code>token</code> field: not '
+      + 'known (an older node). The same for <code>/scripthash/:hash/utxo</code>.',
+    response: `[
+  {
+    "txid": "7958bc9b161e2bacc98e66bd7c6a01457809817a4c0cfcecc749504ad38e8d44",
+    "vout": 0,
+    "value": 0,
+    "status": {
+      "confirmed": true,
+      "block_height": 8462,
+      "block_hash": "2684a41d0b59311ef8daaed2953b53b5d7f8d916c7073749252b5f223e30b33e"
+    },
+    "token": { "kind": 1, "id": "7351ccd9fd2f091cce3f9d8e3cd0b95f278885f4610620784b8c64be8b0237c1", "amount_units": "1" },
+    "spendable": true
+  }
+]`,
+  }),
 ];
 
 const freebankDocs = (): ApiDoc[] => [

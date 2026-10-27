@@ -1,5 +1,6 @@
 import config from '../config';
 import { nodeSidechain } from '../chain/profile';
+import * as retarget from '../chain/retarget';
 import bitcoinApi, { bitcoinCoreApi } from './bitcoin/bitcoin-api-factory';
 import logger from '../logger';
 import memPool from './mempool';
@@ -32,7 +33,6 @@ import rbfCache from './rbf-cache';
 import bitcoinSecondClient from './bitcoin/bitcoin-second-client';
 import mempoolBlocks from './mempool-blocks';
 import statistics from './statistics/statistics';
-import { calcBitsDifference } from './difficulty-adjustment';
 import AccelerationRepository from '../repositories/AccelerationRepository';
 import { calculateGoodBlockCpfp } from './cpfp';
 import blockProcessor, { BlockProcessingResult, detectTemplateAlgorithm, saveCpfpDataToCpfpSummary } from './block-processor';
@@ -1386,7 +1386,8 @@ class Blocks {
       const blockchainInfo = await bitcoinClient.getBlockchainInfo();
       this.updateTimerProgress(timer, 'got blockchain info for initial difficulty adjustment');
       if (blockchainInfo.blocks === blockchainInfo.headers) {
-        const heightDiff = blockHeightTip % 2016;
+        // eCash Explorer: the retarget period of the network at this height (chain/retarget.ts)
+        const heightDiff = blockHeightTip - retarget.periodStart(blockHeightTip);
         const blockHash = await bitcoinApi.$getBlockHash(blockHeightTip - heightDiff);
         this.updateTimerProgress(timer, 'got block hash for initial difficulty adjustment');
         const block: IEsploraApi.Block = await bitcoinApi.$getBlock(blockHash);
@@ -1395,14 +1396,15 @@ class Blocks {
         this.currentBits = block.bits;
 
         if (blockHeightTip >= 2016) {
-          const previousPeriodBlockHash = await bitcoinApi.$getBlockHash(blockHeightTip - heightDiff - 2016);
+          const previousPeriodBlockHash = await bitcoinApi.$getBlockHash(retarget.periodStart(blockHeightTip - heightDiff - 1));
           this.updateTimerProgress(timer, 'got previous block hash for initial difficulty adjustment');
           const previousPeriodBlock: IEsploraApi.Block = await bitcoinApi.$getBlock(previousPeriodBlockHash);
           this.updateTimerProgress(timer, 'got previous block for initial difficulty adjustment');
           if (['liquid', 'liquidtestnet'].includes(config.MEMPOOL.NETWORK)) {
             this.previousDifficultyRetarget = NaN;
           } else {
-            this.previousDifficultyRetarget = calcBitsDifference(previousPeriodBlock.bits, block.bits);
+            // eCash Explorer: any two bits (the fork block's reset crosses exponents, which calcBitsDifference refuses)
+            this.previousDifficultyRetarget = retarget.bitsChange(previousPeriodBlock.bits, block.bits);
           }
           logger.debug(`Initial difficulty adjustment data set.`);
         }
@@ -1496,16 +1498,16 @@ class Blocks {
         }
       }
 
-      if (block.height % 2016 === 0) {
+      if (retarget.isRetarget(block.height)) {
         if (Common.indexingEnabled()) {
           let adjustment;
           if (['liquid', 'liquidtestnet'].includes(config.MEMPOOL.NETWORK)) {
             adjustment = NaN;
           } else {
             adjustment = Math.round(
-              // calcBitsDifference returns +- percentage, +100 returns to positive, /100 returns to ratio.
+              // bitsChange returns +- percentage, +100 returns to positive, /100 returns to ratio.
               // Instead of actually doing /100, just reduce the multiplier.
-              (calcBitsDifference(this.currentBits, block.bits) + 100) * 10000
+              (retarget.bitsChange(this.currentBits, block.bits) + 100) * 10000
             ) / 1000000; // Remove float point noise
           }
 
@@ -1521,7 +1523,7 @@ class Blocks {
         if (['liquid', 'liquidtestnet'].includes(config.MEMPOOL.NETWORK)) {
           this.previousDifficultyRetarget = NaN;
         } else {
-          this.previousDifficultyRetarget = calcBitsDifference(this.currentBits, block.bits);
+          this.previousDifficultyRetarget = retarget.bitsChange(this.currentBits, block.bits);
         }
         this.lastDifficultyAdjustmentTime = block.timestamp;
         this.currentBits = block.bits;

@@ -16,10 +16,11 @@ import { StateService } from '@app/services/state.service';
  * the event feeds, all from /api/v1/drivechain/cockpit and /api/v1/drivechain/events/*.
  */
 
+// eCash blocks, at 10 minutes each
 const WINDOWS = [
-  { label: '1h', blocks: 60 },
-  { label: '1d', blocks: 1440 },
-  { label: '1w', blocks: 10080 },
+  { label: '6h', blocks: 36 },
+  { label: '1d', blocks: 144 },
+  { label: '1w', blocks: 1008 },
   { label: 'All', blocks: 0 },
 ];
 const FEEDS = [
@@ -57,7 +58,7 @@ export class ChainCockpitComponent implements OnInit, OnDestroy {
   profile = PROFILE;
   windows = WINDOWS;
   feeds = FEEDS;
-  window = 1440;
+  window = 144;
   slot: number | null = null;
   feed = 'bmm';
 
