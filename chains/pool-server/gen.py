@@ -117,9 +117,10 @@ FLUSH_RATE, FLUSH_BURST = '5r/s', 20
 # REST interface (rest=1; /rest/spenttxouts and /rest/blockpart, core 31) and its JSON-RPC as the explorer's read-only
 # user (secrets/<network>.rpc: no submitpackage, which only package broadcasts need). Its index sits on / in
 # electrs/<explorer>/ (~7% of the chain's blocks, twice that before the first compaction). Its first sync reads every
-# block through the node ePool mines on: 2 CPUs, 2 threads, idle I/O class (the node's slow block connects on 2026-10-27 were its empty mempool, not electrs).
+# block through the node ePool mines on: 4 CPUs, 4 threads, normal I/O (2026-10-27: CPU-bound at 2 with the node's disk 17% busy and
+# GBT at 2-10 ms; the node's slow block connects were its empty mempool, not electrs).
 ELECTRS_IMAGE = 'ecash-explorer/electrs:0.12.0'
-ELECTRS_MEM, ELECTRS_CPUS, ELECTRS_THREADS = '2g', 2.0, 2
+ELECTRS_MEM, ELECTRS_CPUS, ELECTRS_THREADS = '3g', 4.0, 4
 
 # The server has no swap: if memory runs out, the kernel must kill an explorer container before the pool's node or its
 # enforcer (which would stop mining). Positive scores make the explorer the OOM killer's first choice, the full sidechain
@@ -394,7 +395,7 @@ def main():
                   '    restart: unless-stopped', '    network_mode: host', '    user: "1000:1000"', f'    mem_limit: {ELECTRS_MEM}',
                   f'    cpus: {ELECTRS_CPUS}', f'    oom_score_adj: {OOM_SCORE_FULL}',
                   '    environment:', f'      RAYON_NUM_THREADS: "{ELECTRS_THREADS}"',
-                  '    entrypoint: ["ionice", "-c3", "electrs", "--conf", "/config/electrs.toml"]',
+                  '    entrypoint: ["electrs", "--conf", "/config/electrs.toml"]',
                   '    volumes:', f'      - ./config/electrs-{p}.toml:/config/electrs.toml:ro', f'      - ./electrs/{p}:/db']
     with open(os.path.join(out, 'docker-compose.yml'), 'w') as f:
         f.write('\n'.join(L) + '\n')
