@@ -122,6 +122,24 @@ explorer }`. A deposit's credit on Flush is a coinbase output to `address`; the 
 where to look one up by it. 404: no mainchain explorer, or the tx is not a deposit to this slot; 502: the eCash
 explorer did not answer.
 
+## What an address's outputs carry: GET /api/v1/address/:address/utxo (and scripthash/:hash/utxo)
+
+Esplora's UTXO list, each output with what it carries besides its ECX (chain/modules/flush/tokens.ts), for wallets:
+
+```json
+{ "txid": "…", "vout": 1, "value": 1000, "status": { "confirmed": true, … },
+  "token": { "kind": 0, "id": "<64 hex>", "amount_units": "2238304577" }, "spendable": true }
+```
+
+- `token`: `{ kind, id, amount_units }`, or `null` for plain ECX. `kind` is the node's Token::Kind: 0 asset, 1 control,
+  2 reservation, 3 LP shares, 4 auction receipt, 5 position, 6 order. `amount_units`: an integer as a string (1 for
+  kinds other than 0 and 3).
+- Confirmed outputs: the node's state (`gettxout`'s `token`, flushd 7.0.1 on), so the results of swaps and launches are
+  in it. With an older node, confirmed outputs have no `token` and no `spendable` field: not known.
+- Unconfirmed outputs: the transaction's marker (`decodeassettx`); outputs it does not list carry nothing. An output
+  that takes an order's result (known only when its block applies it), or whose amount cannot be read exactly, has
+  `token: null` and `spendable: false`.
+
 ## Broadcasting a marker: POST /api/v1/tx?maxburnamount=
 The node's sendrawtransaction refuses any unspendable output by default (`maxburnamount` is 0), so a DEX transaction
 whose marker output carries CHN (a swap, a launch's first buy, …) is rejected unless the caller allows that amount.

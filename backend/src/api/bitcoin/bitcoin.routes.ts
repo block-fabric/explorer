@@ -3,6 +3,8 @@ import axios from 'axios';
 import * as bitcoinjs from 'bitcoinjs-lib';
 import config from '../../config';
 import addressIndex from '../../chain/address-index';
+import { PROFILE } from '../../chain/profile';
+import flushTokens from '../../chain/modules/flush/tokens';
 import websocketHandler from '../websocket-handler';
 import mempool from '../mempool';
 import feeApi from '../fee-api';
@@ -885,7 +887,8 @@ class BitcoinRoutes {
 
     try {
       const addressData = await bitcoinApi.$getAddressUtxos(req.params.address);
-      res.json(addressData);
+      // Chains Explorer: on Flush, what each output carries (chain/modules/flush/tokens.ts)
+      res.json(PROFILE.kind === 'flush' ? await flushTokens.annotate(addressData) : addressData);
     } catch (e) {
       if (e instanceof Error && e.message === 'Invalid Bitcoin address') {
         res.status(400).send(e.message);
@@ -980,7 +983,7 @@ class BitcoinRoutes {
       // electrum expects scripthashes in little-endian
       const electrumScripthash = req.params.scripthash.match(/../g)?.reverse().join('') ?? '';
       const addressData = await bitcoinApi.$getScriptHashUtxos(electrumScripthash);
-      res.json(addressData);
+      res.json(PROFILE.kind === 'flush' ? await flushTokens.annotate(addressData) : addressData);
     } catch (e) {
       if (e instanceof Error && e.message && (e.message.indexOf('too long') > 0 || e.message.indexOf('confirmed status') > 0)) {
         handleError(req, res, 413, e.message);
