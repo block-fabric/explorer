@@ -282,12 +282,17 @@ def main():
     out = a.out
     # cross links: the eCash explorer of each network by network id (the network switcher), the sidechain explorers by
     # profile id (the chain switcher)
-    urls = {(e['network'] if e['kind'] == 'l1' else e['profile']): f"https://{DOMAIN}/{e['path']}".rstrip('/') for e in EXPLORERS}
+    key = lambda e: e['network'] if e['kind'] == 'l1' else e['profile']
+    urls = {key(e): f"https://{DOMAIN}/{e['path']}".rstrip('/') for e in EXPLORERS}
     for d in ('config', 'initdb'):
         os.makedirs(os.path.join(out, d), exist_ok=True)
 
-    configs = [(e['id'], backend_config(e, urls)) for e in EXPLORERS]
-    configs += [(f"{e['id']}-full", l2_full_config(e, urls)) for e in EXPLORERS if e['kind'] == 'l2']
+    def urls_of(e):
+        """an explorer's cross links: every network's eCash explorer, and the sidechain explorers of its own network"""
+        return {key(x): urls[key(x)] for x in EXPLORERS if x['kind'] == 'l1' or x['network'] == e['network']}
+
+    configs = [(e['id'], backend_config(e, urls_of(e))) for e in EXPLORERS]
+    configs += [(f"{e['id']}-full", l2_full_config(e, urls_of(e))) for e in EXPLORERS if e['kind'] == 'l2']
     for name, c in configs:
         path = os.path.join(out, 'config', f"{name}.json")
         with open(path, 'w') as f:
