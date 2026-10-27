@@ -1,6 +1,7 @@
 #!/bin/bash
 # Static frontends for the eCash explorers: www/<explorer>/ = the en-US bundle of the frontend image with
-# <base href="/<explorer>/"> and its own /<explorer>/resources/config.js; www/resources/ shared.
+# <base href="/<explorer>/"> and its own /<explorer>/resources/config.js; www/resources/ shared. The explorer with the
+# empty path (mainnet) is the site's root: its bundle in www/ itself, as built (<base href="/">).
 # www-config/<explorer>.js = the frontend's config.js for that explorer (CHAIN_PROFILE, CHAIN_NETWORK, EXPLORER_URLS, ...).
 #   www.sh <frontend image> <out dir> <stage dir written by gen.py>
 set -euo pipefail
@@ -13,17 +14,21 @@ docker cp "$id:/var/www/mempool/browser/resources" "$OUT/www/resources"
 docker rm "$id" >/dev/null
 rm -f "$OUT/www/resources/config.js" "$OUT/www/resources/config.template.js"
 python3 -c 'import json,sys
-for e in json.load(open(sys.argv[1])): print(e["id"], e["path"], e["profile"], e["network"], e["weight"])' "$STAGE/explorers.json" |
+for e in json.load(open(sys.argv[1])): print(e["id"], e["path"] or ".", e["profile"], e["network"], e["weight"])' "$STAGE/explorers.json" |
 while read -r id p profile network weight; do
   # a sidechain explorer's folder sits inside its network's (www/betanet/thunder/): copy the bundle's files only
   mkdir -p "$OUT/www/$p" && cp -r "$OUT/en-US.tmp/." "$OUT/www/$p/"
-  sed -i -e "s#<base href=\"/\">#<base href=\"/$p/\">#" -e "s#src=\"/resources/config.js\"#src=\"/$p/resources/config.js\"#" "$OUT/www/$p/index.html"
-  grep -q "<base href=\"/$p/\">" "$OUT/www/$p/index.html"
+  if [ "$p" = . ]; then
+    b= u=https://explorer.blockfab.org
+  else
+    b=/$p u=https://explorer.blockfab.org/$p
+    sed -i -e "s#<base href=\"/\">#<base href=\"/$p/\">#" -e "s#src=\"/resources/config.js\"#src=\"/$p/resources/config.js\"#" "$OUT/www/$p/index.html"
+  fi
+  grep -q "<base href=\"$b/\">" "$OUT/www/$p/index.html"
   # the network in the page title, and absolute links for crawlers and link previews (they do not run the app)
   # (as the app titles its pages: "eCash Explorer (Betanet)")
   case $profile in ecash) c=eCash ;; truthcoin) c=Truthcoin ;; bitnames) c=BitNames ;; bitassets) c=BitAssets ;; zside) c=zSide ;; coinshift) c=Coinshift ;; freebank) c=FreeBank ;; *) c=${profile^} ;; esac
   case $network in ecash) n="$c Explorer" ;; ecashbeta) n="$c Explorer (Betanet)" ;; ecashtest) n="$c Explorer (Testnet)" ;; *) n="$c Explorer ($network)" ;; esac
-  u="https://explorer.blockfab.org/$p"
   sed -i -e "s/eCash Explorer/$n/g" \
     -e "s#content=\"resources/previews/#content=\"$u/resources/previews/#g" -e "s#rel=\"canonical\" href=\"./\"#rel=\"canonical\" href=\"$u/\"#" "$OUT/www/$p/index.html"
   docker run --rm -e CHAIN_PROFILE="$profile" -e CHAIN_NETWORK="$network" -e CHAIN_EXPLORER_URLS="$URLS" -e BLOCK_WEIGHT_UNITS="$weight" \

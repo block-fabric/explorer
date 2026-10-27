@@ -37,10 +37,17 @@ DB_PORT = 3318
 # Every explorer this server runs: its id (container, config and database names), URL path, chain profile and
 # network, the port of its backend, and where it reads the chain. The eCash explorer (kind l1) reads the node and
 # enforcer next to it; a sidechain explorer (kind l2) reads its sidechain node's public RPC on the sidechain server
-# (216.128.183.114, whose firewall admits this server only) and the enforcer here. Mainnet and testnet are added here
-# when their nodes run.
+# (216.128.183.114, whose firewall admits this server only) and the enforcer here. Testnet is added here when its node
+# runs. The mainnet explorer has the empty path: it is the site's front page (https://explorer.blockfab.org/).
 SIDECHAIN_HOST = '216.128.183.114'
 EXPLORERS = [
+    # mainnet: ecash-mainnet-node (RPC 127.0.0.1:8532, -txindex; its read-only RPC user in secrets/ecash.rpc) and
+    # ecash-mainnet-enforcer (Connect 127.0.0.1:8133), the node and enforcer ePool mines on
+    {
+        'id': 'mainnet', 'path': '', 'kind': 'l1', 'profile': 'ecash', 'network': 'ecash', 'api_port': 18959,
+        'rpc_port': 8532, 'enforcer': 'http://127.0.0.1:8133', 'weight': 4000000,
+        'mem': '1g', 'heap_mb': 768,
+    },
     {
         'id': 'betanet', 'path': 'betanet', 'kind': 'l1', 'profile': 'ecash', 'network': 'ecashbeta', 'api_port': 18950,
         'rpc_port': 8542, 'enforcer': 'http://127.0.0.1:8123', 'weight': 4000000,
@@ -83,7 +90,7 @@ EXPLORERS = [
 # left out of everything gen.py writes, unless named with --enable <id>
 # Flush's slot on each network (CHAIN.FLUSH.SLOT of every explorer there: the eCash explorer names the slot after it)
 FLUSH_SLOT = {'ecashbeta': 99}
-# The front page goes to this explorer
+# The front page goes to this explorer when none has the empty path
 HOME = 'betanet'
 # Explorers renamed since they went public: the old URL path redirects to the new one (301, the rest of the path and
 # the query kept). Slot 13 was 'hivemind' (the name of its node software) until it took its chain's name, Truthcoin.
@@ -275,7 +282,7 @@ def main():
     out = a.out
     # cross links: the eCash explorer of each network by network id (the network switcher), the sidechain explorers by
     # profile id (the chain switcher)
-    urls = {(e['network'] if e['kind'] == 'l1' else e['profile']): f"https://{DOMAIN}/{e['path']}" for e in EXPLORERS}
+    urls = {(e['network'] if e['kind'] == 'l1' else e['profile']): f"https://{DOMAIN}/{e['path']}".rstrip('/') for e in EXPLORERS}
     for d in ('config', 'initdb'):
         os.makedirs(os.path.join(out, d), exist_ok=True)
 
@@ -339,38 +346,46 @@ def main():
     for e in EXPLORERS:
         # a sidechain: the index backend answers /api/v1/chain and /api/v1/l2/, the full backend the rest
         p, prt = e['path'], e.get('full_port', e['api_port'])
+        # the URL path's base: '' for the explorer at the site's root (its pages are the server's catch-all, its
+        # resources/ the shared one)
+        b = f'/{p}' if p else ''
         # the POST routes, rate limited: upstream's (tx, txs/test, txs/package, also as esplora's /api/...) on the
         # (full) backend, and a sidechain's POST /api/v1/l2/tx on its index backend (exact matches: ahead of the rest)
         post = f"limit_req zone=explorer_tx burst={TX_BURST} nodelay; client_max_body_size {TX_BODY[e['kind']]};"
-        posts = ''.join(f"    location = /{p}/api/{v}{r} {{ {post} proxy_pass http://127.0.0.1:{prt}/api/v1/{r}; }}\n"
+        posts = ''.join(f"    location = {b}/api/{v}{r} {{ {post} proxy_pass http://127.0.0.1:{prt}/api/v1/{r}; }}\n"
                         for r in ('tx', 'txs/test', 'txs/package') for v in ('', 'v1/'))
         if e['kind'] in ('flush', 'freebank'):
             # Flush's and FreeBank's own reads (node RPCs, quotes, Flush's public DEX API): rate limited per IP
             k = e['kind']
-            posts += (f"    location ^~ /{p}/api/v1/{k}/ {{ limit_except GET {{ deny all; }} limit_req zone=explorer_tx burst={TX_BURST} nodelay; "
+            posts += (f"    location ^~ {b}/api/v1/{k}/ {{ limit_except GET {{ deny all; }} limit_req zone=explorer_tx burst={TX_BURST} nodelay; "
                       f"limit_req zone=explorer_flush burst={FLUSH_BURST} nodelay; proxy_pass http://127.0.0.1:{prt}/api/v1/{k}/; }}\n")
         if e['kind'] == 'l2':
-            posts += f"    location = /{p}/api/v1/l2/tx {{ {post} proxy_pass http://127.0.0.1:{e['api_port']}/api/v1/l2/tx; }}\n"
-        idx = '' if e['kind'] != 'l2' else f'''    location = /{p}/api/v1/chain {{ proxy_pass http://127.0.0.1:{e['api_port']}/api/v1/chain; }}
-    location ^~ /{p}/api/v1/l2/ {{ proxy_pass http://127.0.0.1:{e['api_port']}/api/v1/l2/; }}
+            posts += f"    location = {b}/api/v1/l2/tx {{ {post} proxy_pass http://127.0.0.1:{e['api_port']}/api/v1/l2/tx; }}\n"
+        idx = '' if e['kind'] != 'l2' else f'''    location = {b}/api/v1/chain {{ proxy_pass http://127.0.0.1:{e['api_port']}/api/v1/chain; }}
+    location ^~ {b}/api/v1/l2/ {{ proxy_pass http://127.0.0.1:{e['api_port']}/api/v1/l2/; }}
 '''
-        loc.append(f'''    # {p}: {e['profile']} on {e['network']}
-    location = /{p} {{ return 301 /{p}/; }}
-    location = /{p}/resources/config.js {{ alias {ROOT}/www-config/{e['id']}.js; expires 5m; }}
-    location ^~ /{p}/resources/ {{ alias {ROOT}/www/resources/; expires 1h; }}
-    location ^~ /{p}/api/v1/ws {{ proxy_pass http://127.0.0.1:{prt}/; proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "Upgrade"; proxy_read_timeout 1h; }}
-    location ^~ /{p}/api/v1/services {{ return 404; }}
-    location ^~ /{p}/api/v1/internal {{ return 404; }}
-{posts}{idx}    location ^~ /{p}/api/v1 {{ proxy_pass http://127.0.0.1:{prt}/api/v1; }}
-    location ^~ /{p}/api/ {{ proxy_pass http://127.0.0.1:{prt}/api/v1/; }}
-    location = /{p}/api {{ try_files /{p}/index.html =404; }}
-    location ^~ /{p}/ {{ try_files $uri $uri/ /{p}/index.html; expires 10m; }}
+        sub = f'''    location = {b} {{ return 301 {b}/; }}
+    location ^~ {b}/resources/ {{ alias {ROOT}/www/resources/; expires 1h; }}
+''' if p else ''
+        pages = f'location ^~ {b}/' if p else 'location /'
+        loc.append(f'''    # {p or '/'}: {e['profile']} on {e['network']}
+{sub}    location = {b}/resources/config.js {{ alias {ROOT}/www-config/{e['id']}.js; expires 5m; }}
+    location ^~ {b}/api/v1/ws {{ proxy_pass http://127.0.0.1:{prt}/; proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "Upgrade"; proxy_read_timeout 1h; }}
+    location ^~ {b}/api/v1/services {{ return 404; }}
+    location ^~ {b}/api/v1/internal {{ return 404; }}
+{posts}{idx}    location ^~ {b}/api/v1 {{ proxy_pass http://127.0.0.1:{prt}/api/v1; }}
+    location ^~ {b}/api/ {{ proxy_pass http://127.0.0.1:{prt}/api/v1/; }}
+    location = {b}/api {{ try_files {b}/index.html =404; }}
+    {pages} {{ try_files $uri $uri/ {b}/index.html; expires 10m; }}
 ''')
     for old, new in RENAMED.items():
         loc.append(f'''    # {old}: renamed {new}
     location = /{old} {{ return 301 /{new}/; }}
     location ^~ /{old}/ {{ rewrite ^/{old}/(.*)$ /{new}/$1 permanent; }}
 ''')
+    root_explorer = any(not e['path'] for e in EXPLORERS)
+    home = '' if root_explorer else f'    location = / {{ return 302 /{HOME}/; }}\n'
+    notfound = '' if root_explorer else '    location / {{ return 404; }}\n'
     site = f'''# eCash block explorers ({ROOT}): https://{DOMAIN}/<explorer>/ for each explorer.
 # Written by {ROOT}/gen.py. The api containers listen on 127.0.0.1 (host network), one port each.
 # The certificate is its own (certbot certonly --webroot -w /var/www/html -d {DOMAIN}), apart from the other sites'.
@@ -416,12 +431,9 @@ server {{
     index index.html;
     add_header Cache-Control "public, no-transform";
     location /.well-known/acme-challenge/ {{ root /var/www/html; }}
-    location = / {{ return 302 /{HOME}/; }}
-    location ^~ /resources/ {{ expires 1h; }}
+{home}    location ^~ /resources/ {{ expires 1h; }}
 
-''' + '\n'.join(loc) + '''
-    location / {{ return 404; }}
-}}
+''' + '\n'.join(loc) + notfound + '''}}
 '''.replace('{{', '{').replace('}}', '}')
     with open(os.path.join(out, 'nginx-site.conf'), 'w') as f:
         f.write(site)
@@ -432,12 +444,12 @@ server {{
     for e in EXPLORERS:
         if e['kind'] in ('flush', 'freebank'):
             pub = f"  public api {e['public_api']} (Host {e['public_api_host']})" if e.get('public_api') else ''
-            print(f"{e['id']:18} https://{DOMAIN}/{e['path']}/  {e['profile']} on {e['network']}  api 127.0.0.1:{e['api_port']}"
+            print(f"{e['id']:18} https://{DOMAIN}/{e['path'] + '/' if e['path'] else ''}  {e['profile']} on {e['network']}  api 127.0.0.1:{e['api_port']}"
                   f"  rpc {e['rpc_host']}:{e['rpc_port']} ({db_name(e)}){pub}")
             continue
         src = f"rpc 127.0.0.1:{e['rpc_port']}" if e['kind'] == 'l1' else \
             f"sidechain {e['sidechain_rpc']}  core view 127.0.0.1:{e['l2_rpc_port']}  full api 127.0.0.1:{e['full_port']} ({db_name(e)})"
-        print(f"{e['id']:18} https://{DOMAIN}/{e['path']}/  {e['profile']} on {e['network']}  api 127.0.0.1:{e['api_port']}"
+        print(f"{e['id']:18} https://{DOMAIN}/{e['path'] + '/' if e['path'] else ''}  {e['profile']} on {e['network']}  api 127.0.0.1:{e['api_port']}"
               f"  {src}  enforcer {e['enforcer']}")
 
 
