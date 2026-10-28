@@ -394,6 +394,8 @@ def main():
             L += [f'  electrs-{p}:', f'    image: {ELECTRS_IMAGE}', f'    container_name: ecash-explorer-electrs-{p}',
                   '    restart: unless-stopped', '    network_mode: host', '    user: "1000:1000"', f'    mem_limit: {ELECTRS_MEM}',
                   f'    cpus: {ELECTRS_CPUS}', f'    oom_score_adj: {OOM_SCORE_FULL}',
+                  # RocksDB keeps its .sst files open (4,000+ for mainnet's index): Docker's 1024 refuses lookups
+                  '    ulimits:', '      nofile:', '        soft: 65536', '        hard: 65536',
                   '    environment:', f'      RAYON_NUM_THREADS: "{ELECTRS_THREADS}"',
                   '    entrypoint: ["electrs", "--conf", "/config/electrs.toml"]',
                   '    volumes:', f'      - ./config/electrs-{p}.toml:/config/electrs.toml:ro', f'      - ./electrs/{p}:/db']
