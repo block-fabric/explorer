@@ -159,7 +159,7 @@ def backend_config(e, urls):
     user, password = rpc_auth(e['network'])
     return {
         'MEMPOOL': {
-            'NETWORK': 'mainnet', 'BACKEND': 'none', 'HTTP_PORT': e['api_port'], 'CACHE_DIR': '/backend/cache',
+            'NETWORK': 'mainnet', 'BACKEND': 'electrum' if electrum_config(e) else 'none', 'HTTP_PORT': e['api_port'], 'CACHE_DIR': '/backend/cache',
             'BLOCK_WEIGHT_UNITS': e['weight'], 'INDEXING_BLOCKS_AMOUNT': INDEXING_BLOCKS, 'USER_AGENT': 'ecash-explorer',
             'STDOUT_LOG_MIN_PRIORITY': 'info', 'AUTOMATIC_POOLS_UPDATE': False, 'ENABLED': True,
             'POLL_RATE_MS': 2000, 'API_URL_PREFIX': '/api/v1/', 'SPAWN_CLUSTER_PROCS': 0,
