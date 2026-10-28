@@ -207,8 +207,8 @@ def electrs_toml(e):
         f'auth = "{user}:{password}"', f'electrum_rpc_addr = "127.0.0.1:{x["port"]}"',
         f'monitoring_addr = "127.0.0.1:{x["monitoring_port"]}"', f'db_parallelism = {ELECTRS_THREADS}',
         # an address with more transactions than this answers an error rather than tie electrs up (Bitcoin's history
-        # has addresses with millions; about 3 ms a transaction, and a page asks two or three times)
-        'index_lookup_limit = 2000', 'log_filters = "INFO"', ''])
+        # has addresses with millions; about 3 ms a transaction: 10000 is ~30 s, during which other lookups wait)
+        'index_lookup_limit = 10000', 'log_filters = "INFO"', ''])
 
 
 def flush_config(e, urls):
