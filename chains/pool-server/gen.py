@@ -31,6 +31,9 @@ False is left out (no container, config, database, nginx location or link): for 
 import argparse, json, os
 
 DOMAIN = 'explorer.blockfab.org'
+# Other hostnames sent to one explorer here, path and query kept (explorer.flush.markets/tx/<id> lands on the Flush
+# explorer's tx page). Behind Cloudflare, whose origin check is not strict: they answer with DOMAIN's certificate.
+ALIASES = {'explorer.flush.markets': 'betanet/flush'}
 ROOT = '/opt/ecash-explorer'
 DB_PORT = 3318
 
@@ -499,6 +502,29 @@ server {{
 
 ''' + '\n'.join(loc) + notfound + '''}}
 '''.replace('{{', '{').replace('}}', '}')
+    for host, path in ALIASES.items():
+        site += f'''
+# {host}: the {path} explorer
+server {{
+    listen 80;
+    listen [::]:80;
+    server_name {host};
+    location /.well-known/acme-challenge/ {{ root /var/www/html; }}
+    location / {{ return 301 https://{DOMAIN}/{path}$request_uri; }}
+}}
+server {{
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name {host};
+    ssl_certificate     /etc/letsencrypt/live/{DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{DOMAIN}/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+    access_log /var/log/nginx/ecash-explorer.access.log;
+    location / {{ return 301 https://{DOMAIN}/{path}$request_uri; }}
+}}
+'''
     with open(os.path.join(out, 'nginx-site.conf'), 'w') as f:
         f.write(site)
     with open(os.path.join(out, 'urls.env'), 'w') as f:
