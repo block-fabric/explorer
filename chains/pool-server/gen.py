@@ -112,14 +112,17 @@ TX_BODY['flush'] = TX_BODY['freebank'] = TX_BODY['l1']
 # this keep us under its budget
 FLUSH_RATE, FLUSH_BURST = '5r/s', 20
 
-# An explorer's electrs (romanz/electrs v0.12.0, its image built from the release's Dockerfile as
-# ecash-explorer/electrs:0.12.0): the address index of upstream's electrum backend. It reads the node's blocks over its
+# An explorer's electrs (romanz/electrs v0.12.0, its image built from the release's Dockerfile with
+# electrs-lookup-limit.patch applied, as ecash-explorer/electrs:0.12.0-limit): the address index of upstream's electrum backend. It reads the node's blocks over its
 # REST interface (rest=1; /rest/spenttxouts and /rest/blockpart, core 31) and its JSON-RPC as the explorer's read-only
 # user (secrets/<network>.rpc: no submitpackage, which only package broadcasts need). Its index sits on / in
 # electrs/<explorer>/ (~7% of the chain's blocks, twice that before the first compaction). Its first sync reads every
 # block through the node ePool mines on: 4 CPUs, 4 threads, normal I/O (2026-10-27: CPU-bound at 2 with the node's disk 17% busy and
 # GBT at 2-10 ms; the node's slow block connects were its empty mempool, not electrs).
-ELECTRS_IMAGE = 'ecash-explorer/electrs:0.12.0'
+# The image carries electrs-lookup-limit.patch: 0.12.0 reads index_lookup_limit and never applies it, so one address
+# with tens of thousands of transactions (31,087: 99 s) held the server, which answers one request at a time, and every
+# other lookup timed out behind it; patched, it is refused from its index entries alone, before any is fetched
+ELECTRS_IMAGE = 'ecash-explorer/electrs:0.12.0-limit'
 ELECTRS_MEM, ELECTRS_CPUS, ELECTRS_THREADS = '3g', 4.0, 4
 
 # The server has no swap: if memory runs out, the kernel must kill an explorer container before the pool's node or its
@@ -204,8 +207,8 @@ def electrs_toml(e):
         f'auth = "{user}:{password}"', f'electrum_rpc_addr = "127.0.0.1:{x["port"]}"',
         f'monitoring_addr = "127.0.0.1:{x["monitoring_port"]}"', f'db_parallelism = {ELECTRS_THREADS}',
         # an address with more transactions than this answers an error rather than tie electrs up (Bitcoin's history
-        # has addresses with millions)
-        'index_lookup_limit = 20000', 'log_filters = "INFO"', ''])
+        # has addresses with millions; about 3 ms a transaction, and a page asks two or three times)
+        'index_lookup_limit = 2000', 'log_filters = "INFO"', ''])
 
 
 def flush_config(e, urls):
