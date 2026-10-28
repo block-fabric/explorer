@@ -189,7 +189,7 @@ Paths (`{id}` a 64-hex id, `{name}` an id or a ticker, case as given):
 status  stats  fees  treasury
 launches  launches/stats  launches/log  launches/{name}  launches/{name}/trades|candles|holders  launches/{name}/logo
 pools  pools/{id}  pools/{name}/{name}  pools/{id}/trades|candles|ticks
-positions/{id}  books/{name}  books/{name}/{name}  tickers/{name}  addresses/{address}/holdings  verifications
+positions/{id}  books/{name}  books/{name}/{name}  tickers/{name}  addresses/{address}/holdings  addresses/{address}/trades  trades/{txid}  verifications
 assets  assets/{name}  assets/{name}/logo
 ```
 Query parameters, each once, ≤ 200 printable characters: filter sort q cursor limit before interval from to

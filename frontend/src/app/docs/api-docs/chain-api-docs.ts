@@ -689,6 +689,27 @@ const flushDocs = (): ApiDoc[] => [
   }),
   endpoint({
     category: 'flush',
+    fragment: 'flush-trade',
+    title: 'GET Order Outcome',
+    url: '/v1/flush/market/trades/:txid',
+    description: 'What became of an order, by its transaction\'s txid (or the txid of the settle of a limit order): <code>kind</code> '
+      + '<code>swap</code> or <code>order</code>; <code>status</code> <code>filled</code> or <code>missed</code> for a swap, '
+      + '<code>open</code>, <code>filled</code>, <code>expired</code>, <code>evicted</code>, <code>cancelled</code> or '
+      + '<code>settled</code> for a limit order; its height, time, address and script, and in <code>swap</code> the path, '
+      + 'each hop\'s amounts, and what was paid out or refunded and how (<code>coinbase</code> for ECX, or <code>output</code>: '
+      + 'the token on the result output). 404 when the txid is no order (Flush node 8.2.0 on).',
+  }),
+  endpoint({
+    category: 'flush',
+    fragment: 'flush-address-trades',
+    title: 'GET Address Orders',
+    url: '/v1/flush/market/addresses/:address/trades',
+    description: 'The orders of an address, newest first, misses included, as <code>trades/:txid</code> gives each: the swaps '
+      + 'paying it (its ECX or its result output) and the limit orders it owns. <code>limit</code> up to 100, <code>cursor</code> '
+      + 'the previous page\'s <code>next_cursor</code>; <code>total</code> counts them all.',
+  }),
+  endpoint({
+    category: 'flush',
     fragment: 'flush-verifications',
     title: 'GET Asset Verifications',
     url: '/v1/flush/market/verifications',

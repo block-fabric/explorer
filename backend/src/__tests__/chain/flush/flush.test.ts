@@ -21,6 +21,7 @@ describe('Flush: the public API allowlist', () => {
       `pools/${ID}/trades`, `pools/${ID}/candles`, `pools/${ID}/ticks`, `positions/${ID}`, 'books/USDX', 'books/USDX/ECX',
       'tickers/MOON', 'addresses/rsc1qkkt5556w3eduf6a53krg6ytth7cmlgyg0fj5fg/holdings', 'verifications',
       'assets', 'assets/MOON', `assets/${ID}`,
+      `trades/${ID}`, 'addresses/rsc1qkkt5556w3eduf6a53krg6ytth7cmlgyg0fj5fg/trades',
     ]) {
       expect([p, marketPath(p)]).toEqual([p, 'json']);
     }

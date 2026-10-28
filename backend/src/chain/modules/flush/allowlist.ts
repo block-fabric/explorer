@@ -175,7 +175,8 @@ const MARKET_PATHS: RegExp[] = [
   `positions/${ID}`,
   `books/${NAME}`, `books/${NAME}/${NAME}`,
   `tickers/${NAME}`,
-  `addresses/${ADDRESS}/holdings`,
+  `addresses/${ADDRESS}/holdings`, `addresses/${ADDRESS}/trades`,
+  `trades/${ID}`,                // 8.2.0: an order's outcome by its txid (or its settle's), misses included
   'verifications',
 ].map(p => new RegExp(`^${p}$`));
 
