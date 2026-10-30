@@ -77,7 +77,7 @@ EXPLORERS = [
     # (the front's public-rpc.auth there)
     {
         'id': 'mainnet-thunder', 'path': 'thunder', 'kind': 'l2', 'profile': 'thunder', 'network': 'ecash',
-        'enabled': False, 'api_port': 18967, 'l2_rpc_port': 19967, 'full_port': 18968,
+        'enabled': True, 'api_port': 18967, 'l2_rpc_port': 19967, 'full_port': 18968,
         'sidechain_rpc': f'http://{SIDECHAIN_HOST}:17009', 'sidechain_secret': 'mainnet-thunder',
         'enforcer': 'http://127.0.0.1:8133',
         'weight': 4000000, 'mem': '384m', 'heap_mb': 256, 'full_mem': '512m', 'full_heap_mb': 384,
@@ -118,7 +118,7 @@ EXPLORERS = [
     # ("user:password" in secrets/mainnet-freebank.rpc)
     {
         'id': 'mainnet-freebank', 'path': 'freebank', 'kind': 'freebank', 'profile': 'freebank', 'network': 'ecash',
-        'enabled': False, 'api_port': 18969, 'rpc_host': SIDECHAIN_HOST, 'rpc_port': 38131, 'secret': 'mainnet-freebank',
+        'enabled': True, 'api_port': 18969, 'rpc_host': SIDECHAIN_HOST, 'rpc_port': 38131, 'secret': 'mainnet-freebank',
         'indexing_blocks': 1008, 'weight': 4000000, 'mem': '768m', 'heap_mb': 512,
     },
 ]
