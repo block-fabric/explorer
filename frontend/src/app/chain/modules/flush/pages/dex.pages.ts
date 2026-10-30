@@ -128,7 +128,7 @@ function depthSeries(c: any): ChartSeries[] {
         <app-flush-head [title]="p.asset_a + ' / ' + p.asset_b" [tabs]="tabs" active="/pools"><span class="pill on ms-2" style="font-size: 0.8rem">{{ fx.kindLabel(p.curve) }}</span></app-flush-head>
         <div class="sub"><span class="id">{{ p.pool }}</span> <app-clipboard [text]="p.pool"></app-clipboard>
           @if (p.locked) {<span class="pill ms-2">locked liquidity</span>} @if (p.abandoned) {<span class="pill warn ms-2">abandoned</span>}</div>
-        <app-flush-supply [id]="p.asset_a_id"></app-flush-supply><app-flush-supply [id]="p.asset_b_id"></app-flush-supply>
+        <app-flush-supply [id]="p.asset_a_id || p.asset_a"></app-flush-supply><app-flush-supply [id]="p.asset_b_id || p.asset_b"></app-flush-supply>
         <div class="kpis">
           <div class="kpi"><div class="l">Price</div><div class="v">{{ fx.price(p.price) }}</div><div class="s">{{ p.asset_b }} per {{ p.asset_a }}</div></div>
           <div class="kpi"><div class="l">Reserve {{ p.asset_a }}</div><div class="v">{{ fx.compact(p.reserve_a) }}</div><div class="s"><app-flush-token [ticker]="p.asset_a" [id]="p.asset_a_id" [logo]="p.logo"></app-flush-token></div></div>

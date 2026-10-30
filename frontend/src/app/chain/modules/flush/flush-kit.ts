@@ -6,7 +6,7 @@ import { PROFILE } from '@app/chain/profiles';
 import { SidechainLabelComponent } from '@app/chain/components/sidechain-label/sidechain-label.component';
 import { ChainTableComponent, CxCellDirective, CxColumn, CxFilter } from '@app/chain/components/chain-table/chain-table.component';
 import { ECASH_GOLD, ECASH_MARK_PATHS, ECASH_MARK_VIEWBOX } from '@app/chain/marks';
-import { Observable } from 'rxjs';
+import { Observable, catchError, map, of } from 'rxjs';
 import { FlushApiService, FlushLoaded } from './flush-api.service';
 import { AssetInfo, ECX_ID, FlushAssetsService } from './flush-assets.service';
 import { Holder, LaunchSummary, Pool, Trade, TreasuryInflow } from './flush.interfaces';
@@ -225,32 +225,41 @@ export const ASSET_TABS: FlushTab[] = [
 export const STAKE_TABS: FlushTab[] = [{ path: '/stake', title: 'Validators and anchors' }, { path: '/fees', title: 'Fees' }];
 export const PEG_TABS: FlushTab[] = [{ path: '/peg', title: 'The peg' }, { path: '/bmm', title: 'BMM on eCash' }];
 
-/** An asset whose control coin is still held: its supply is unlocked (the holder can mint more), said where it is traded */
+/** An asset whose control coin is still held: its supply is unlocked (the holder can mint more), said where it is traded.
+ *  Its own getasset (not the shared cache): a failed lookup says so rather than passing for a fixed supply */
 @Component({
   selector: 'app-flush-supply',
   standalone: true,
   imports: [CommonModule, RouterModule, FlushAddrComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styles: [`.unlocked { display: block; padding: 8px 12px; margin-bottom: 12px; border-radius: 8px; border: 1px solid #f5b83d55; background: #f5b83d14; font-size: 0.85rem; }
-    .unlocked b { color: #ffd98a; }`],
+  styles: [`.n { display: block; padding: 8px 12px; margin-bottom: 12px; border-radius: 8px; font-size: 0.85rem; }
+    .unlocked { border: 1px solid #f5b83d55; background: #f5b83d14; } .unlocked b { color: #ffd98a; }
+    .unknown { border: 1px solid var(--cx-rule, #ffffff20); color: var(--transparent-fg); }`],
   template: `
-    @if (info$ | async; as i) {
-      @if (i.control; as c) {
-        <div class="unlocked"><b>Supply unlocked:</b> the control coin of {{ i.ticker }}
+    @if (state$ | async; as st) {
+      @if (st.control; as c) {
+        <div class="n unlocked"><b>Supply unlocked:</b> the control coin of {{ st.ticker }}
           (<a [routerLink]="['/tx', c.txid]" class="mono">{{ fx.shortId(c.txid) }}:{{ c.vout }}</a>) is still held@if (c.address) { by <app-flush-addr [address]="c.address"></app-flush-addr>},
-          so its holder can mint more {{ i.ticker }} and change the asset. Its supply is capped only once the control coin is given up.</div>
+          so its holder can mint more {{ st.ticker }} and change the asset. Its supply is capped only once the control coin is given up.</div>
+      } @else if (st.unknown) {
+        <div class="n unknown">Whether {{ st.ticker }}'s supply is fixed could not be checked right now.</div>
       }
     }`,
 })
 export class FlushSupplyComponent implements OnChanges {
+  /** the asset's id, or its ticker (case as registered); ECX, the chain's coin, has none */
   @Input() id: string | null | undefined;
-  info$: Observable<AssetInfo | null>;
+  state$: Observable<{ ticker: string; control: { txid: string; vout: number; address?: string } | null; unknown: boolean } | null>;
   fx = F;
 
-  constructor(private assets: FlushAssetsService) {}
+  constructor(private api: FlushApiService) {}
 
   ngOnChanges(): void {
-    this.info$ = this.assets.info$(this.id);
+    const t = String(this.id ?? '').trim();
+    this.state$ = !t || t.toLowerCase() === ECX_ID || t.toLowerCase() === 'ecx' ? of(null) : this.api.rpc$<any>('getasset', F.assetArg(t)).pipe(
+      map(a => ({ ticker: String(a?.name ?? t), control: a?.control?.txid ? a.control : null, unknown: !a || typeof a.fixed !== 'boolean' })),
+      catchError(() => of({ ticker: F.isId(t) ? F.shortId(t, 6) : t, control: null, unknown: true })),
+    );
   }
 }
 
