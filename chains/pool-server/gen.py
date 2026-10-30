@@ -113,6 +113,14 @@ EXPLORERS = [
         'enabled': True, 'api_port': 18958, 'rpc_host': SIDECHAIN_HOST, 'rpc_port': 38130, 'secret': 'betanet-freebank',
         'indexing_blocks': 1008, 'weight': 4000000, 'mem': '768m', 'heap_mb': 512,
     },
+    # FreeBank on mainnet (slot 130, freebankd v1.0.0, dormant): the lab node's method filter (port 38131, the same
+    # allowlist as betanet's, firewalled to this server and admitting it alone) for the rpcauth user "explorer"
+    # ("user:password" in secrets/mainnet-freebank.rpc)
+    {
+        'id': 'mainnet-freebank', 'path': 'freebank', 'kind': 'freebank', 'profile': 'freebank', 'network': 'ecash',
+        'enabled': False, 'api_port': 18969, 'rpc_host': SIDECHAIN_HOST, 'rpc_port': 38131, 'secret': 'mainnet-freebank',
+        'indexing_blocks': 1008, 'weight': 4000000, 'mem': '768m', 'heap_mb': 512,
+    },
 ]
 # An explorer with 'enabled': False (e.g. a Flush explorer of a network whose node's RPC is not reachable from here) is
 # left out of everything gen.py writes, unless named with --enable <id>
