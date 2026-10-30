@@ -31,8 +31,17 @@ const POOLS: Record<NetworkId, PoolMeta[]> = {
     { id: 100005, tag: '/avonpool/', name: 'avonpool', logo: 'avonpool.svg' },
     { id: 100006, tag: '/ecxfreebank.com/', name: 'FreeBank', logo: 'freebank.svg' },
   ],
+  // mainnet: the list's pools that mine it, by the tags its blocks carry (its own tag for Pow.re); the others as their
+  // tags read (the banner's names) until the list has them. '/ec-pool/' also matches the tags with a prefix ('./ec-pool/')
   ecash: [
+    { id: 100002, tag: '/ecpool.tech/', name: 'eCPool.tech', logo: 'ecpool.png' },
+    { id: 100003, tag: 'ePool', name: 'ePool', logo: 'epool.png' },
+    { id: 100004, tag: 'Buy hashrate @ pow.re', name: 'Pow.re', logo: null },
     { id: 100006, tag: '/ecxfreebank.com/', name: 'FreeBank', logo: 'freebank.svg' },
+    { id: 100007, tag: '/ec-pool/', name: 'ec-pool', logo: null },
+    { id: 100008, tag: '/solo-ecash/', name: 'solo-ecash', logo: null },
+    { id: 100009, tag: '/Talking to you from the future/', name: 'Talking to you from the future', logo: null },
+    { id: 100010, tag: '/laPimpa/', name: 'laPimpa', logo: null },
   ],
   ecashtest: [],
 };

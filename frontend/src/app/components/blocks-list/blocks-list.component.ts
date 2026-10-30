@@ -1,6 +1,6 @@
 import { Component, OnInit, ChangeDetectionStrategy, Input, ChangeDetectorRef, Inject, LOCALE_ID } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { BehaviorSubject, combineLatest, Observable, timer, of, Subscription } from 'rxjs';
+import { BehaviorSubject, combineLatest, forkJoin, Observable, timer, of, Subscription } from 'rxjs';
 import { debounceTime, delayWhen, filter, map, retryWhen, scan, skip, switchMap, tap, throttleTime } from 'rxjs/operators';
 import { BlockExtended } from '@interfaces/node-api.interface';
 import { ApiService } from '@app/services/api.service';
@@ -43,6 +43,9 @@ export class BlocksList implements OnInit {
   lastBlockHeightFetched = -1;
   paginationMaxSize: number;
   page = 1;
+  /** eCash Explorer: rows a page (the API's pages are 15 blocks: a bigger page reads several), the viewer's choice kept */
+  pageSizes = [15, 25, 50, 100];
+  pageSize = BlocksList.savedPageSize();
   lastPage = 1;
   maxSize = window.innerWidth <= 767.98 ? 3 : 5;
   blocksCount: number;
@@ -92,7 +95,7 @@ export class BlocksList implements OnInit {
         filter(([blocksCountInitialized, _]) => blocksCountInitialized),
         tap(([_, params]) => {
           this.page = +params['page'] || 1;
-          this.page === 1 ? this.fromHeightSubject.next(undefined) : this.fromHeightSubject.next((this.blocksCount - 1) - (this.page - 1) * 15);
+          this.page === 1 ? this.fromHeightSubject.next(undefined) : this.fromHeightSubject.next((this.blocksCount - 1) - (this.page - 1) * this.pageSize);
         })
       ).subscribe();
 
@@ -108,7 +111,7 @@ export class BlocksList implements OnInit {
             this.isLoading = true;
             this.cd.markForCheck();
           }
-          if (event.key === nextKey && this.page * 15 < this.blocksCount) {
+          if (event.key === nextKey && this.page * this.pageSize < this.blocksCount) {
             this.page++;
             this.isLoading = true;
             this.cd.markForCheck();
@@ -120,7 +123,7 @@ export class BlocksList implements OnInit {
       });
     }
 
-    this.skeletonLines = this.widget === true ? [...Array(6).keys()] : [...Array(15).keys()];
+    this.skeletonLines = this.widget === true ? [...Array(6).keys()] : [...Array(this.pageSize).keys()];
     this.paginationMaxSize = window.matchMedia('(max-width: 670px)').matches ? 3 : 5;
 
     this.blocks$ = combineLatest([
@@ -129,7 +132,7 @@ export class BlocksList implements OnInit {
         switchMap((fromBlockHeight) => {
           this.isLoading = true;
           this.lastBlockHeightFetched = fromBlockHeight;
-          return this.apiService.getBlocks$(this.page === 1 ? undefined : fromBlockHeight)
+          return this.getPage$(this.page === 1 ? undefined : fromBlockHeight)
             .pipe(
               tap(blocks => {
                 if (this.blocksCount === undefined) {
@@ -181,7 +184,7 @@ export class BlocksList implements OnInit {
                 blocks[1][0].extras.pool.slug + '.svg';
             }
             acc.unshift(blocks[1][0]);
-            acc = acc.slice(0, this.widget ? 6 : 15);
+            acc = acc.slice(0, this.widget ? 6 : this.pageSize);
           }
           return acc;
         }, []),
@@ -194,6 +197,49 @@ export class BlocksList implements OnInit {
           return of(blocks);
         })
       );
+  }
+
+  /** a page of pageSize blocks from a height (the tip: undefined), in the API's pages of 15 */
+  private getPage$(from: number | undefined): Observable<BlockExtended[]> {
+    const n = this.widget ? 15 : this.pageSize;
+    return this.apiService.getBlocks$(from).pipe(
+      switchMap(first => {
+        const top = first.length ? first[0].height : 0;
+        const more: number[] = [];
+        for (let h = top - 15; h > top - n && h >= 0; h -= 15) {
+          more.push(h);
+        }
+        return more.length ? forkJoin(more.map(h => this.apiService.getBlocks$(h))).pipe(map(rest => [first, ...rest].flat())) : of(first);
+      }),
+      map(blocks => blocks.slice(0, n)),
+    );
+  }
+
+  setPageSize(size: number): void {
+    if (!this.pageSizes.includes(size) || size === this.pageSize) {
+      return;
+    }
+    this.pageSize = size;
+    try {
+      localStorage.setItem('blocks-page-size', String(size));
+    } catch (e) { /* storage blocked: this visit only */ }
+    this.skeletonLines = [...Array(size).keys()];
+    this.lastBlockHeightFetched = -1;
+    if (this.page === 1) {
+      this.lastPage = 0;
+      this.fromHeightSubject.next(undefined);
+    } else {
+      this.pageChange(1);
+    }
+  }
+
+  static savedPageSize(): number {
+    try {
+      const n = Number(localStorage.getItem('blocks-page-size'));
+      return [15, 25, 50, 100].includes(n) ? n : 15;
+    } catch (e) {
+      return 15;
+    }
   }
 
   pageChange(page: number): void {

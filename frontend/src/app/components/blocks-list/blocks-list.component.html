@@ -152,9 +152,14 @@
     </table>
 
     <ngb-pagination *ngIf="!widget" class="pagination-container float-end mt-2" [class]="isLoading ? 'disabled' : ''"
-      [collectionSize]="blocksCount" [rotate]="true" [maxSize]="maxSize" [pageSize]="15" [(page)]="page"
+      [collectionSize]="blocksCount" [rotate]="true" [maxSize]="maxSize" [pageSize]="pageSize" [(page)]="page"
       (pageChange)="pageChange(page)" [boundaryLinks]="true" [ellipses]="false">
     </ngb-pagination>
+    <label *ngIf="!widget" class="rows-select float-end mt-2 me-3">Rows
+      <select class="form-select form-select-sm d-inline-block w-auto ms-1" (change)="setPageSize(+$any($event.target).value)" aria-label="Blocks per page">
+        <option *ngFor="let n of pageSizes" [value]="n" [selected]="n === pageSize">{{ n }}</option>
+      </select>
+    </label>
 
     <ng-template [ngIf]="!widget">
       <div class="clearfix"></div>
