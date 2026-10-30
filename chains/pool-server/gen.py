@@ -96,11 +96,12 @@ EXPLORERS = [
         'indexing_blocks': 140000, 'weight': 4000000, 'mem': '512m', 'heap_mb': 384,
     },
     # Flush on mainnet (slot 46): the pool server's own flushd (flush-mainnet-validator, RPC 127.0.0.1:8254, -txindex;
-    # rpcauth user "explorer" with betanet's rpcwhitelist, "user:password" in secrets/mainnet-flush.rpc). No public DEX
-    # API yet (the market pages stay off).
+    # rpcauth user "explorer" with betanet's rpcwhitelist, "user:password" in secrets/mainnet-flush.rpc). Market
+    # pages from the sidechain server's mainnet public DEX API (8256, Host flush.markets).
     {
         'id': 'mainnet-flush', 'path': 'flush', 'kind': 'flush', 'profile': 'flush', 'network': 'ecash',
         'enabled': True, 'api_port': 18960, 'rpc_host': '127.0.0.1', 'rpc_port': 8254, 'secret': 'mainnet-flush',
+        'public_api': f'http://{SIDECHAIN_HOST}:8256', 'public_api_host': 'flush.markets',
         'indexing_blocks': 140000, 'weight': 4000000, 'mem': '512m', 'heap_mb': 384,
     },
     # FreeBank (kind freebank, slot 130): upstream mempool on the FreeBank node's Core RPC (freebankd, a Core 0.16 base,
