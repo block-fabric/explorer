@@ -255,8 +255,9 @@ export class L2BmmPage implements OnInit, AfterViewInit, OnDestroy {
 
   // --- helpers for the template ---------------------------------------------------------------------
 
+  /** this chain's own colour (its slot may not be the profile's: Flush's differs by network) */
   get color(): string {
-    return slotColor(this.slot);
+    return PROFILE.color || slotColor(this.slot);
   }
 
   get stats(): any {
@@ -421,7 +422,7 @@ export class L2BmmPage implements OnInit, AfterViewInit, OnDestroy {
   private buildCharts(): void {
     const name = this.data?.live?.sidechains?.[0]?.title ?? PROFILE.name;
     this.charts = {
-      ...cockpitCharts(this.data, { colorOf: s => slotColor(s), nameOf: () => name, unit: 'ECX' }),
+      ...cockpitCharts(this.data, { colorOf: s => s === this.slot ? this.color : slotColor(s), nameOf: () => name, unit: 'ECX' }),
       competition: this.charts.competition,
     };
   }
