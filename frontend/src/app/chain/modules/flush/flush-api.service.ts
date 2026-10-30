@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
-import { Observable, catchError, map, of, shareReplay, startWith, switchMap, throwError } from 'rxjs';
+import { Observable, catchError, combineLatest, map, of, shareReplay, startWith, switchMap, throwError } from 'rxjs';
 import { ChainApiService } from '@app/chain/chain-api.service';
 import { PROFILE } from '@app/chain/profiles';
 import { basePath } from '@app/chain/base-path';
@@ -58,10 +58,17 @@ type Params = Record<string, string | number | boolean | null | undefined>;
 export class FlushApiService {
   /** the eCash explorer of this network, null: none */
   readonly mainchain$: Observable<string | null>;
+  /** this chain's slot on eCash, as the backend names it (CHAIN.FLUSH.SLOT: Flush's slot differs by network), else the profile's */
+  readonly slot$: Observable<number>;
 
   constructor(private http: HttpClient, private api: ChainApiService) {
     this.mainchain$ = this.api.chain$().pipe(
       map(c => (c?.mainchainExplorer ?? c?.explorers?.['ecash'] ?? null)?.replace(/\/+$/, '') ?? null),
+      shareReplay(1),
+    );
+    this.slot$ = this.api.chain$().pipe(
+      map(c => Number.isInteger(c?.slot) ? c.slot : PROFILE.slot as number),
+      catchError(() => of(PROFILE.slot as number)),
       shareReplay(1),
     );
   }
@@ -112,12 +119,12 @@ export class FlushApiService {
 
   /** the eCash explorer's drivechain API (GET <mainchainExplorer>/api/v1/drivechain/<path>), this chain's slot */
   drivechain$<T>(path: string, params?: Params): Observable<T> {
-    return this.mainchain$.pipe(
-      switchMap(base => {
+    return combineLatest([this.mainchain$, this.slot$]).pipe(
+      switchMap(([base, slot]) => {
         if (!base) {
           return throwError(() => ({ status: 404, error: null }));
         }
-        let p = new HttpParams().set('slot', String(PROFILE.slot));
+        let p = new HttpParams().set('slot', String(slot));
         for (const [k, v] of Object.entries(params ?? {})) {
           if (v !== null && v !== undefined && v !== '') {
             p = p.set(k, String(v));

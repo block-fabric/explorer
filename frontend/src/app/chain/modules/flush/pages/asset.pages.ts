@@ -194,9 +194,10 @@ interface HistoryRow { field: string; value: string | null; txid: string; height
           @if (verified$ | async; as vf) {
             @if (vf.data; as vd) {<span class="pill" [class.ok]="vd.verified" [title]="'Per your curators: ' + curatorNames(vd)">{{ vd.verified ? 'verified issuer' : 'not verified by your curators' }}</span>}
           }
-          @if (a.fixed) {<span class="pill">fixed supply</span>}
+          @if (a.fixed) {<span class="pill">fixed supply</span>} @else if (a.control) {<span class="pill warn">supply unlocked</span>}
         </div>
         <div class="sub"><span class="id">{{ a.asset }}</span> <app-clipboard [text]="a.asset"></app-clipboard></div>
+        <app-flush-supply [id]="a.asset"></app-flush-supply>
         <div class="kpis">
           <div class="kpi"><div class="l">Supply</div><div class="v">{{ fx.compact(a.supply) }}</div><div class="s">{{ fx.amount(a.minted, a.decimals) }} minted · {{ fx.amount(a.burned, a.decimals) }} burned</div></div>
           <div class="kpi"><div class="l">Decimals</div><div class="v">{{ a.decimals }}</div><div class="s">places of a unit</div></div>

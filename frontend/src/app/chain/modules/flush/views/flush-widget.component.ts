@@ -138,7 +138,7 @@ export class FlushWidgetComponent implements OnChanges {
           return this.api.rpc$<any>('getposinfo').pipe(map(pos => ({ pos })));
         case 'flush-peg':
           return combineLatest([this.api.rpc$<any>('getpeginfo'), safe(this.api.rpc$<any>('getwithdrawalbundle')), safe(this.api.drivechain$<any>('cockpit', { window: 144 }))])
-            .pipe(map(([peg, bundle, cockpit]) => ({ peg, bundle, cockpitSlot: cockpit?.slots?.find((s: any) => s.slot === PROFILE.slot) ?? null })));
+            .pipe(map(([peg, bundle, cockpit]) => ({ peg, bundle, cockpitSlot: cockpit?.slots?.find((s: any) => s.slot === cockpit.slot) ?? null })));
         case 'flush-trades':
         case 'flush-pools':
           return this.api.market$<Page<Pool>>('pools', { sort: 'volume', limit: 3 }).pipe(

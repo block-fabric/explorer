@@ -128,6 +128,7 @@ function depthSeries(c: any): ChartSeries[] {
         <app-flush-head [title]="p.asset_a + ' / ' + p.asset_b" [tabs]="tabs" active="/pools"><span class="pill on ms-2" style="font-size: 0.8rem">{{ fx.kindLabel(p.curve) }}</span></app-flush-head>
         <div class="sub"><span class="id">{{ p.pool }}</span> <app-clipboard [text]="p.pool"></app-clipboard>
           @if (p.locked) {<span class="pill ms-2">locked liquidity</span>} @if (p.abandoned) {<span class="pill warn ms-2">abandoned</span>}</div>
+        <app-flush-supply [id]="p.asset_a_id"></app-flush-supply><app-flush-supply [id]="p.asset_b_id"></app-flush-supply>
         <div class="kpis">
           <div class="kpi"><div class="l">Price</div><div class="v">{{ fx.price(p.price) }}</div><div class="s">{{ p.asset_b }} per {{ p.asset_a }}</div></div>
           <div class="kpi"><div class="l">Reserve {{ p.asset_a }}</div><div class="v">{{ fx.compact(p.reserve_a) }}</div><div class="s"><app-flush-token [ticker]="p.asset_a" [id]="p.asset_a_id" [logo]="p.logo"></app-flush-token></div></div>
@@ -333,6 +334,7 @@ export class FlushBooksPage implements OnInit {
       @if (v.data; as b) {
         <div class="sub">Asks sell {{ b.base }} for {{ b.quote }}; prices in {{ b.quote }} per {{ b.base }} · book <span class="id">{{ b.book }}</span>
           · <a [routerLink]="['/pool', b.book]">its pool record</a></div>
+        <app-flush-supply [id]="b.base"></app-flush-supply><app-flush-supply [id]="b.quote"></app-flush-supply>
         <div class="kpis">
           <div class="kpi"><div class="l">Best bid</div><div class="v pos">{{ b.best_bid_exact ?? fx.price(b.best_bid) }}</div><div class="s">{{ b.bid_orders | number }} buy orders</div></div>
           <div class="kpi"><div class="l">Best ask</div><div class="v neg">{{ b.best_ask_exact ?? fx.price(b.best_ask) }}</div><div class="s">{{ b.ask_orders | number }} sell orders</div></div>

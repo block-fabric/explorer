@@ -225,6 +225,35 @@ export const ASSET_TABS: FlushTab[] = [
 export const STAKE_TABS: FlushTab[] = [{ path: '/stake', title: 'Validators and anchors' }, { path: '/fees', title: 'Fees' }];
 export const PEG_TABS: FlushTab[] = [{ path: '/peg', title: 'The peg' }, { path: '/bmm', title: 'BMM on eCash' }];
 
+/** An asset whose control coin is still held: its supply is unlocked (the holder can mint more), said where it is traded */
+@Component({
+  selector: 'app-flush-supply',
+  standalone: true,
+  imports: [CommonModule, RouterModule, FlushAddrComponent],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  styles: [`.unlocked { display: block; padding: 8px 12px; margin-bottom: 12px; border-radius: 8px; border: 1px solid #f5b83d55; background: #f5b83d14; font-size: 0.85rem; }
+    .unlocked b { color: #ffd98a; }`],
+  template: `
+    @if (info$ | async; as i) {
+      @if (i.control; as c) {
+        <div class="unlocked"><b>Supply unlocked:</b> the control coin of {{ i.ticker }}
+          (<a [routerLink]="['/tx', c.txid]" class="mono">{{ fx.shortId(c.txid) }}:{{ c.vout }}</a>) is still held@if (c.address) { by <app-flush-addr [address]="c.address"></app-flush-addr>},
+          so its holder can mint more {{ i.ticker }} and change the asset. Its supply is capped only once the control coin is given up.</div>
+      }
+    }`,
+})
+export class FlushSupplyComponent implements OnChanges {
+  @Input() id: string | null | undefined;
+  info$: Observable<AssetInfo | null>;
+  fx = F;
+
+  constructor(private assets: FlushAssetsService) {}
+
+  ngOnChanges(): void {
+    this.info$ = this.assets.info$(this.id);
+  }
+}
+
 /** A page's head: the chain's mark, title, a line under it, the sibling pages' tabs */
 @Component({
   selector: 'app-flush-head',
@@ -526,7 +555,7 @@ export class FlushPagerComponent {
 }
 
 export const FLUSH_PAGE_IMPORTS = [
-  CommonModule, RouterModule, SharedModule, SidechainLabelComponent, FlushStateComponent, FlushTokenComponent, FlushAddrComponent, FlushAssetComponent, FlushEcashLinkComponent,
+  CommonModule, RouterModule, SharedModule, SidechainLabelComponent, FlushStateComponent, FlushTokenComponent, FlushAddrComponent, FlushAssetComponent, FlushEcashLinkComponent, FlushSupplyComponent,
   FlushHeadComponent, FlushPoolsTableComponent, FlushLaunchesTableComponent, FlushTradesTableComponent, FlushHoldersTableComponent,
   FlushPagerComponent, FlushInflowsTableComponent, ChainTableComponent, CxCellDirective,
 ];

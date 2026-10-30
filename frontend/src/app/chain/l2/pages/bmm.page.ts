@@ -181,6 +181,7 @@ export class L2BmmPage implements OnInit, AfterViewInit, OnDestroy {
     ).subscribe(d => {
       if (d) {
         this.data = d;
+        this.slot = Number.isInteger(d.slot) ? d.slot : this.slot; // the slot the cockpit was read for (Flush's differs by network)
         this.error = null;
         this.buildCharts();
       }
@@ -321,7 +322,8 @@ export class L2BmmPage implements OnInit, AfterViewInit, OnDestroy {
   /**
    * A node sidechain's newest blocks (upstream's block list, 15 a call: fees, txs) with the eCash block each was merged-mined
    * in (its module's block fields: FreeBank names the eCash block hash, Flush its height) and that block's bid for the
-   * slot (the drivechain index's BMM events). A Flush block of stake has no eCash block: no bid.
+   * slot (the drivechain index's BMM events). A Flush block of stake has no eCash block (no bid) unless it acks a BMM
+   * ticket: its ack names the ticket an eCash block committed, and that block's height.
    */
   private nodeRows$(n: number): Observable<EconRow[]> {
     const page = (height: number | null) => this.chainApi.get<any[]>(height === null ? 'blocks' : 'blocks/' + height);
@@ -342,13 +344,16 @@ export class L2BmmPage implements OnInit, AfterViewInit, OnDestroy {
         const fields: Record<string, any> = Object.assign({}, ...parts);
         const byHash = new Map<string, any>(events.map((e: any) => [e.blockHash, e]));
         const byHeight = new Map<number, any>(events.map((e: any) => [e.height, e]));
+        const bySide = new Map<string, any>(events.map((e: any) => [e.sideBlock, e]));
         return blocks.map(b => {
           const f = fields[b.id] ?? null;
-          const ev = (f?.mainblock && byHash.get(f.mainblock)) || (f?.kind === 'bmm' && f?.mainheight && byHeight.get(f.mainheight)) || null;
+          // Flush under stake: the BMM request commits a ticket, and the stake block that acks it names it and its eCash height
+          const ev = (f?.mainblock && byHash.get(f.mainblock)) || (f?.kind === 'bmm' && f?.mainheight && byHeight.get(f.mainheight))
+            || (f?.ack?.ticket && bySide.get(f.ack.ticket)) || (f?.ack?.mainheight && byHeight.get(f.ack.mainheight)) || null;
           const fees = b.extras?.totalFees ?? 0;
           const bid = ev?.bid ?? null;
           return {
-            height: b.height, hash: b.id, time: b.timestamp ?? null, mainHeight: ev?.height ?? f?.mainheight ?? null,
+            height: b.height, hash: b.id, time: b.timestamp ?? null, mainHeight: ev?.height ?? f?.mainheight ?? f?.ack?.mainheight ?? null,
             txs: Math.max(0, (b.tx_count ?? 1) - 1), fees, bid, margin: bid === null ? null : fees - bid, contested: false,
           } as EconRow;
         });

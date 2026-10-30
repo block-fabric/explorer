@@ -108,6 +108,7 @@ export class FlushLaunchesPage implements OnInit {
           @else if (l.pool_id) {<a [routerLink]="['/pool', l.pool_id]">the curve's pool →</a>}
         </div>
         <div class="sub"><span class="id">{{ l.id }}</span> <app-clipboard [text]="l.id"></app-clipboard></div>
+        <app-flush-supply [id]="l.id"></app-flush-supply>
         <div class="kpis">
           <div class="kpi"><div class="l">Price</div><div class="v">{{ fx.price(l.price_ecx) }}</div><div class="s">ECX per {{ l.ticker }}</div></div>
           <div class="kpi"><div class="l">Market cap</div><div class="v">{{ fx.compact(l.mcap_ecx) }} <span class="muted">ECX</span></div><div class="s">the supply at the price</div></div>

@@ -3,17 +3,19 @@ import { Observable, catchError, map, of, shareReplay } from 'rxjs';
 import { FlushApiService } from './flush-api.service';
 import { assetArg } from './flush-format';
 
-/** What the pages need to show an asset by its id: ticker, display name, decimals, whether it has a logo */
+/** What the pages need to show an asset by its id: ticker, display name, decimals, whether it has a logo, its control
+ *  coin (held: the supply is unlocked, its holder can mint more; none: a fixed supply) */
 export interface AssetInfo {
   id: string;
   ticker: string;
   displayName: string | null;
   decimals: number;
   hasLogo: boolean;
+  control: { txid: string; vout: number; address?: string } | null;
 }
 
 export const ECX_ID = '0'.repeat(64);
-export const ECX_INFO: AssetInfo = { id: ECX_ID, ticker: 'ECX', displayName: 'eCash', decimals: 8, hasLogo: false };
+export const ECX_INFO: AssetInfo = { id: ECX_ID, ticker: 'ECX', displayName: 'eCash', decimals: 8, hasLogo: false, control: null };
 
 /** The node's getasset, once per asset and page load (ECX: the chain's coin, 8 decimals) */
 @Injectable({ providedIn: 'root' })
@@ -33,6 +35,7 @@ export class FlushAssetsService {
         map(a => ({
           id: String(a?.asset ?? k), ticker: String(a?.name ?? a?.label ?? ''), displayName: a?.display_name ?? null,
           decimals: Number.isFinite(a?.decimals) ? a.decimals : 8, hasLogo: !!(a?.logo || a?.has_logo),
+          control: a?.control?.txid ? a.control : null,
         })),
         catchError(() => of(null)),
         shareReplay(1),

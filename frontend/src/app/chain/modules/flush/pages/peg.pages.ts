@@ -4,7 +4,6 @@ import { SeoService } from '@app/services/seo.service';
 import { ChainApiService } from '@app/chain/chain-api.service';
 import { L2ApiService } from '@app/chain/l2/l2-api.service';
 import { L2BmmPage } from '@app/chain/l2/pages/bmm.page';
-import { PROFILE } from '@app/chain/profiles';
 import { FlushApiService, FlushLoaded, flushLoaded, flushResult } from '../flush-api.service';
 import { FLUSH_PAGE_IMPORTS, PEG_TABS } from '../flush-kit';
 import * as F from '../flush-format';
@@ -30,14 +29,14 @@ export function depositAddress(dest: string): string {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
   <div class="container-xl mp">
-    <app-flush-head title="Drivechain" [sub]="'Flush is slot ' + slot + ' of eCash\\'s drivechains (BIP300/301): ECX deposited into its escrow on eCash is credited on Flush, and withdrawals leave in bundles that eCash miners vote on'" [tabs]="tabs" active="/peg"></app-flush-head>
+    <app-flush-head title="Drivechain" [sub]="'Flush is slot ' + (slot$ | async) + ' of eCash\\'s drivechains (BIP300/301): ECX deposited into its escrow on eCash is credited on Flush, and withdrawals leave in bundles that eCash miners vote on'" [tabs]="tabs" active="/peg"></app-flush-head>
     @if (peg$ | async; as v) {
       <app-flush-state [state]="v" what="The peg" [list]="true" [height]="200"></app-flush-state>
       @if (v.data; as p) {
         <div class="kpis">
           <div class="kpi"><div class="l">Escrow on eCash</div><div class="v">{{ fx.amount(p.escrow?.amount, 4) }} <span class="muted">ECX</span></div>
             <div class="s">@if (p.escrow?.txid) {<app-flush-ecash kind="tx" [id]="p.escrow.txid" [text]="fx.shortId(p.escrow.txid, 6) + ':' + p.escrow.n"></app-flush-ecash>} @else {no escrow output}</div></div>
-          <div class="kpi"><div class="l">Slot</div><div class="v">{{ p.sidechain?.slot ?? slot }}</div><div class="s">{{ p.sidechain?.title }} · {{ p.sidechain?.active ? 'active since eCash ' + (p.sidechain?.activationheight | number) : 'not active' }}</div></div>
+          <div class="kpi"><div class="l">Slot</div><div class="v">{{ p.sidechain?.slot ?? (slot$ | async) }}</div><div class="s">{{ p.sidechain?.title }} · {{ p.sidechain?.active ? 'active since eCash ' + (p.sidechain?.activationheight | number) : 'not active' }}</div></div>
           <div class="kpi"><div class="l">eCash tip</div><div class="v"><app-flush-ecash kind="block" [id]="p.height" [text]="(p.height | number) + ''" [mark]="false"></app-flush-ecash></div><div class="s">as this node follows it ({{ p.via }})</div></div>
           <div class="kpi"><div class="l">Withdrawal rules</div><div class="v">{{ p.withdrawalminscore | number }}</div><div class="s">votes for a bundle, within {{ p.withdrawalperiod | number }} eCash blocks</div></div>
         </div>
@@ -93,7 +92,7 @@ export function depositAddress(dest: string): string {
         }
       </div>
     </div>
-    <h2>Deposits from eCash <span class="hint">the eCash explorer's drivechain index, slot {{ slot }}</span></h2>
+    <h2>Deposits from eCash <span class="hint">the eCash explorer's drivechain index, slot {{ slot$ | async }}</span></h2>
     <div class="box">
       @if (deposits$ | async; as d) {
         <app-flush-state [state]="d" what="Deposits" [height]="160" [list]="true"></app-flush-state>
@@ -114,7 +113,7 @@ export function depositAddress(dest: string): string {
 export class FlushPegPage implements OnInit {
   tabs = PEG_TABS;
   fx = F;
-  slot = PROFILE.slot;
+  slot$: Observable<number>;
   depositAddress = depositAddress;
   balanceKeys = [
     { key: 'utxos', label: 'coins' }, { key: 'assets', label: 'held by the DEX' }, { key: 'withdrawals', label: 'withdrawals' },
@@ -127,7 +126,9 @@ export class FlushPegPage implements OnInit {
   withdrawals$: Observable<FlushLoaded<any[]>>;
   deposits$: Observable<FlushLoaded<any[]>>;
 
-  constructor(private api: FlushApiService, private seo: SeoService) {}
+  constructor(private api: FlushApiService, private seo: SeoService) {
+    this.slot$ = this.api.slot$;
+  }
 
   ngOnInit(): void {
     this.seo.setTitle('Flush drivechain: the peg');
