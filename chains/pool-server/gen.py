@@ -8,7 +8,7 @@ server, in ROOT; writes into OUT (default ./stage):
   config/<explorer>.json      the backend's mempool-config.json
   initdb/databases.sql
   nginx-site.conf             the host nginx site: https://explorer.blockfab.org/<explorer>/
-  urls.env                    the explorers' public URLs, for www.sh
+  urls.env                    each explorer's cross links (its CHAIN_EXPLORER_URLS), one line each: <id> <k=url,...>
 The frontends are served by the host nginx from www/<explorer>/ (the en-US bundle of ecash-explorer/frontend with
 <base href="/<explorer>/">, see www.sh) and www/resources/ (shared).
 
@@ -81,6 +81,14 @@ EXPLORERS = [
         'enabled': True, 'api_port': 18957, 'rpc_host': SIDECHAIN_HOST, 'rpc_port': 38994, 'secret': 'betanet-flush',
         'public_api': f'http://{SIDECHAIN_HOST}:38996', 'public_api_host': 'flush.markets',
         # 15-second blocks: a week of them indexed into MariaDB
+        'indexing_blocks': 140000, 'weight': 4000000, 'mem': '512m', 'heap_mb': 384,
+    },
+    # Flush on mainnet (slot 46): the pool server's own flushd (flush-mainnet-validator, RPC 127.0.0.1:8254, -txindex;
+    # rpcauth user "explorer" with betanet's rpcwhitelist, "user:password" in secrets/mainnet-flush.rpc). No public DEX
+    # API yet (the market pages stay off).
+    {
+        'id': 'mainnet-flush', 'path': 'flush', 'kind': 'flush', 'profile': 'flush', 'network': 'ecash',
+        'enabled': True, 'api_port': 18960, 'rpc_host': '127.0.0.1', 'rpc_port': 8254, 'secret': 'mainnet-flush',
         'indexing_blocks': 140000, 'weight': 4000000, 'mem': '512m', 'heap_mb': 384,
     },
     # FreeBank (kind freebank, slot 130): upstream mempool on the FreeBank node's Core RPC (freebankd, a Core 0.16 base,
@@ -243,9 +251,10 @@ def flush_config(e, urls):
             'MAINCHAIN_EXPLORER': urls.get(e['network'], ''),
             'EXPLORER_URLS': urls,
             'ADDRESS_INDEX': flush,
+            # without a public API (none yet on the network): no market pages
             'FLUSH': flush_chain(e['network'], {
                 'PUBLIC_API': e['public_api'], 'PUBLIC_API_HOST': e['public_api_host'], 'PUBLIC_API_TIMEOUT': 10000,
-            } if flush else None),
+            } if flush and e.get('public_api') else None),
         },
     }
 
@@ -325,15 +334,16 @@ def main():
     EXPLORERS[:] = [e for e in EXPLORERS if e.get('enabled', True) or e['id'] in a.enable]
     out = a.out
     # cross links: the eCash explorer of each network by network id (the network switcher), the sidechain explorers by
-    # profile id (the chain switcher)
+    # profile id (the chain switcher). A profile runs on more than one network (Flush on betanet and mainnet): each
+    # explorer's links name its own network's.
     key = lambda e: e['network'] if e['kind'] == 'l1' else e['profile']
-    urls = {key(e): f"https://{DOMAIN}/{e['path']}".rstrip('/') for e in EXPLORERS}
+    url = lambda e: f"https://{DOMAIN}/{e['path']}".rstrip('/')
     for d in ('config', 'initdb'):
         os.makedirs(os.path.join(out, d), exist_ok=True)
 
     def urls_of(e):
         """an explorer's cross links: every network's eCash explorer, and the sidechain explorers of its own network"""
-        return {key(x): urls[key(x)] for x in EXPLORERS if x['kind'] == 'l1' or x['network'] == e['network']}
+        return {key(x): url(x) for x in EXPLORERS if x['kind'] == 'l1' or x['network'] == e['network']}
 
     configs = [(e['id'], backend_config(e, urls_of(e))) for e in EXPLORERS]
     for e in EXPLORERS:
@@ -528,7 +538,7 @@ server {{
     with open(os.path.join(out, 'nginx-site.conf'), 'w') as f:
         f.write(site)
     with open(os.path.join(out, 'urls.env'), 'w') as f:
-        f.write(','.join(f'{k}={v}' for k, v in urls.items()) + '\n')
+        f.writelines(f"{e['id']} " + ','.join(f'{k}={v}' for k, v in urls_of(e).items()) + '\n' for e in EXPLORERS)
     with open(os.path.join(out, 'explorers.json'), 'w') as f:
         json.dump(EXPLORERS, f, indent=2)
     for e in EXPLORERS:

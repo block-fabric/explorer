@@ -6,7 +6,6 @@
 #   www.sh <frontend image> <out dir> <stage dir written by gen.py>
 set -euo pipefail
 IMG=$1 OUT=$2 STAGE=$3
-URLS=$(cat "$STAGE/urls.env")
 rm -rf "$OUT/www" "$OUT/www-config"; mkdir -p "$OUT/www" "$OUT/www-config"
 id=$(docker create "$IMG")
 docker cp "$id:/var/www/mempool/browser/en-US" "$OUT/en-US.tmp"
@@ -25,6 +24,8 @@ while read -r id p profile network weight; do
     sed -i -e "s#<base href=\"/\">#<base href=\"/$p/\">#" -e "s#src=\"/resources/config.js\"#src=\"/$p/resources/config.js\"#" "$OUT/www/$p/index.html"
   fi
   grep -q "<base href=\"$b/\">" "$OUT/www/$p/index.html"
+  # its cross links (gen.py's urls.env: <id> <k=url,...>)
+  URLS=$(awk -v id="$id" '$1 == id { print $2 }' "$STAGE/urls.env"); [ -n "$URLS" ]
   # the network in the page title, and absolute links for crawlers and link previews (they do not run the app)
   # (as the app titles its pages: "eCash Explorer (Betanet)")
   case $profile in ecash) c=eCash ;; truthcoin) c=Truthcoin ;; bitnames) c=BitNames ;; bitassets) c=BitAssets ;; zside) c=zSide ;; coinshift) c=Coinshift ;; freebank) c=FreeBank ;; *) c=${profile^} ;; esac
