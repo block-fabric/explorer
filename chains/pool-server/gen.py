@@ -34,7 +34,7 @@ from urllib.parse import quote
 DOMAIN = 'explorer.blockfab.org'
 # Other hostnames sent to one explorer here, path and query kept (explorer.flush.markets/tx/<id> lands on the Flush
 # explorer's tx page). Behind Cloudflare, whose origin check is not strict: they answer with DOMAIN's certificate.
-ALIASES = {'explorer.flush.markets': 'betanet/flush'}
+ALIASES = {'explorer.flush.markets': 'flush'}
 ROOT = '/opt/ecash-explorer'
 DB_PORT = 3318
 
@@ -59,12 +59,14 @@ EXPLORERS = [
     },
     {
         'id': 'betanet', 'path': 'betanet', 'kind': 'l1', 'profile': 'ecash', 'network': 'ecashbeta', 'api_port': 18950,
+        'enabled': False,
         'rpc_port': 8542, 'enforcer': 'http://127.0.0.1:8123', 'weight': 4000000,
         'mem': '1g', 'heap_mb': 768,
     },
 ] + [
     {
         'id': f'betanet-{profile}', 'path': f'betanet/{profile}', 'kind': 'l2', 'profile': profile, 'network': 'ecashbeta',
+        'enabled': False,
         'api_port': 18951 + i, 'l2_rpc_port': 19951 + i, 'full_port': 18961 + i,
         'sidechain_rpc': f'http://{SIDECHAIN_HOST}:{rpc}', 'enforcer': 'http://127.0.0.1:8123',
         'weight': 4000000, 'mem': '384m', 'heap_mb': 256, 'full_mem': '512m', 'full_heap_mb': 384,
@@ -90,7 +92,7 @@ EXPLORERS = [
     # the reads chains/FLUSH-API.md lists, -txindex) and public API 38996, both firewalled to this server.
     {
         'id': 'betanet-flush', 'path': 'betanet/flush', 'kind': 'flush', 'profile': 'flush', 'network': 'ecashbeta',
-        'enabled': True, 'api_port': 18957, 'rpc_host': SIDECHAIN_HOST, 'rpc_port': 38994, 'secret': 'betanet-flush',
+        'enabled': False, 'api_port': 18957, 'rpc_host': SIDECHAIN_HOST, 'rpc_port': 38994, 'secret': 'betanet-flush',
         'public_api': f'http://{SIDECHAIN_HOST}:38996', 'public_api_host': 'flush.markets',
         # 15-second blocks: a week of them indexed into MariaDB
         'indexing_blocks': 140000, 'weight': 4000000, 'mem': '512m', 'heap_mb': 384,
@@ -111,7 +113,7 @@ EXPLORERS = [
     # them indexed into MariaDB; no address index.
     {
         'id': 'betanet-freebank', 'path': 'betanet/freebank', 'kind': 'freebank', 'profile': 'freebank', 'network': 'ecashbeta',
-        'enabled': True, 'api_port': 18958, 'rpc_host': SIDECHAIN_HOST, 'rpc_port': 38130, 'secret': 'betanet-freebank',
+        'enabled': False, 'api_port': 18958, 'rpc_host': SIDECHAIN_HOST, 'rpc_port': 38130, 'secret': 'betanet-freebank',
         'indexing_blocks': 1008, 'weight': 4000000, 'mem': '768m', 'heap_mb': 512,
     },
     # FreeBank on mainnet (slot 130, freebankd v1.0.0, dormant): the lab node's method filter (port 38131, the same
@@ -124,14 +126,20 @@ EXPLORERS = [
     },
 ]
 # An explorer with 'enabled': False (e.g. a Flush explorer of a network whose node's RPC is not reachable from here) is
-# left out of everything gen.py writes, unless named with --enable <id>
+# left out of everything gen.py writes, unless named with --enable <id>. Betanet ended on 2026-10-30: its explorers
+# are off, their URLs redirect (RETIRED)
 # Flush's slot on each network (CHAIN.FLUSH.SLOT of every explorer there: the eCash explorer names the slot after it)
 FLUSH_SLOT = {'ecashbeta': 99}
 # The front page goes to this explorer when none has the empty path
 HOME = 'betanet'
 # Explorers renamed since they went public: the old URL path redirects to the new one (301, the rest of the path and
 # the query kept). Slot 13 was 'hivemind' (the name of its node software) until it took its chain's name, Truthcoin.
-RENAMED = {'betanet/hivemind': 'betanet/truthcoin'}
+RENAMED = {}
+# Explorers taken down: their URLs go to the one taking their place (301, to its front page: their blocks, txs and
+# addresses are not on it), the longest path first (nginx's longest prefix). Betanet's sidechains to their mainnet
+# explorers, where there is one; the others to the front page.
+RETIRED = {'betanet': '', 'betanet/hivemind': '', 'betanet/flush': 'flush', 'betanet/thunder': 'thunder', 'betanet/freebank': 'freebank',
+           **{f'betanet/{p}': '' for p in ('bitnames', 'bitassets', 'truthcoin', 'zside', 'coinshift')}}
 
 # The POST routes (a tx to broadcast): per client IP at most TX_RATE, TX_BURST more queued at once; a body of at most
 # TX_BODY (a sidechain tx: chain/l2/submit.ts takes 64 KB; an eCash tx up to 100 kB, 200 kB as hex)
@@ -490,6 +498,12 @@ def main():
         loc.append(f'''    # {old}: renamed {new}
     location = /{old} {{ return 301 /{new}/; }}
     location ^~ /{old}/ {{ rewrite ^/{old}/(.*)$ /{new}/$1 permanent; }}
+''')
+    for old, new in RETIRED.items():
+        to = f'/{new}/' if new else '/'
+        loc.append(f'''    # {old}: retired
+    location = /{old} {{ return 301 {to}; }}
+    location ^~ /{old}/ {{ return 301 {to}; }}
 ''')
     root_explorer = any(not e['path'] for e in EXPLORERS)
     home = '' if root_explorer else f'    location = / {{ return 302 /{HOME}/; }}\n'
