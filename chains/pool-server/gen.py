@@ -29,6 +29,7 @@ False is left out (no container, config, database, nginx location or link): for 
   python3 gen.py [--out stage] [--tag local] [--enable betanet-flush]
 """
 import argparse, json, os
+from urllib.parse import quote
 
 DOMAIN = 'explorer.blockfab.org'
 # Other hostnames sent to one explorer here, path and query kept (explorer.flush.markets/tx/<id> lands on the Flush
@@ -70,6 +71,17 @@ EXPLORERS = [
     }
     for i, (profile, rpc) in enumerate([('thunder', 16009), ('bitnames', 16002), ('bitassets', 16004),
                                         ('truthcoin', 16013), ('zside', 16098), ('coinshift', 16255)])
+] + [
+    # Thunder on mainnet (slot 9): backbone-thunder-mainnet on the sidechain server, through its read-only RPC front
+    # (17009, firewalled to this server), which takes HTTP Basic auth: "user:password" in secrets/mainnet-thunder.rpc
+    # (the front's public-rpc.auth there)
+    {
+        'id': 'mainnet-thunder', 'path': 'thunder', 'kind': 'l2', 'profile': 'thunder', 'network': 'ecash',
+        'enabled': False, 'api_port': 18967, 'l2_rpc_port': 19967, 'full_port': 18968,
+        'sidechain_rpc': f'http://{SIDECHAIN_HOST}:17009', 'sidechain_secret': 'mainnet-thunder',
+        'enforcer': 'http://127.0.0.1:8133',
+        'weight': 4000000, 'mem': '384m', 'heap_mb': 256, 'full_mem': '512m', 'full_heap_mb': 384,
+    },
 ] + [
     # Flush (kind flush): upstream mempool on the Flush node's Core RPC (-txindex; a read-only rpcauth user with an
     # rpcwhitelist, its "user:password" in secrets/betanet-flush.rpc) and the node's public DEX API (flushd -publicapi,
@@ -158,6 +170,16 @@ def rpc_auth(name):
     except (OSError, ValueError):
         raise SystemExit(f'{path}: missing or not "user:password" (the read-only RPC user of the {name} node)')
     return user, password
+
+
+def sidechain_rpc_url(e):
+    """A sidechain node's read RPC, with its Basic auth pair in the URL when it takes one (the backend's HTTP client
+    sends it; the URL is not logged)"""
+    if not e.get('sidechain_secret'):
+        return e['sidechain_rpc']
+    user, password = rpc_auth(e['sidechain_secret'])
+    scheme, rest = e['sidechain_rpc'].split('://', 1)
+    return f"{scheme}://{quote(user, safe='')}:{quote(password, safe='')}@{rest}"
 
 
 def flush_chain(network, extra=None):
@@ -275,7 +297,7 @@ def l2_config(e, urls):
         'CHAIN': {
             'PROFILE': e['profile'], 'NETWORK': e['network'],
             'ENFORCER': {'URL': e['enforcer'], 'TIMEOUT': 60000, 'MAX_CONCURRENT': 2},
-            'SIDECHAIN_RPC': {'URL': e['sidechain_rpc'], 'TIMEOUT': 60000, 'MAX_CONCURRENT': 2},
+            'SIDECHAIN_RPC': {'URL': sidechain_rpc_url(e), 'TIMEOUT': 60000, 'MAX_CONCURRENT': 2},
             'MAINCHAIN_EXPLORER': urls.get(e['network'], ''),
             # the BMM views: the eCash explorer backend of the same network, next to this one (network_mode host)
             'MAINCHAIN_API': f"http://127.0.0.1:{l1_of(e['network'])['api_port']}",
