@@ -97,6 +97,8 @@
         <div class="big-row">
           <div class="big"><div class="big-value">{{ hashrate(m.totals.hashrate) }}</div><div class="big-label">hashrate, 144 blocks</div></div>
           <div class="big"><div class="big-value">{{ diff(m.totals.regularDifficulty ?? m.totals.difficulty) }}</div><div class="big-label">difficulty</div></div>
+          <div class="big" *ngIf="m.totals.avgBlockTime" [title]="'median ' + duration(m.totals.medianBlockTime)">
+            <div class="big-value">{{ duration(m.totals.avgBlockTime) }}</div><div class="big-label">avg block time</div></div>
           <div class="big" *ngIf="m.retarget?.change !== null && m.retarget?.change !== undefined">
             <div class="big-value" [class.pos]="m.retarget.change > 0" [class.neg]="m.retarget.change < 0">{{ m.retarget.change > 0 ? '+' : '' }}{{ m.retarget.change * 100 | number:'1.1-1' }}%</div>
             <div class="big-label">estimated at the retarget</div></div>

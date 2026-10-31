@@ -11,7 +11,7 @@ import { poolLogoFallback, poolLogoUrl } from '@app/chain/pool-logo';
  *   bmm       the newest blocks x sidechains, coverage and bids
  *   bundles   the pending withdrawal bundles: their votes against the threshold, the blocks they have left
  *   peg       the latest deposits and withdrawals
- *   mining    hashrate, the retarget, pools by coinbase tag, the halving
+ *   mining    hashrate, difficulty, the average block time, the retarget, pools by coinbase tag, the halving
  */
 @Component({
   selector: 'app-drivechain-widget',
@@ -105,6 +105,13 @@ export class DrivechainWidgetComponent implements OnInit {
     let i = 0;
     while (h >= 1000 && i < u.length - 1) { h /= 1000; i++; }
     return h.toFixed(h < 10 ? 2 : 1) + ' ' + u[i];
+  }
+
+  /** a block interval in seconds, as "2m 17s" */
+  duration(s: number): string {
+    if (!s && s !== 0) { return '–'; }
+    const t = Math.round(s);
+    return t < 60 ? t + 's' : Math.floor(t / 60) + 'm ' + String(t % 60).padStart(2, '0') + 's';
   }
 
   diff(d: number): string {
