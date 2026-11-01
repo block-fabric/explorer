@@ -1,0 +1,408 @@
+import * as dns from 'dns';
+import * as net from 'net';
+import { createHash, randomBytes } from 'crypto';
+import config from '../config';
+import DB from '../database';
+import logger from '../logger';
+import { NETWORK, NetworkId } from './networks';
+
+/**
+ * The network's reachable nodes (/nodes), as a crawler finds them: from the DNS seeds and the nodes already known, a
+ * P2P version handshake with each address (its user agent, protocol version, services, height), then getaddr for the
+ * addresses it knows, until no new address turns up. Every CRAWL_EVERY; the nodes and a snapshot per crawl are kept
+ * in the database (chain_nodes, chain_nodes_crawls), so a node's uptime and the network's history survive a restart.
+ *
+ * It speaks to the network itself: the explorer's node is not asked (its RPC user may not read its peers). Only public
+ * addresses are dialled (never a private, loopback or reserved one a peer could gossip), over IPv4 and IPv6.
+ */
+
+/** the P2P network of each eCash network (Backbone's src/kernel/chainparams.cpp); none: no crawler */
+const P2P: Partial<Record<NetworkId, { magic: string; port: number; seeds: string[] }>> = {
+  ecash: {
+    magic: 'eca5dcb7', port: 8533,
+    seeds: ['seed.ecash.ninja', 'seed.bip300.xyz', 'seed.ecash.drivecha.in', 'seed.ecash.zuexeuz.net', 'seed.ecash.eu.com'],
+  },
+};
+
+const CRAWL_EVERY = 30 * 60_000;
+const FIRST_CRAWL = 60_000;
+const CONCURRENCY = 32;
+const CONNECT_TIMEOUT = 8_000;
+const SESSION_TIMEOUT = 20_000;
+const MAX_TRIES = 5000; // addresses dialled per crawl at most
+const RECENT = 48; // the crawls a node's uptime is over (a day)
+const FORGET_UNREACHABLE = 7 * 86400; // a node never reached, or not since, is forgotten after this many seconds
+const PROTOCOL_VERSION = 70016;
+const USER_AGENT = '/eCash-Explorer-Crawler:1.0/';
+
+export interface CrawledNode {
+  address: string; // ip:port, [ip]:port for IPv6
+  ip: string;
+  port: number;
+  userAgent: string | null;
+  protocol: number | null;
+  services: string | null; // a 64-bit flag field, as a decimal string
+  height: number | null;
+  latency: number | null; // ms, the handshake
+  firstSeen: number; // unix seconds, first reached
+  lastSeen: number; // last reached
+  lastTried: number;
+  recent: string; // the last RECENT crawls, newest last: 1 reached, 0 not
+}
+
+export interface CrawlSnapshot {
+  time: number;
+  duration: number; // seconds
+  tried: number;
+  reachable: number;
+  known: number; // addresses heard of in this crawl
+  versions: Record<string, number>; // user agent: nodes
+}
+
+const nodes = new Map<string, CrawledNode>();
+const crawls: CrawlSnapshot[] = [];
+let crawling = false;
+let started = false;
+
+export function p2pParams() {
+  return P2P[NETWORK.id] ?? null;
+}
+
+export function getNodes(): CrawledNode[] {
+  return [...nodes.values()];
+}
+
+export function getCrawls(): CrawlSnapshot[] {
+  return crawls;
+}
+
+export function isCrawling(): boolean {
+  return crawling;
+}
+
+// --- addresses ------------------------------------------------------------------------------------------------------
+
+function addressOf(ip: string, port: number): string {
+  return ip.includes(':') ? `[${ip}]:${port}` : `${ip}:${port}`;
+}
+
+/** a public unicast address: not private, loopback, link-local, CGNAT, multicast, documentation or reserved */
+export function isPublic(ip: string): boolean {
+  if (net.isIPv4(ip)) {
+    const [a, b, c] = ip.split('.').map(Number);
+    return !(a === 0 || a === 10 || a === 127 || a >= 224 || (a === 100 && b >= 64 && b < 128) || (a === 169 && b === 254)
+      || (a === 172 && b >= 16 && b < 32) || (a === 192 && b === 168) || (a === 192 && b === 0 && (c === 0 || c === 2))
+      || (a === 198 && (b === 18 || b === 19)) || (a === 198 && b === 51 && c === 100) || (a === 203 && b === 0 && c === 113));
+  }
+  if (net.isIPv6(ip)) {
+    const v = ip.toLowerCase();
+    const mapped = v.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    if (mapped) {
+      return isPublic(mapped[1]);
+    }
+    // global unicast only (2000::/3), less the documentation prefix and 6to4/Teredo's tunnels
+    return /^[23]/.test(v) && !v.startsWith('2001:db8') && !v.startsWith('2001:0db8') && !/^2001:0?:/.test(v) && !v.startsWith('2002:');
+  }
+  return false;
+}
+
+// --- the P2P protocol -----------------------------------------------------------------------------------------------
+
+function dsha(b: Buffer): Buffer {
+  return createHash('sha256').update(createHash('sha256').update(b).digest()).digest();
+}
+
+function message(magic: Buffer, cmd: string, payload: Buffer = Buffer.alloc(0)): Buffer {
+  const h = Buffer.alloc(24);
+  magic.copy(h, 0);
+  h.write(cmd, 4, 'ascii');
+  h.writeUInt32LE(payload.length, 16);
+  dsha(payload).copy(h, 20, 0, 4);
+  return Buffer.concat([h, payload]);
+}
+
+function versionPayload(): Buffer {
+  const ua = Buffer.from(USER_AGENT, 'ascii');
+  const b = Buffer.alloc(4 + 8 + 8 + 26 + 26 + 8 + 1 + ua.length + 4 + 1);
+  let i = 0;
+  b.writeInt32LE(PROTOCOL_VERSION, i); i += 4;
+  b.writeBigUInt64LE(0n, i); i += 8; // services: none
+  b.writeBigInt64LE(BigInt(Math.floor(Date.now() / 1000)), i); i += 8;
+  i += 26 + 26; // addr_recv, addr_from: zeros
+  randomBytes(8).copy(b, i); i += 8;
+  b.writeUInt8(ua.length, i); i += 1;
+  ua.copy(b, i); i += ua.length;
+  b.writeInt32LE(0, i); i += 4; // start height
+  b.writeUInt8(0, i); // relay: no transactions
+  return b;
+}
+
+function varint(b: Buffer, i: number): [number, number] {
+  const n = b[i];
+  if (n < 0xfd) { return [n, i + 1]; }
+  if (n === 0xfd) { return [b.readUInt16LE(i + 1), i + 3]; }
+  if (n === 0xfe) { return [b.readUInt32LE(i + 1), i + 5]; }
+  return [Number(b.readBigUInt64LE(i + 1)), i + 9];
+}
+
+function ipOf(b: Buffer): string {
+  if (b.subarray(0, 12).equals(Buffer.from('00000000000000000000ffff', 'hex'))) {
+    return [...b.subarray(12)].join('.');
+  }
+  const parts: string[] = [];
+  for (let i = 0; i < 16; i += 2) {
+    parts.push(b.readUInt16BE(i).toString(16));
+  }
+  return new URL(`http://[${parts.join(':')}]/`).hostname.slice(1, -1); // (its canonical, compressed form)
+}
+
+interface Probe {
+  version: { protocol: number; services: string; userAgent: string; height: number; latency: number } | null;
+  addrs: { ip: string; port: number }[];
+}
+
+/** a handshake with one node, and the addresses it answers getaddr with */
+function probe(ip: string, port: number, magic: Buffer): Promise<Probe> {
+  return new Promise((resolve) => {
+    const res: Probe = { version: null, addrs: [] };
+    const t0 = Date.now();
+    let buf = Buffer.alloc(0);
+    let done = false;
+    const sock = net.connect({ host: ip, port, family: net.isIPv6(ip) ? 6 : 4 });
+    const finish = () => {
+      if (!done) {
+        done = true;
+        clearTimeout(timer);
+        sock.destroy();
+        resolve(res);
+      }
+    };
+    const timer = setTimeout(finish, SESSION_TIMEOUT);
+    sock.setTimeout(CONNECT_TIMEOUT, finish);
+    sock.on('error', finish);
+    sock.on('close', finish);
+    sock.on('connect', () => sock.write(message(magic, 'version', versionPayload())));
+    sock.on('data', (chunk: Buffer) => {
+      buf = Buffer.concat([buf, chunk]);
+      if (buf.length > 4_000_000) {
+        return finish();
+      }
+      while (buf.length >= 24) {
+        if (!buf.subarray(0, 4).equals(magic)) {
+          return finish(); // another network
+        }
+        const len = buf.readUInt32LE(16);
+        if (buf.length < 24 + len) {
+          break;
+        }
+        const cmd = buf.subarray(4, 16).toString('ascii').replace(/\0+$/, '');
+        const p = buf.subarray(24, 24 + len);
+        buf = buf.subarray(24 + len);
+        try {
+          if (cmd === 'version' && p.length >= 85) {
+            const [uaLen, i] = varint(p, 80);
+            res.version = {
+              protocol: p.readInt32LE(0), services: p.readBigUInt64LE(4).toString(),
+              userAgent: p.subarray(i, i + Math.min(uaLen, 256)).toString('utf8').replace(/[^\x20-\x7e]/g, ''),
+              height: p.length >= i + uaLen + 4 ? p.readInt32LE(i + uaLen) : 0, latency: Date.now() - t0,
+            };
+            sock.write(message(magic, 'verack'));
+            sock.write(message(magic, 'getaddr'));
+          } else if (cmd === 'ping') {
+            sock.write(message(magic, 'pong', p));
+          } else if (cmd === 'addr') {
+            const [n, start] = varint(p, 0);
+            for (let k = 0, i = start; k < n && i + 30 <= p.length; k++, i += 30) {
+              res.addrs.push({ ip: ipOf(p.subarray(i + 12, i + 28)), port: p.readUInt16BE(i + 28) });
+            }
+            if (n > 1) {
+              return finish(); // the answer to getaddr (a single address is a node announcing itself)
+            }
+          }
+        } catch {
+          return finish();
+        }
+      }
+    });
+  });
+}
+
+// --- the crawl ------------------------------------------------------------------------------------------------------
+
+/** @asyncSafe */
+async function seedAddresses(seeds: string[], port: number): Promise<{ ip: string; port: number }[]> {
+  const out: { ip: string; port: number }[] = [];
+  await Promise.allSettled(seeds.map(/** @asyncSafe */ async (s) => {
+    for (const lookup of [dns.promises.resolve4, dns.promises.resolve6]) {
+      try {
+        for (const ip of await lookup(s)) {
+          out.push({ ip, port });
+        }
+      } catch { /* a seed without records of that family */ }
+    }
+  }));
+  return out;
+}
+
+/** @asyncSafe */
+async function $crawl(): Promise<void> {
+  const p2p = p2pParams();
+  if (!p2p || crawling) {
+    return;
+  }
+  crawling = true;
+  const t0 = Date.now();
+  const now = Math.floor(t0 / 1000);
+  const magic = Buffer.from(p2p.magic, 'hex');
+  try {
+    const queue: { ip: string; port: number }[] = [
+      ...await seedAddresses(p2p.seeds, p2p.port), ...[...nodes.values()].map(n => ({ ip: n.ip, port: n.port })),
+    ];
+    const heard = new Set<string>();
+    const reached = new Map<string, Probe['version']>();
+    let tried = 0;
+    const next = (): { ip: string; port: number } | null => {
+      while (queue.length) {
+        const a = queue.shift()!;
+        const key = addressOf(a.ip, a.port);
+        if (!heard.has(key) && a.port > 0 && isPublic(a.ip)) {
+          heard.add(key);
+          return a;
+        }
+      }
+      return null;
+    };
+    const worker = async () => {
+      // (a worker waits while others may still add addresses: up to 30 s, longer than a session)
+      for (let idle = 0; idle < 60 && tried < MAX_TRIES;) {
+        const a = next();
+        if (!a) {
+          idle++;
+          await new Promise(r => setTimeout(r, 500));
+          continue;
+        }
+        idle = 0;
+        tried++;
+        const r = await probe(a.ip, a.port, magic);
+        if (r.version) {
+          reached.set(addressOf(a.ip, a.port), r.version);
+          queue.push(...r.addrs.slice(0, 1000));
+        }
+        const key = addressOf(a.ip, a.port);
+        const n = nodes.get(key);
+        if (r.version) {
+          nodes.set(key, {
+            address: key, ip: a.ip, port: a.port, userAgent: r.version.userAgent, protocol: r.version.protocol,
+            services: r.version.services, height: r.version.height, latency: r.version.latency,
+            firstSeen: n?.firstSeen ?? now, lastSeen: now, lastTried: now, recent: ((n?.recent ?? '') + '1').slice(-RECENT),
+          });
+        } else if (n) {
+          n.lastTried = now;
+          n.recent = (n.recent + '0').slice(-RECENT);
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+    for (const [k, n] of nodes) {
+      if (now - n.lastSeen > FORGET_UNREACHABLE) {
+        nodes.delete(k);
+      }
+    }
+    const versions: Record<string, number> = {};
+    for (const v of reached.values()) {
+      versions[v!.userAgent] = (versions[v!.userAgent] ?? 0) + 1;
+    }
+    const snap: CrawlSnapshot = { time: now, duration: Math.round((Date.now() - t0) / 1000), tried, reachable: reached.size, known: heard.size, versions };
+    crawls.push(snap);
+    while (crawls.length && crawls[0].time < now - 90 * 86400) {
+      crawls.shift();
+    }
+    logger.info(`Nodes crawler: ${reached.size} reachable of ${tried} addresses tried in ${snap.duration}s`, 'Nodes');
+    await $save(snap);
+  } catch (e) {
+    logger.err(`Nodes crawler failed: ${e instanceof Error ? e.message : e}`, 'Nodes');
+  } finally {
+    crawling = false;
+  }
+}
+
+// --- persistence ----------------------------------------------------------------------------------------------------
+
+const db = () => config.DATABASE.ENABLED;
+
+/** @asyncUnsafe */
+async function $ensureTables(): Promise<void> {
+  await DB.query(`CREATE TABLE IF NOT EXISTS chain_nodes (
+    address varchar(64) NOT NULL PRIMARY KEY, ip varchar(45) NOT NULL, port int unsigned NOT NULL, user_agent varchar(256) NULL,
+    protocol int NULL, services varchar(24) NULL, height int NULL, latency int NULL, first_seen int unsigned NOT NULL,
+    last_seen int unsigned NOT NULL, last_tried int unsigned NOT NULL, recent varchar(${RECENT}) NOT NULL DEFAULT ''
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+  await DB.query(`CREATE TABLE IF NOT EXISTS chain_nodes_crawls (
+    time int unsigned NOT NULL PRIMARY KEY, duration int unsigned NOT NULL, tried int unsigned NOT NULL,
+    reachable int unsigned NOT NULL, known int unsigned NOT NULL, versions json NOT NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+}
+
+/** @asyncUnsafe */
+async function $load(): Promise<void> {
+  if (!db()) {
+    return;
+  }
+  await $ensureTables();
+  const [rows]: any = await DB.query('SELECT * FROM chain_nodes');
+  for (const r of rows) {
+    nodes.set(r.address, {
+      address: r.address, ip: r.ip, port: r.port, userAgent: r.user_agent, protocol: r.protocol, services: r.services,
+      height: r.height, latency: r.latency, firstSeen: r.first_seen, lastSeen: r.last_seen, lastTried: r.last_tried, recent: r.recent,
+    });
+  }
+  const [snaps]: any = await DB.query('SELECT * FROM chain_nodes_crawls WHERE time >= UNIX_TIMESTAMP() - 90 * 86400 ORDER BY time');
+  for (const s of snaps) {
+    crawls.push({ ...s, versions: typeof s.versions === 'string' ? JSON.parse(s.versions) : s.versions });
+  }
+  logger.info(`Nodes crawler: ${nodes.size} known nodes, ${crawls.length} crawls loaded`, 'Nodes');
+}
+
+/** @asyncUnsafe */
+async function $save(snap: CrawlSnapshot): Promise<void> {
+  if (!db()) {
+    return;
+  }
+  await DB.query('DELETE FROM chain_nodes WHERE last_seen < ?', [snap.time - FORGET_UNREACHABLE]);
+  const all = [...nodes.values()];
+  for (let i = 0; i < all.length; i += 200) {
+    const part = all.slice(i, i + 200);
+    await DB.query(
+      `INSERT INTO chain_nodes (address, ip, port, user_agent, protocol, services, height, latency, first_seen, last_seen, last_tried, recent)
+       VALUES ${part.map(() => '(?,?,?,?,?,?,?,?,?,?,?,?)').join(',')}
+       ON DUPLICATE KEY UPDATE user_agent = VALUES(user_agent), protocol = VALUES(protocol), services = VALUES(services),
+         height = VALUES(height), latency = VALUES(latency), last_seen = VALUES(last_seen), last_tried = VALUES(last_tried), recent = VALUES(recent)`,
+      part.flatMap(n => [n.address, n.ip, n.port, n.userAgent, n.protocol, n.services, n.height, n.latency, n.firstSeen, n.lastSeen, n.lastTried, n.recent]));
+  }
+  await DB.query('INSERT INTO chain_nodes_crawls (time, duration, tried, reachable, known, versions) VALUES (?,?,?,?,?,?)',
+    [snap.time, snap.duration, snap.tried, snap.reachable, snap.known, JSON.stringify(snap.versions)]);
+  await DB.query('DELETE FROM chain_nodes_crawls WHERE time < ?', [snap.time - 90 * 86400]);
+}
+
+// --- the schedule ---------------------------------------------------------------------------------------------------
+
+/** start crawling this network, if it has a P2P network to crawl */
+export function startCrawler(): void {
+  if (started || !p2pParams()) {
+    return;
+  }
+  started = true;
+  void (/** @asyncSafe */ async () => {
+    try {
+      await $load();
+    } catch (e) {
+      logger.warn(`Nodes crawler: could not load the known nodes: ${e instanceof Error ? e.message : e}`, 'Nodes');
+    }
+    /** @asyncSafe */
+    const run = async (): Promise<void> => {
+      await $crawl();
+      setTimeout(run, CRAWL_EVERY);
+    };
+    setTimeout(run, FIRST_CRAWL);
+  })();
+}

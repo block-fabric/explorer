@@ -1,12 +1,40 @@
 import { ChainModule } from '../../module';
+import { getCrawls, getNodes, isCrawling, p2pParams, startCrawler } from '../../nodes';
 
 /**
  * eCash (ECX), the mainchain: a fork of Bitcoin with BIP300/BIP301 drivechains, enforced by a bip300301_enforcer next
  * to eCash's node or by Backbone. Its drivechain views (BMM, deposits, withdrawals, votes, proposals) are the core's
  * drivechain index (chain/drivechain.ts), served at /api/v1/drivechain/*.
+ *
+ * Its own routes:
+ *   GET chain/nodes   the network's reachable nodes, as the crawler (chain/nodes.ts) last found them, and its crawls
  */
 const ecash: ChainModule = {
   profile: { id: 'ecash', kind: 'l1', name: 'eCash', unit: 'ECX', slot: null, mainchain: true, subsidy: true },
+
+  initRoutes(app, prefix, ctx) {
+    app.get(prefix + 'nodes', ctx.handler(/** @asyncUnsafe: handler() answers its errors */ async (req, res) => {
+      if (!p2pParams()) {
+        return ctx.fail(req, res, 404, 'No node crawler on this network');
+      }
+      const tip = await ctx.cached('blockcount', 10_000, () => ctx.node.call<number>('getblockcount').catch(() => null));
+      const crawls = getCrawls();
+      const last = crawls[crawls.length - 1] ?? null;
+      res.json({
+        tip,
+        crawling: isCrawling(),
+        port: p2pParams()!.port,
+        last,
+        // the nodes reached in the last crawl first; then the others reached in the last week
+        nodes: getNodes().map(n => ({ ...n, up: !!last && n.lastSeen >= last.time })),
+        history: crawls.map(c => ({ time: c.time, reachable: c.reachable, known: c.known, versions: c.versions })),
+      });
+    }));
+  },
+
+  start() {
+    startCrawler();
+  },
 };
 
 export default ecash;

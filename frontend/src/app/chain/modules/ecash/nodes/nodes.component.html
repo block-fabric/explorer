@@ -1,0 +1,101 @@
+<div class="container-xl nd" [style.--accent]="profile.color">
+  <div class="nd-head">
+    <div>
+      <h1><app-svg-images name="nav-network" width="28" height="28" class="nd-icon"></app-svg-images> Nodes</h1>
+      <div class="nd-sub">
+        The reachable {{ profile.name }} nodes: the explorer crawls the P2P network (port {{ data?.port ?? 8533 }}) every 30 minutes, from the DNS
+        seeds and the addresses the nodes it reaches tell it of.
+        @if (data?.last; as c) {<span class="ms-1">Last crawl <app-time kind="since" [time]="c.time" [fastRender]="true"></app-time>, {{ c.tried | number }} addresses tried in {{ c.duration }} s.</span>}
+        @if (data?.crawling) {<span class="ms-1">Crawling now…</span>}
+      </div>
+    </div>
+  </div>
+
+  <div *ngIf="error && !data" class="alert alert-warning">The node list is not available: {{ error }}</div>
+  <div *ngIf="!data && !error" class="skeleton-loader nd-skel"></div>
+  <div *ngIf="data && !data.last" class="alert alert-info">The first crawl has not finished yet: the list fills in a minute or two.</div>
+
+  <ng-container *ngIf="data?.last">
+    <div class="kpis">
+      <div class="kpi">
+        <div class="k-label">Reachable nodes</div>
+        <div class="k-value">{{ reachable() | number }}</div>
+        <div class="k-sub">accepting connections · of {{ data.last.known | number }} addresses heard of (the others do not listen, or not on a public address)</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">At the tip</div>
+        <div class="k-value">{{ synced | number }}<small> / {{ reachable() | number }}</small></div>
+        <div class="k-sub">within 2 blocks of {{ data.tip | number }} when reached</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">Newest version</div>
+        <div class="k-value">{{ pct(latestShare()) }}</div>
+        <div class="k-sub">of the reachable nodes run {{ latest || '–' }}</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">Versions</div>
+        <div class="k-value">{{ versions.length | number }}</div>
+        <div class="k-sub">client versions on the network</div>
+      </div>
+    </div>
+
+    <div class="row-2">
+      <div class="box">
+        <h5>Versions <small>the reachable nodes by client and version</small></h5>
+        <div class="vers">
+          @for (v of versions; track v.label) {
+            <div class="ver">
+              <span class="nm"><i class="dot" [style.background]="v.color"></i>{{ v.label }}</span>
+              <div class="bar" [style.--sc]="v.color"><div class="fill" [style.width.%]="100 * v.share"></div></div>
+              <span class="num">{{ v.count | number }}</span>
+              <span class="pc">{{ pct(v.share) }}</span>
+            </div>
+          }
+        </div>
+      </div>
+      <div class="box">
+        <h5>Over time <small>reachable nodes at each crawl</small></h5>
+        @if (chart) {
+          <div class="chart" *browserOnly echarts [initOpts]="chartInitOptions" [options]="chart"></div>
+        } @else {
+          <p class="muted chart-empty">The chart starts after the second crawl.</p>
+        }
+      </div>
+    </div>
+
+    <section class="nd-sec">
+      <h2 class="nd-h2">Nodes <span class="sub2">reachable in the last crawl, then those reached in the last week that have since gone</span></h2>
+      <div class="box table-box">
+        <app-chain-table [rows]="rows" [columns]="cols" [filters]="filters" [search]="match" searchPlaceholder="Address, client…"
+            [trackBy]="trackAddress" [pageSize]="50" empty="No node reached yet.">
+          <ng-template cxCell="address" let-r>
+            <span class="addr"><i class="st" [class.up]="r.up" [title]="r.up ? 'reachable in the last crawl' : 'not reachable in the last crawl'"></i>{{ r.address }}</span>
+          </ng-template>
+          <ng-template cxCell="agent" let-r>
+            <span class="agent" [title]="r.userAgent">{{ r.agent.label }}</span>
+            @for (c of r.agent.comments; track $index) {<span class="cmt">{{ c }}</span>}
+          </ng-template>
+          <ng-template cxCell="height" let-r>
+            @if (r.height !== null) {
+              <span>{{ r.height | number }}</span>
+              @if (r.up && r.behind > 2) {<span class="pill warn ms-1" [title]="r.behind + ' blocks behind the tip when reached'">−{{ r.behind | number }}</span>}
+            } @else {–}
+          </ng-template>
+          <ng-template cxCell="services" let-r>
+            @for (s of services(r.services); track s.label) {<span class="svc" [title]="s.title">{{ s.label }}</span>}
+          </ng-template>
+          <ng-template cxCell="latency" let-r>{{ r.latency !== null ? (r.latency | number) + ' ms' : '–' }}</ng-template>
+          <ng-template cxCell="uptime" let-r>
+            <span [class.pos]="r.uptime >= 0.95" [class.neg]="r.uptime < 0.5" [title]="'reached in ' + (r.recent.split('1').length - 1) + ' of the last ' + r.recent.length + ' crawls'">{{ pct(r.uptime) }}</span>
+          </ng-template>
+          <ng-template cxCell="firstSeen" let-r><app-time kind="since" [time]="r.firstSeen" [fastRender]="true"></app-time></ng-template>
+          <ng-template cxCell="lastSeen" let-r>
+            @if (r.up) {<span class="pill ok">now</span>} @else {<app-time kind="since" [time]="r.lastSeen" [fastRender]="true"></app-time>}
+          </ng-template>
+        </app-chain-table>
+      </div>
+      <p class="note muted">A node's height and version are what it said when the crawler reached it. Nodes that only connect out (most
+        wallets, nodes behind NAT) cannot be reached and are not counted. Uptime covers the last day's crawls (fewer for a node first seen since).</p>
+    </section>
+  </ng-container>
+</div>

@@ -14,8 +14,14 @@ const ecash: ChainFrontendModule = {
     mark: ['M16 3.5l10.8 6.25v12.5L16 28.5 5.2 22.25V9.75z', 'M11 16h10'],
     blockWeightUnits: 4000000,
   },
-  nav: [{ path: '/mining', title: 'Mining: pools, DATUM miners, hashrate, difficulty', icon: 'nav-pickaxe' }],
-  routes: [{ path: 'mining', loadChildren: () => import('./mining/mining.module').then(m => m.ChainMiningModule) }],
+  nav: [
+    { path: '/mining', title: 'Mining: pools, DATUM miners, hashrate, difficulty', icon: 'nav-pickaxe' },
+    { path: '/nodes', title: 'Nodes: the reachable nodes of the network, their versions', icon: 'nav-network' },
+  ],
+  routes: [
+    { path: 'mining', loadChildren: () => import('./mining/mining.module').then(m => m.ChainMiningModule) },
+    { path: 'nodes', loadChildren: () => import('./nodes/nodes.module').then(m => m.ChainNodesModule) },
+  ],
 };
 
 export default ecash;

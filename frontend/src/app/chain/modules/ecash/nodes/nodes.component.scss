@@ -1,0 +1,38 @@
+.nd { padding-top: 18px; padding-bottom: 40px; }
+.nd-head { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }
+h1 { font-size: 1.9rem; margin: 0; display: flex; align-items: center; gap: 10px; }
+.nd-icon { color: var(--accent); display: inline-flex; }
+.nd-sub { color: var(--cx-ink-3); font-size: 0.88rem; margin-top: 4px; max-width: 900px; }
+.nd-skel { height: 300px; }
+.nd-sec { margin-top: 28px; }
+.nd-h2 { font-size: 1.25rem; margin: 0 0 10px; .sub2 { font-size: 0.78rem; color: var(--cx-ink-3); font-weight: normal; margin-left: 8px; } }
+h5 small { color: var(--cx-ink-3); font-size: 0.75rem; font-weight: normal; margin-left: 4px; }
+.box { padding: 14px 18px; }
+.muted { color: var(--cx-ink-3); }
+.pos { color: #3bd16f; } .neg { color: #ff6b6b; }
+.k-value small { font-size: 0.9rem; color: var(--cx-ink-3); font-weight: normal; }
+.row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; > * { min-width: 0; } }
+@media (max-width: 900px) { .row-2 { grid-template-columns: 1fr; } }
+.chart { height: 240px; width: 100%; }
+.chart-empty { height: 240px; display: flex; align-items: center; justify-content: center; margin: 0; font-size: 0.85rem; }
+
+// the versions: name, bar, count, share
+.vers { display: flex; flex-direction: column; gap: 9px; margin-top: 8px; }
+.ver { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(60px, 1fr) 40px 44px; align-items: center; gap: 10px; font-size: 0.86rem;
+  .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .num, .pc { text-align: right; font-variant-numeric: tabular-nums; }
+  .pc { color: var(--cx-ink-3); } }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; }
+
+// the table
+.addr { font-family: var(--cx-mono); font-size: 0.8rem; white-space: nowrap; display: inline-flex; align-items: center; }
+.st { width: 7px; height: 7px; border-radius: 50%; margin-right: 8px; background: #ff6b6b; flex: none;
+  &.up { background: #3bd16f; box-shadow: 0 0 6px #3bd16f99; } }
+.agent { white-space: nowrap; }
+.cmt { font-size: 0.7rem; color: var(--cx-ink-3); margin-left: 6px; white-space: nowrap; }
+.svc { font-family: var(--cx-mono); font-size: 0.64rem; letter-spacing: 0.04em; padding: 0 6px; border-radius: 99px; margin-right: 4px;
+  border: 1px solid #ffffff2a; color: var(--cx-ink-2, #ffffffcc); white-space: nowrap; }
+.note { font-size: 0.78rem; margin-top: 10px; }
+
+// the shared look (last, so it wins)
+@import '../../../components/chain-ui';
