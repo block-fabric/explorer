@@ -96,25 +96,13 @@ export class ChainNodesComponent implements OnInit, OnDestroy {
     }
     this.versions = [...byVersion.entries()].sort((a, b) => b[1] - a[1])
       .map(([label, count], i) => ({ label, count, share: up.length ? count / up.length : 0, color: PALETTE[i % PALETTE.length] }));
-    this.latest = this.newest(this.versions.map(v => v.label));
+    this.latest = this.versions[0]?.label ?? ''; // the most run (versions do not order across clients, nor across eCash's own renumbering)
 
     this.filters = [
       { label: 'Status', options: [{ label: 'reachable', test: r => r.up }, { label: 'gone', test: r => !r.up }] },
       { label: 'Version', options: this.versions.map(v => ({ label: v.label, test: (r: any) => r.agent.label === v.label })) },
     ];
     this.chart = this.historyChart(d.history ?? []);
-  }
-
-  /** the highest version among the clients' (by numeric parts), as "client version" */
-  private newest(labels: string[]): string {
-    const num = (l: string) => (l.match(/(\d+(?:\.\d+)*)\s*$/)?.[1] ?? '0').split('.').map(Number);
-    return labels.reduce((best, l) => {
-      const a = num(l), b = num(best);
-      for (let i = 0; i < Math.max(a.length, b.length); i++) {
-        if ((a[i] ?? 0) !== (b[i] ?? 0)) { return (a[i] ?? 0) > (b[i] ?? 0) ? l : best; }
-      }
-      return best;
-    }, labels[0] ?? '');
   }
 
   latestShare(): number {
