@@ -17,18 +17,20 @@ const ecash: ChainModule = {
       if (!p2pParams()) {
         return ctx.fail(req, res, 404, 'No node crawler on this network');
       }
-      const tip = await ctx.cached('blockcount', 10_000, () => ctx.node.call<number>('getblockcount').catch(() => null));
-      const crawls = getCrawls();
-      const last = crawls[crawls.length - 1] ?? null;
-      res.json({
-        tip,
-        crawling: isCrawling(),
-        port: p2pParams()!.port,
-        last,
-        // the nodes reached in the last crawl first; then the others reached in the last week
-        nodes: getNodes().map(n => ({ ...n, up: !!last && n.lastSeen >= last.time })),
-        history: crawls.map(c => ({ time: c.time, reachable: c.reachable, known: c.known, versions: c.versions })),
-      });
+      res.json(await ctx.cached('nodes', 30_000, /** @asyncUnsafe: cached() passes its errors on */ async () => {
+        const tip = await ctx.cached('blockcount', 10_000, () => ctx.node.call<number>('getblockcount').catch(() => null));
+        const crawls = getCrawls();
+        const last = crawls[crawls.length - 1] ?? null;
+        return {
+          tip,
+          crawling: isCrawling(),
+          port: p2pParams()?.port,
+          last,
+          // the nodes reached in the last crawl, and those reached in the last week that have gone since
+          nodes: getNodes().map(n => ({ ...n, up: !!last && n.lastSeen >= last.time })),
+          history: crawls.map(c => ({ time: c.time, reachable: c.reachable, known: c.known })),
+        };
+      }));
     }));
   },
 

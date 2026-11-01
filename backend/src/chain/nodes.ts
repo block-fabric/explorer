@@ -30,6 +30,16 @@ const CONCURRENCY = 32;
 const CONNECT_TIMEOUT = 8_000;
 const SESSION_TIMEOUT = 20_000;
 const MAX_TRIES = 5000; // addresses dialled per crawl at most
+const MAX_QUEUE = 20_000; // addresses waiting to be dialled at most
+const MAX_ADDRS = 1000; // addresses taken from one node (a getaddr answer has 1000 at most)
+const MAX_MESSAGE = 200_000; // bytes: the largest message read (an addr of 1000 is 30 kB); larger ends the session
+const MAX_NODES = 10_000; // nodes kept at most (the most recently reached)
+const MAX_VERSIONS = 30; // user agents per crawl snapshot; the rest count as "other"
+// one gossiped address per IP, and a few per /24 (IPv4) or /48 (IPv6), so no peer can steer the crawler at one host's
+// ports or one network; never a privileged port
+const PER_IP = 1;
+const PER_SUBNET = 8;
+const MIN_PORT = 1024;
 const RECENT = 48; // the crawls a node's uptime is over (a day)
 const FORGET_UNREACHABLE = 7 * 86400; // a node never reached, or not since, is forgotten after this many seconds
 const PROTOCOL_VERSION = 70016;
@@ -104,6 +114,16 @@ export function isPublic(ip: string): boolean {
     return /^[23]/.test(v) && !v.startsWith('2001:db8') && !v.startsWith('2001:0db8') && !/^2001:0?:/.test(v) && !v.startsWith('2002:');
   }
   return false;
+}
+
+/** the /24 of an IPv4 address, the /48 of an IPv6 one */
+function subnetOf(ip: string): string {
+  if (net.isIPv4(ip)) {
+    return ip.split('.').slice(0, 3).join('.');
+  }
+  const full = new URL(`http://[${ip}]/`).hostname; // (validates; the expansion below needs no :: shortcut for /48)
+  const [head] = full.slice(1, -1).split('::');
+  return head.split(':').slice(0, 3).join(':');
 }
 
 // --- the P2P protocol -----------------------------------------------------------------------------------------------
@@ -184,7 +204,7 @@ function probe(ip: string, port: number, magic: Buffer): Promise<Probe> {
     sock.on('connect', () => sock.write(message(magic, 'version', versionPayload())));
     sock.on('data', (chunk: Buffer) => {
       buf = Buffer.concat([buf, chunk]);
-      if (buf.length > 4_000_000) {
+      if (buf.length > 24 + MAX_MESSAGE) {
         return finish();
       }
       while (buf.length >= 24) {
@@ -192,6 +212,9 @@ function probe(ip: string, port: number, magic: Buffer): Promise<Probe> {
           return finish(); // another network
         }
         const len = buf.readUInt32LE(16);
+        if (len > MAX_MESSAGE) {
+          return finish();
+        }
         if (buf.length < 24 + len) {
           break;
         }
@@ -210,12 +233,12 @@ function probe(ip: string, port: number, magic: Buffer): Promise<Probe> {
             sock.write(message(magic, 'getaddr'));
           } else if (cmd === 'ping') {
             sock.write(message(magic, 'pong', p));
-          } else if (cmd === 'addr') {
+          } else if (cmd === 'addr' && res.version) {
             const [n, start] = varint(p, 0);
-            for (let k = 0, i = start; k < n && i + 30 <= p.length; k++, i += 30) {
+            for (let k = 0, i = start; k < n && i + 30 <= p.length && res.addrs.length < MAX_ADDRS; k++, i += 30) {
               res.addrs.push({ ip: ipOf(p.subarray(i + 12, i + 28)), port: p.readUInt16BE(i + 28) });
             }
-            if (n > 1) {
+            if (n > 1 || res.addrs.length >= MAX_ADDRS) {
               return finish(); // the answer to getaddr (a single address is a node announcing itself)
             }
           }
@@ -259,16 +282,25 @@ async function $crawl(): Promise<void> {
       ...await seedAddresses(p2p.seeds, p2p.port), ...[...nodes.values()].map(n => ({ ip: n.ip, port: n.port })),
     ];
     const heard = new Set<string>();
+    const perIp = new Map<string, number>();
+    const perSubnet = new Map<string, number>();
     const reached = new Map<string, Probe['version']>();
     let tried = 0;
     const next = (): { ip: string; port: number } | null => {
       while (queue.length) {
         const a = queue.shift()!;
         const key = addressOf(a.ip, a.port);
-        if (!heard.has(key) && a.port > 0 && isPublic(a.ip)) {
-          heard.add(key);
-          return a;
+        if (heard.has(key) || a.port < MIN_PORT || !isPublic(a.ip)) {
+          continue;
         }
+        const net_ = subnetOf(a.ip);
+        if ((perIp.get(a.ip) ?? 0) >= PER_IP || (perSubnet.get(net_) ?? 0) >= PER_SUBNET) {
+          continue;
+        }
+        heard.add(key);
+        perIp.set(a.ip, (perIp.get(a.ip) ?? 0) + 1);
+        perSubnet.set(net_, (perSubnet.get(net_) ?? 0) + 1);
+        return a;
       }
       return null;
     };
@@ -286,7 +318,7 @@ async function $crawl(): Promise<void> {
         const r = await probe(a.ip, a.port, magic);
         if (r.version) {
           reached.set(addressOf(a.ip, a.port), r.version);
-          queue.push(...r.addrs.slice(0, 1000));
+          queue.push(...r.addrs.slice(0, Math.max(0, MAX_QUEUE - queue.length)));
         }
         const key = addressOf(a.ip, a.port);
         const n = nodes.get(key);
@@ -308,10 +340,20 @@ async function $crawl(): Promise<void> {
         nodes.delete(k);
       }
     }
-    const versions: Record<string, number> = {};
-    for (const v of reached.values()) {
-      versions[v!.userAgent] = (versions[v!.userAgent] ?? 0) + 1;
+    if (nodes.size > MAX_NODES) {
+      for (const n of [...nodes.values()].sort((a, b) => a.lastSeen - b.lastSeen).slice(0, nodes.size - MAX_NODES)) {
+        nodes.delete(n.address);
+      }
     }
+    const counts = new Map<string, number>();
+    for (const v of reached.values()) {
+      counts.set(v?.userAgent ?? '', (counts.get(v?.userAgent ?? '') ?? 0) + 1);
+    }
+    const versions: Record<string, number> = Object.create(null);
+    [...counts.entries()].sort((a, b) => b[1] - a[1]).forEach(([ua, c], i) => {
+      const k = i < MAX_VERSIONS ? ua : 'other';
+      versions[k] = (versions[k] ?? 0) + c;
+    });
     const snap: CrawlSnapshot = { time: now, duration: Math.round((Date.now() - t0) / 1000), tried, reachable: reached.size, known: heard.size, versions };
     crawls.push(snap);
     while (crawls.length && crawls[0].time < now - 90 * 86400) {
