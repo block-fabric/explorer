@@ -13,7 +13,7 @@ h5 small { color: var(--cx-ink-3); font-size: 0.75rem; font-weight: normal; marg
 .k-value small { font-size: 0.9rem; color: var(--cx-ink-3); font-weight: normal; }
 .row-2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); gap: 12px; margin-top: 12px; }
 @media (max-width: 900px) { .row-2 { grid-template-columns: 1fr; } }
-.stack { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.lcol { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .over { display: flex; flex-direction: column; .chart { flex: 1; min-height: 220px; height: auto; } }
 
 // the crawler's countdowns, side by side
