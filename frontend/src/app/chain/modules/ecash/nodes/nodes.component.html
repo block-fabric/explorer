@@ -36,44 +36,47 @@
     </div>
 
     <div class="row-2">
-      <div class="box">
-        <h5>Versions <small>the reachable nodes by node and version</small></h5>
-        <div class="vers">
-          @for (v of versions; track v.label) {
-            <div class="ver">
-              <span class="nm"><i class="dot" [style.background]="v.color"></i>{{ v.label }}</span>
-              <div class="bar" [style.--sc]="v.color"><div class="fill" [style.width.%]="100 * v.share"></div></div>
-              <span class="num">{{ v.count | number }}</span>
-              <span class="pc">{{ pct(v.share) }}</span>
-            </div>
+      <div class="stack">
+        <div class="box sched">
+          <h5>Crawler</h5>
+          @if (clock$ | async; as now) {
+            @if (data.schedule; as sc) {
+              <div class="cds">
+                <div class="cd">
+                  <div class="cd-l">Next crawl <span>every {{ sc.crawlEvery / 60 }} min</span></div>
+                  @if (data.crawling || !sc.nextCrawl || sc.nextCrawl <= now) {
+                    <div class="cd-v live">crawling…</div>
+                    <div class="bar busy"><div class="fill"></div></div>
+                  } @else {
+                    <div class="cd-v">{{ countdown(sc.nextCrawl, now) }}</div>
+                    <div class="bar"><div class="fill" [style.width.%]="100 * elapsed(sc.nextCrawl, sc.crawlEvery, now)"></div></div>
+                  }
+                </div>
+                <div class="cd">
+                  <div class="cd-l">Next height check <span>every {{ sc.checkEvery / 60 }} min</span></div>
+                  <div class="cd-v">{{ sc.nextCheck && sc.nextCheck > now ? countdown(sc.nextCheck, now) : 'checking…' }}</div>
+                  <div class="bar" [style.--sc]="'#5aa6ff'"><div class="fill" [style.width.%]="100 * elapsed(sc.nextCheck, sc.checkEvery, now)"></div></div>
+                </div>
+              </div>
+              <div class="cd-s">The last crawl took {{ data.last.duration }} s for {{ data.last.tried | number }} addresses; a height check is a handshake with each reachable node.</div>
+            }
           }
         </div>
+        <div class="box">
+          <h5>Versions <small>the reachable nodes by node and version</small></h5>
+          <div class="vers">
+            @for (v of versions; track v.label) {
+              <div class="ver">
+                <span class="nm"><i class="dot" [style.background]="v.color"></i>{{ v.label }}</span>
+                <div class="bar" [style.--sc]="v.color"><div class="fill" [style.width.%]="100 * v.share"></div></div>
+                <span class="num">{{ v.count | number }}</span>
+                <span class="pc">{{ pct(v.share) }}</span>
+              </div>
+            }
+          </div>
+        </div>
       </div>
-      <div class="box sched">
-        <h5>Crawler</h5>
-        @if (clock$ | async; as now) {
-          @if (data.schedule; as sc) {
-            <div class="cd">
-              <div class="cd-l">Next crawl</div>
-              @if (data.crawling || !sc.nextCrawl || sc.nextCrawl <= now) {
-                <div class="cd-v live">crawling…</div>
-                <div class="bar busy"><div class="fill"></div></div>
-              } @else {
-                <div class="cd-v">{{ countdown(sc.nextCrawl, now) }}</div>
-                <div class="bar"><div class="fill" [style.width.%]="100 * elapsed(sc.nextCrawl, sc.crawlEvery, now)"></div></div>
-              }
-              <div class="cd-s">every {{ sc.crawlEvery / 60 }} min · the last took {{ data.last.duration }} s for {{ data.last.tried | number }} addresses</div>
-            </div>
-            <div class="cd">
-              <div class="cd-l">Next height check</div>
-              <div class="cd-v sm">{{ sc.nextCheck && sc.nextCheck > now ? countdown(sc.nextCheck, now) : 'checking…' }}</div>
-              <div class="bar thin" [style.--sc]="'#5aa6ff'"><div class="fill" [style.width.%]="100 * elapsed(sc.nextCheck, sc.checkEvery, now)"></div></div>
-              <div class="cd-s">every {{ sc.checkEvery / 60 }} min · a handshake with each reachable node</div>
-            </div>
-          }
-        }
-      </div>
-      <div class="box">
+      <div class="box over">
         <h5>Over time <small>reachable nodes at each crawl</small></h5>
         @if (chart) {
           <div class="chart" *browserOnly echarts [initOpts]="chartInitOptions" [options]="chart"></div>
