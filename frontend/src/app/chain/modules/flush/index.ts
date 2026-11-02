@@ -55,6 +55,7 @@ const flush: ChainFrontendModule = {
     { path: '/stake', title: 'Stake: validators, leader schedule, anchors', icon: 'nav-stake' },
     { path: '/fees', title: 'Fees: where every fee goes', icon: 'nav-gold' },
     { path: '/peg', title: 'Drivechain: the peg and BMM on eCash', icon: 'nav-drivechain' },
+    { path: '/nodes', title: 'Nodes: the reachable nodes of the network, their versions', icon: 'nav-network' },
   ],
   footerNav: [
     { path: '/books', title: 'Order books', icon: 'nav-dex' },
@@ -85,6 +86,7 @@ const flush: ChainFrontendModule = {
     { path: 'fees', loadComponent: page(fees, 'FlushFeesPage') },
     { path: 'peg', loadComponent: page(peg, 'FlushPegPage') },
     { path: 'bmm', loadComponent: page(peg, 'FlushBmmPage') },
+    { path: 'nodes', loadChildren: () => import('@app/chain/nodes/nodes.module').then(m => m.ChainNodesModule) },
   ],
 };
 

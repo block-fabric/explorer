@@ -20,7 +20,7 @@ const ecash: ChainFrontendModule = {
   ],
   routes: [
     { path: 'mining', loadChildren: () => import('./mining/mining.module').then(m => m.ChainMiningModule) },
-    { path: 'nodes', loadChildren: () => import('./nodes/nodes.module').then(m => m.ChainNodesModule) },
+    { path: 'nodes', loadChildren: () => import('@app/chain/nodes/nodes.module').then(m => m.ChainNodesModule) },
   ],
 };
 

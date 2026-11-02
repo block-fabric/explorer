@@ -66,7 +66,7 @@ export function chainKind(services: string | null): 'Full' | 'Pruned' | 'No bloc
 }
 
 /**
- * eCash's network (/nodes): the reachable nodes the backend's crawler found on the P2P network, their clients and
+ * A chain's network (/nodes, on eCash, Flush and FreeBank): the reachable nodes the backend's crawler found on its P2P network, their clients and
  * versions, services, heights and uptime, and the count over time (GET /api/v1/chain/nodes).
  */
 @Component({

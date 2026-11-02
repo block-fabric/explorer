@@ -5,6 +5,7 @@ import config from '../config';
 import DB from '../database';
 import logger from '../logger';
 import { NETWORK, NetworkId } from './networks';
+import { PROFILE } from './profile';
 
 /**
  * The network's reachable nodes (/nodes), as a crawler finds them: from the DNS seeds and the nodes already known, a
@@ -16,12 +17,24 @@ import { NETWORK, NetworkId } from './networks';
  * addresses are dialled (never a private, loopback or reserved one a peer could gossip), over IPv4 and IPv6.
  */
 
-/** the P2P network of each eCash network (Backbone's src/kernel/chainparams.cpp); none: no crawler */
-const P2P: Partial<Record<NetworkId, { magic: string; port: number; seeds: string[] }>> = {
+interface P2PNetwork { magic: string; port: number; seeds: string[] }
+
+/**
+ * The P2P network of each chain on each eCash network (its node's chainparams); none: no crawler. Thunder's nodes speak
+ * LayerTwo's protocol (QUIC streams of bincode, Backbone's bt/sidechain/p2p.h), not Bitcoin's: none yet.
+ */
+const P2P: Record<string, Partial<Record<NetworkId, P2PNetwork>>> = {
+  // Backbone's src/kernel/chainparams.cpp
   ecash: {
-    magic: 'eca5dcb7', port: 8533,
-    seeds: ['seed.ecash.ninja', 'seed.bip300.xyz', 'seed.ecash.drivecha.in', 'seed.ecash.zuexeuz.net', 'seed.ecash.eu.com'],
+    ecash: {
+      magic: 'eca5dcb7', port: 8533,
+      seeds: ['seed.ecash.ninja', 'seed.bip300.xyz', 'seed.ecash.drivecha.in', 'seed.ecash.zuexeuz.net', 'seed.ecash.eu.com'],
+    },
   },
+  // backbone-flush src/kernel/chainparams.cpp (CEcashSidechainParams, mainnet: "flx" + 0x21)
+  flush: { ecash: { magic: '666c7821', port: 8255, seeds: ['seed.mainnet.flush.markets'] } },
+  // freebank src/chainparams.cpp (CMainParams: its own message start, beta's port and seed)
+  freebank: { ecash: { magic: 'fb4bec58', port: 8455, seeds: ['seed.ecxfreebank.com'] } },
 };
 
 const CRAWL_EVERY = 10 * 60_000;
@@ -88,8 +101,8 @@ let nextCrawlAt: number | null = null; // unix seconds
 let nextCheckAt: number | null = null;
 let started = false;
 
-export function p2pParams() {
-  return P2P[NETWORK.id] ?? null;
+export function p2pParams(): P2PNetwork | null {
+  return P2P[PROFILE.id]?.[NETWORK.id] ?? null;
 }
 
 export function getNodes(): CrawledNode[] {

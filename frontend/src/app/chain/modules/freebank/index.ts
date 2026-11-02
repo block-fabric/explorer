@@ -51,6 +51,7 @@ const freebank: ChainFrontendModule = {
     { path: '/gold', title: 'Gold fix and oracles', icon: 'nav-gold' },
     { path: '/pools', title: 'Note pools', icon: 'nav-dex' },
     { path: '/assets', title: 'Assets', icon: 'nav-assets' },
+    { path: '/nodes', title: 'Nodes: the reachable nodes of the network, their versions', icon: 'nav-network' },
   ],
   footerNav: [
     { path: '/bmm', title: 'BMM on eCash', icon: 'nav-drivechain' },
@@ -63,6 +64,7 @@ const freebank: ChainFrontendModule = {
     '/assets': get => nonEmpty(get, 'listassets'),
   },
   routes: [
+    { path: 'nodes', loadChildren: () => import('@app/chain/nodes/nodes.module').then(m => m.ChainNodesModule) },
     { path: 'houses', loadComponent: page(houses, 'FreebankHousesPage') },
     { path: 'house/:id', loadComponent: page(houses, 'FreebankHousePage') },
     { path: 'bills', loadComponent: page(bills, 'FreebankBillsPage') },
