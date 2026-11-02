@@ -76,8 +76,9 @@ export class MasterPageComponent implements OnInit, OnDestroy {
     this.chainNav$ = NODE_SIDECHAIN ? moduleNav$(this.chainApi, this.chainNav) : PROFILE.kind !== 'l2' ? of(this.chainNav) : combineLatest([
       this.l2Api.features$, this.chainApi.chain$().pipe(startWith(null)),
     ]).pipe(
-      // upstream's own Blocks entry stays; the BMM page only where the backend reads the eCash drivechain index
-      map(([f, c]) => [...L2_NAV.filter(n => n.path !== '/blocks' && (n.path !== '/bmm' || c?.bmm !== false)), ...l2FeatureNav(f, true)]),
+      // upstream's own Blocks entry stays; the BMM page only where the backend reads the eCash drivechain index; then
+      // the chain's feature pages, and its module's own (Thunder's Nodes)
+      map(([f, c]) => [...L2_NAV.filter(n => n.path !== '/blocks' && (n.path !== '/bmm' || c?.bmm !== false)), ...l2FeatureNav(f, true), ...(MODULE.nav ?? [])]),
     );
     this.networks$ = this.chainApi.chain$().pipe(
       map(c => ({ others: (c?.networks ?? []).filter(n => n.id !== (c?.network ?? CHAIN_NETWORK) && !!n.explorer) })),

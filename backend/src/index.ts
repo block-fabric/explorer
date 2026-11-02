@@ -323,6 +323,7 @@ class Server {
       .use(express.text({ type: ['text/plain'], limit: MAX_SUBMIT_BYTES + 1024 }))
       .use(express.json({ limit: MAX_SUBMIT_BYTES + 1024 }));
     l2Routes.initRoutes(this.app);
+    chainNodesRoutes.initRoutes(this.app); // the chain's reachable nodes, where it has a P2P network to crawl (Thunder's)
     // a body too large or not JSON: a JSON error, not express's page
     this.app.use((err: any, req: Request, res: Response, next: NextFunction) => {
       if (!err) {
