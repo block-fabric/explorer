@@ -39,14 +39,12 @@ h5 small { color: var(--cx-ink-3); font-size: 0.75rem; font-weight: normal; marg
 // the table
 .addr { font-family: var(--cx-mono); font-size: 0.8rem; white-space: nowrap; display: inline-flex; align-items: center; }
 // its reverse DNS name under it, small and dim, cut to the address's width (the whole on hover)
-.rdns { display: block; max-width: 210px; padding-left: 15px; margin-top: 1px; font-size: 0.68rem; line-height: 1.2; color: var(--cx-ink-3);
+.rdns { display: block; max-width: 300px; padding-left: 15px; margin-top: 1px; font-size: 0.68rem; line-height: 1.2; color: var(--cx-ink-3);
   opacity: 0.8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .st { width: 7px; height: 7px; border-radius: 50%; margin-right: 8px; background: #ff6b6b; flex: none;
   &.up { background: #3bd16f; box-shadow: 0 0 6px #3bd16f99; } }
 .agent { white-space: nowrap; }
 .cmt { font-size: 0.7rem; color: var(--cx-ink-3); margin-left: 6px; white-space: nowrap; }
-.svc { font-family: var(--cx-mono); font-size: 0.64rem; letter-spacing: 0.04em; padding: 0 6px; border-radius: 99px; margin-right: 4px;
-  border: 1px solid #ffffff2a; color: var(--cx-ink-2, #ffffffcc); white-space: nowrap; }
 .note { font-size: 0.78rem; margin-top: 10px; }
 
 // the tiles: three a row (one on a phone)

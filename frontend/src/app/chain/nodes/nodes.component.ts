@@ -7,13 +7,6 @@ import { SeoService } from '@app/services/seo.service';
 
 const PALETTE = [PROFILE.color, '#5aa6ff', '#ff8a3d', '#f26b9c', '#a585ff', '#2bc79a', '#f5b83d', '#9aa4b2'];
 
-/** the service bits a node advertises in its version message, as the table shows them (its chain: chainKind) */
-const SERVICES: { bit: number; label: string; title: string }[] = [
-  { bit: 8, label: 'witness', title: 'NODE_WITNESS' },
-  { bit: 4, label: 'bloom', title: 'NODE_BLOOM: BIP37 filters' },
-  { bit: 64, label: 'filters', title: 'NODE_COMPACT_FILTERS: BIP157/158' },
-  { bit: 2048, label: 'v2', title: 'NODE_P2P_V2: BIP324 encrypted transport' },
-];
 const NODE_NETWORK = 1;
 const NODE_NETWORK_LIMITED = 1024;
 
@@ -43,13 +36,13 @@ export function parseAgent(ua: string | null): NodeAgent {
   return { node: `${product} ${m[2]}`, backbone, comments, order: (backbone ? 1e9 : 2e9) - newer };
 }
 
-/** an address to fit the table: an IPv6 one as its first two groups … its last ("[2a01:e0a:…:b43a]:8533") */
+/** an address to fit the table: an IPv6 one as its first three groups … its last two ("[2a01:e0a:1f3:…:5e1:b43a]:8533") */
 export function shortAddress(ip: string, port: number): string {
   if (!ip.includes(':')) {
     return `${ip}:${port}`;
   }
   const g = ip.split(':').filter(Boolean);
-  return g.length > 3 ? `[${g[0]}:${g[1]}:…:${g[g.length - 1]}]:${port}` : `[${ip}]:${port}`;
+  return g.length > 5 ? `[${g.slice(0, 3).join(':')}:…:${g.slice(-2).join(':')}]:${port}` : `[${ip}]:${port}`;
 }
 
 /** a user agent's comments, as the Node column's small print: about "Bitcoin Core 32.1.0" long (the whole on hover) */
@@ -67,7 +60,7 @@ export function chainKind(services: string | null): 'Full' | 'Pruned' | 'No bloc
 
 /**
  * A chain's network (/nodes, on eCash, Flush, FreeBank and Thunder): the reachable nodes the backend's crawler found on its P2P network, their clients and
- * versions, services, heights and uptime, and the count over time (GET /api/v1/chain/nodes).
+ * versions, chain kind, heights and uptime, and the count over time (GET /api/v1/chain/nodes).
  */
 @Component({
   selector: 'app-chain-nodes',
@@ -97,15 +90,14 @@ export class ChainNodesComponent implements OnInit, OnDestroy {
     { key: 'node', label: 'Node', sort: r => r.agent.node },
     { key: 'chain', label: 'Chain', sort: r => ['Full', 'Pruned', 'No blocks'].indexOf(r.chain), title: 'Full: serves every block; Pruned: the last 288 only' },
     { key: 'height', label: 'Height', align: 'right', sort: true },
-    { key: 'services', label: 'Services', hide: 'md' },
     { key: 'protocol', label: 'Protocol', align: 'right', sort: true, hide: 'lg' },
     { key: 'latency', label: 'Latency', align: 'right', sort: true, hide: 'sm', title: 'the handshake, from the explorer\'s server' },
     { key: 'uptime', label: 'Uptime (24h)', sort: true, nowrap: true, title: 'reached in the crawls of the last day (one every 10 minutes), hour by hour' },
     { key: 'firstSeen', label: 'First seen', align: 'right', sort: true, hide: 'md' },
     { key: 'lastSeen', label: 'Last seen', align: 'right', sort: true },
   ];
-  /** a LayerTwo chain's nodes (Thunder: QUIC) tell no services nor protocol number: no Chain, Services, Protocol */
-  private static readonly BITCOIN_ONLY = ['chain', 'services', 'protocol'];
+  /** a LayerTwo chain's nodes (Thunder: QUIC) tell no services nor protocol number: no Chain, Protocol */
+  private static readonly BITCOIN_ONLY = ['chain', 'protocol'];
   cols: CxColumn[] = this.allCols;
   filters: CxFilter[] = [];
   match = (r: any, q: string) => [r.address, r.rdns, r.userAgent].some(x => typeof x === 'string' && x.toLowerCase().includes(q));
@@ -203,12 +195,6 @@ export class ChainNodesComponent implements OnInit, OnDestroy {
 
   reachable(): number {
     return this.rows.filter(r => r.up).length;
-  }
-
-  services(s: string | null): { label: string; title: string }[] {
-    if (!s) { return []; }
-    const v = BigInt(s);
-    return SERVICES.filter(x => (v & BigInt(x.bit)) !== BigInt(0));
   }
 
   pct(x: number, d = 0): string { return ((x || 0) * 100).toFixed(d) + '%'; }

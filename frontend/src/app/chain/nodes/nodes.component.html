@@ -117,9 +117,6 @@
               @if (r.up && r.behind > 2) {<span class="pill warn ms-1" [title]="r.behind + ' blocks behind the tip (' + (r.tip | number) + ') when checked'">−{{ r.behind | number }}</span>}
             } @else {–}
           </ng-template>
-          <ng-template cxCell="services" let-r>
-            @for (s of services(r.services); track s.label) {<span class="svc" [title]="s.title">{{ s.label }}</span>}
-          </ng-template>
           <ng-template cxCell="latency" let-r><span class="lat" [class.slow]="r.latency > 300">{{ r.latency !== null ? (r.latency | number) + ' ms' : '–' }}</span></ng-template>
           <ng-template cxCell="uptime" let-r>
             <span class="up" [title]="'reached in ' + (r.recent.split('1').length - 1) + ' of the last ' + r.recent.length + ' crawls (each cell: an hour)'">
