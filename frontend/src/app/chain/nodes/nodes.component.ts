@@ -100,6 +100,8 @@ export class ChainNodesComponent implements OnInit, OnDestroy {
   private static readonly BITCOIN_ONLY = ['chain', 'protocol'];
   cols: CxColumn[] = this.allCols;
   filters: CxFilter[] = [];
+  /** a client's colour (Versions card, map) */
+  colorMap: Record<string, string> = {};
   match = (r: any, q: string) => [r.address, r.rdns, r.userAgent].some(x => typeof x === 'string' && x.toLowerCase().includes(q));
   trackAddress = (r: any) => r.address;
 
@@ -140,6 +142,7 @@ export class ChainNodesComponent implements OnInit, OnDestroy {
     }
     this.versions = [...byVersion.entries()].sort((a, b) => b[1] - a[1])
       .map(([label, count], i) => ({ label, count, share: up.length ? count / up.length : 0, color: PALETTE[i % PALETTE.length] }));
+    this.colorMap = Object.fromEntries(this.versions.map(v => [v.label, v.color]));
     this.latest = this.versions[0]?.label ?? ''; // the most run (versions do not order across clients, nor across eCash's own renumbering)
 
     this.filters = [

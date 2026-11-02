@@ -92,6 +92,17 @@
     </div>
 
     <section class="nd-sec">
+      <h2 class="nd-h2">Map <span class="sub2">the reachable nodes where their addresses are; an arc: a node there named one here when asked for addresses</span></h2>
+      <div class="box nd-map">
+        <app-nodes-globe [nodes]="rows" [links]="data.links ?? []" [colors]="colorMap" [accent]="profile.color"></app-nodes-globe>
+        <div class="map-foot">
+          @for (v of versions; track v.label) {<span class="lg"><i [style.background]="v.color"></i>{{ v.label }}</span>}
+          <span class="attr">Drag to turn it. Locations: <a href="https://db-ip.com" target="_blank" rel="noopener">IP Geolocation by DB-IP</a>, a city at best (a VPN shows where it exits).</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="nd-sec">
       <h2 class="nd-h2">Nodes <span class="sub2">reachable in the last crawl, then those reached in the last week that have since gone</span></h2>
       <div class="asof">
         <span>Status, versions and uptime: last crawl <app-time kind="since" [time]="data.last.time" [fastRender]="true"></app-time> (every 10 min)</span>

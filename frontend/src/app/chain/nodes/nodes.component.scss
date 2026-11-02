@@ -61,3 +61,10 @@ h5 small { color: var(--cx-ink-3); font-size: 0.75rem; font-weight: normal; marg
 
 // the shared look (last, so it wins)
 @import '../components/chain-ui';
+
+// the map: the globe, then the versions' colours and the locations' source
+.nd-map { padding: 0; overflow: hidden; }
+.map-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 10px 16px 12px; border-top: 1px solid #ffffff14; font-size: 0.75rem; }
+.map-foot .lg { display: inline-flex; align-items: center; gap: 6px; color: var(--cx-ink-2, #ffffffcc); white-space: nowrap;
+  i { width: 8px; height: 8px; border-radius: 50%; } }
+.map-foot .attr { margin-left: auto; color: var(--cx-ink-3); a { color: inherit; text-decoration: underline; } }

@@ -125,6 +125,12 @@ const RDNS_TTL = 86400;
 const RDNS_TIMEOUT = 3_000;
 const MAX_RDNS = 20_000;
 const crawls: CrawlSnapshot[] = [];
+/**
+ * The last crawl's links: a reachable node that, asked for addresses (getaddr), named another reachable one. Who a
+ * node knows of, not who it is connected to (no message says that); none on a network with no getaddr (Thunder's).
+ */
+let links: [string, string][] = [];
+const MAX_LINKS = 3000;
 let crawling = false;
 let checking = false;
 let crawlPending = false; // a crawl waits: a check takes no new node
@@ -146,6 +152,10 @@ export function rdnsOf(ip: string): string | null {
 
 export function getNodes(): CrawledNode[] {
   return [...nodes.values()];
+}
+
+export function getLinks(): [string, string][] {
+  return links;
 }
 
 export function getCrawls(): CrawlSnapshot[] {
@@ -485,6 +495,7 @@ async function $crawl(): Promise<void> {
     const perIp = new Map<string, number>();
     const perSubnet = new Map<string, number>();
     const reached = new Map<string, Probe['version']>();
+    const told = new Map<string, string[]>(); // a reached node: the addresses its getaddr answer named
     let tried = 0;
     const next = (): { ip: string; port: number } | null => {
       while (queue.length) {
@@ -534,6 +545,7 @@ async function $crawl(): Promise<void> {
         const r = await probe(a.ip, a.port, magic);
         record(a, r.version);
         if (r.version) {
+          told.set(addressOf(a.ip, a.port), r.addrs.map(x => addressOf(x.ip, x.port)));
           queue.push(...r.addrs.slice(0, Math.max(0, MAX_QUEUE - queue.length)));
         }
       }
@@ -550,6 +562,18 @@ async function $crawl(): Promise<void> {
     } else {
       await Promise.all(Array.from({ length: CONCURRENCY }, worker));
     }
+    const seen = new Set<string>();
+    const found: [string, string][] = [];
+    for (const [a, list] of told) {
+      for (const b of list) {
+        const pair = a < b ? `${a} ${b}` : `${b} ${a}`;
+        if (b !== a && reached.has(b) && !seen.has(pair) && found.length < MAX_LINKS) {
+          seen.add(pair);
+          found.push([a, b]);
+        }
+      }
+    }
+    links = found;
     const passTip = passTipOf(startTip, [...reached.values()].map(v => v?.height ?? 0));
     for (const k of reached.keys()) {
       nodes.get(k)!.tip = passTip;
