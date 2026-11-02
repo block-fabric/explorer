@@ -43,6 +43,15 @@ export function parseAgent(ua: string | null): NodeAgent {
   return { node: `${name} ${m[2]}`, backbone, comments, order: (backbone ? 1e9 : 2e9) - newer };
 }
 
+/** an address to fit the table: an IPv6 one as its first two groups … its last ("[2a01:e0a:…:b43a]:8533") */
+export function shortAddress(ip: string, port: number): string {
+  if (!ip.includes(':')) {
+    return `${ip}:${port}`;
+  }
+  const g = ip.split(':').filter(Boolean);
+  return g.length > 3 ? `[${g[0]}:${g[1]}:…:${g[g.length - 1]}]:${port}` : `[${ip}]:${port}`;
+}
+
 /** whether a node keeps the whole chain: Full (NODE_NETWORK), Pruned (NODE_NETWORK_LIMITED alone: the last 288
  * blocks), or No blocks */
 export function chainKind(services: string | null): 'Full' | 'Pruned' | 'No blocks' {
@@ -109,7 +118,9 @@ export class ChainNodesComponent implements OnInit, OnDestroy {
       ...n,
       agent: parseAgent(n.userAgent),
       chain: chainKind(n.services),
-      behind: n.height !== null && tip ? tip - n.height : null,
+      // behind the tip when its height was read (a crawl, or a check between crawls), not the tip now
+      behind: n.height !== null && (n.tip ?? tip) ? Math.max(0, (n.tip ?? tip) - n.height) : null,
+      short: shortAddress(n.ip, n.port),
       uptime: n.recent ? [...n.recent].filter(c => c === '1').length / n.recent.length : 0,
     })).sort((a: any, b: any) => a.agent.order - b.agent.order || Number(b.up) - Number(a.up) || b.lastSeen - a.lastSeen);
     const up = this.rows.filter(r => r.up);

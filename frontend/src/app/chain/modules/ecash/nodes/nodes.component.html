@@ -25,7 +25,7 @@
       <div class="kpi">
         <div class="k-label">At the tip</div>
         <div class="k-value">{{ synced | number }}<small> / {{ reachable() | number }}</small></div>
-        <div class="k-sub">within 2 blocks of {{ data.tip | number }} when reached</div>
+        <div class="k-sub">within 2 blocks of the tip when last checked</div>
       </div>
       <div class="kpi">
         <div class="k-label">Most run version</div>
@@ -65,11 +65,15 @@
 
     <section class="nd-sec">
       <h2 class="nd-h2">Nodes <span class="sub2">reachable in the last crawl, then those reached in the last week that have since gone</span></h2>
+      <div class="asof">
+        <span>Status, versions and uptime: last crawl <app-time kind="since" [time]="data.last.time" [fastRender]="true"></app-time> (every 30 min)</span>
+        @if (data.checked) {<span>Heights: checked <app-time kind="since" [time]="data.checked" [fastRender]="true"></app-time> (every 5 min)</span>}
+      </div>
       <div class="box table-box">
         <app-chain-table [rows]="rows" [columns]="cols" [filters]="filters" [search]="match" searchPlaceholder="Address, client…"
             [trackBy]="trackAddress" [pageSize]="50" sort="node" [asc]="true" empty="No node reached yet.">
           <ng-template cxCell="address" let-r>
-            <span class="addr"><i class="st" [class.up]="r.up" [title]="r.up ? 'reachable in the last crawl' : 'not reachable in the last crawl'"></i>{{ r.address }}</span>
+            <span class="addr"><i class="st" [class.up]="r.up" [title]="r.up ? 'reachable in the last crawl' : 'not reachable in the last crawl'"></i><span [title]="r.address">{{ r.short }}</span></span>
           </ng-template>
           <ng-template cxCell="node" let-r>
             <span class="agent" [class.bb]="r.agent.backbone" [title]="r.userAgent">{{ r.agent.node }}</span>
@@ -82,7 +86,7 @@
           <ng-template cxCell="height" let-r>
             @if (r.height !== null) {
               <span>{{ r.height | number }}</span>
-              @if (r.up && r.behind > 2) {<span class="pill warn ms-1" [title]="r.behind + ' blocks behind the tip when reached'">−{{ r.behind | number }}</span>}
+              @if (r.up && r.behind > 2) {<span class="pill warn ms-1" [title]="r.behind + ' blocks behind the tip (' + (r.tip | number) + ') when checked'">−{{ r.behind | number }}</span>}
             } @else {–}
           </ng-template>
           <ng-template cxCell="services" let-r>
@@ -98,7 +102,7 @@
           </ng-template>
         </app-chain-table>
       </div>
-      <p class="note muted">A node's height and version are what it said when the crawler reached it. Nodes that only connect out (most
+      <p class="note muted">A node's height and version are what it said when it was last checked, and how far behind it was is counted from the tip then. Nodes that only connect out (most
         wallets, nodes behind NAT) cannot be reached and are not counted. Uptime covers the last day's crawls (fewer for a node first seen since).</p>
     </section>
   </ng-container>

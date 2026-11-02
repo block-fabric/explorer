@@ -33,6 +33,7 @@ h5 small { color: var(--cx-ink-3); font-size: 0.75rem; font-weight: normal; marg
 .svc { font-family: var(--cx-mono); font-size: 0.64rem; letter-spacing: 0.04em; padding: 0 6px; border-radius: 99px; margin-right: 4px;
   border: 1px solid #ffffff2a; color: var(--cx-ink-2, #ffffffcc); white-space: nowrap; }
 .note { font-size: 0.78rem; margin-top: 10px; }
+.asof { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 0.78rem; color: var(--cx-ink-3); margin: -4px 0 10px; }
 
 // the shared look (last, so it wins)
 @import '../../../components/chain-ui';

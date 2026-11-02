@@ -1,5 +1,5 @@
 import { ChainModule } from '../../module';
-import { getCrawls, getNodes, isCrawling, p2pParams, startCrawler } from '../../nodes';
+import { getCrawls, getNodes, isCrawling, lastChecked, p2pParams, startCrawler } from '../../nodes';
 
 /**
  * eCash (ECX), the mainchain: a fork of Bitcoin with BIP300/BIP301 drivechains, enforced by a bip300301_enforcer next
@@ -24,6 +24,7 @@ const ecash: ChainModule = {
         return {
           tip,
           crawling: isCrawling(),
+          checked: lastChecked(), // the heights' time (a crawl, or a check every 5 minutes between crawls)
           port: p2pParams()?.port,
           last,
           // the nodes reached in the last crawl, and those reached in the last week that have gone since

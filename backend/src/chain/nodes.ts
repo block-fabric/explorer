@@ -25,6 +25,8 @@ const P2P: Partial<Record<NetworkId, { magic: string; port: number; seeds: strin
 };
 
 const CRAWL_EVERY = 30 * 60_000;
+const CHECK_EVERY = 5 * 60_000; // between crawls, the reachable nodes' heights are checked again (a handshake, no getaddr)
+const TIP_QUORUM = 3; // the tip of a pass: the highest height at least this many nodes report (no single node sets it)
 const FIRST_CRAWL = 60_000;
 const CONCURRENCY = 32;
 const CONNECT_TIMEOUT = 8_000;
@@ -58,6 +60,8 @@ export interface CrawledNode {
   lastSeen: number; // last reached
   lastTried: number;
   recent: string; // the last RECENT crawls, newest last: 1 reached, 0 not
+  checked: number | null; // when its height was read (a crawl or a check)
+  tip: number | null; // the network's tip then: the height of the pass the node was checked in (TIP_QUORUM)
 }
 
 export interface CrawlSnapshot {
@@ -72,6 +76,8 @@ export interface CrawlSnapshot {
 const nodes = new Map<string, CrawledNode>();
 const crawls: CrawlSnapshot[] = [];
 let crawling = false;
+let checking = false;
+let lastCheck: number | null = null;
 let started = false;
 
 export function p2pParams() {
@@ -84,6 +90,11 @@ export function getNodes(): CrawledNode[] {
 
 export function getCrawls(): CrawlSnapshot[] {
   return crawls;
+}
+
+/** when the reachable nodes' heights were last checked (a crawl or a check between crawls) */
+export function lastChecked(): number | null {
+  return lastCheck;
 }
 
 export function isCrawling(): boolean {
@@ -182,7 +193,7 @@ interface Probe {
 }
 
 /** a handshake with one node, and the addresses it answers getaddr with */
-function probe(ip: string, port: number, magic: Buffer): Promise<Probe> {
+function probe(ip: string, port: number, magic: Buffer, addrs = true): Promise<Probe> {
   return new Promise((resolve) => {
     const res: Probe = { version: null, addrs: [] };
     const t0 = Date.now();
@@ -229,6 +240,9 @@ function probe(ip: string, port: number, magic: Buffer): Promise<Probe> {
               userAgent: p.subarray(i, i + Math.min(uaLen, 256)).toString('utf8').replace(/[^\x20-\x7e]/g, ''),
               height: p.length >= i + uaLen + 4 ? p.readInt32LE(i + uaLen) : 0, latency: Date.now() - t0,
             };
+            if (!addrs) {
+              return finish(); // a check: the version is all it wants
+            }
             sock.write(message(magic, 'verack'));
             sock.write(message(magic, 'getaddr'));
           } else if (cmd === 'ping') {
@@ -248,6 +262,11 @@ function probe(ip: string, port: number, magic: Buffer): Promise<Probe> {
       }
     });
   });
+}
+
+/** @asyncSafe */
+function sleep(ms: number): Promise<void> {
+  return new Promise(r => setTimeout(r, ms));
 }
 
 // --- the crawl ------------------------------------------------------------------------------------------------------
@@ -270,7 +289,10 @@ async function seedAddresses(seeds: string[], port: number): Promise<{ ip: strin
 /** @asyncSafe */
 async function $crawl(): Promise<void> {
   const p2p = p2pParams();
-  if (!p2p || crawling) {
+  for (let i = 0; checking && i < 120; i++) {
+    await sleep(500); // a check finishes first (a minute at most)
+  }
+  if (!p2p || crawling || checking) {
     return;
   }
   crawling = true;
@@ -327,6 +349,7 @@ async function $crawl(): Promise<void> {
             address: key, ip: a.ip, port: a.port, userAgent: r.version.userAgent, protocol: r.version.protocol,
             services: r.version.services, height: r.version.height, latency: r.version.latency,
             firstSeen: n?.firstSeen ?? now, lastSeen: now, lastTried: now, recent: ((n?.recent ?? '') + '1').slice(-RECENT),
+            checked: now, tip: null,
           });
         } else if (n) {
           n.lastTried = now;
@@ -335,6 +358,11 @@ async function $crawl(): Promise<void> {
       }
     };
     await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+    const passTip = tipOf([...reached.values()].map(v => v?.height ?? 0));
+    for (const k of reached.keys()) {
+      nodes.get(k)!.tip = passTip;
+    }
+    lastCheck = now;
     for (const [k, n] of nodes) {
       if (now - n.lastSeen > FORGET_UNREACHABLE) {
         nodes.delete(k);
@@ -368,6 +396,50 @@ async function $crawl(): Promise<void> {
   }
 }
 
+/** the tip of a pass: the highest height at least TIP_QUORUM of its nodes are at or above; null with fewer nodes */
+function tipOf(heights: number[]): number | null {
+  const h = heights.filter(x => x > 0).sort((a, b) => b - a);
+  return h.length >= TIP_QUORUM ? h[TIP_QUORUM - 1] : h[h.length - 1] ?? null;
+}
+
+/** between crawls: the heights of the nodes reachable in the last crawl, again (a handshake each) @asyncSafe */
+async function $check(): Promise<void> {
+  const p2p = p2pParams();
+  const last = crawls[crawls.length - 1];
+  if (!p2p || crawling || checking || !last) {
+    return;
+  }
+  checking = true;
+  const now = Math.floor(Date.now() / 1000);
+  const magic = Buffer.from(p2p.magic, 'hex');
+  try {
+    const todo = [...nodes.values()].filter(n => n.lastSeen >= last.time);
+    const got = new Map<string, NonNullable<Probe['version']>>();
+    const worker = async (): Promise<void> => {
+      for (let n = todo.shift(); n; n = todo.shift()) {
+        const r = await probe(n.ip, n.port, magic, false);
+        if (r.version) {
+          got.set(n.address, r.version);
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+    const passTip = tipOf([...got.values()].map(v => v.height));
+    for (const [k, v] of got) {
+      const n = nodes.get(k);
+      if (n) {
+        Object.assign(n, { userAgent: v.userAgent, protocol: v.protocol, services: v.services, height: v.height, latency: v.latency, checked: now, tip: passTip });
+      }
+    }
+    lastCheck = now;
+    await $saveNodes();
+  } catch (e) {
+    logger.err(`Nodes check failed: ${e instanceof Error ? e.message : e}`, 'Nodes');
+  } finally {
+    checking = false;
+  }
+}
+
 // --- persistence ----------------------------------------------------------------------------------------------------
 
 const db = () => config.DATABASE.ENABLED;
@@ -379,6 +451,7 @@ async function $ensureTables(): Promise<void> {
     protocol int NULL, services varchar(24) NULL, height int NULL, latency int NULL, first_seen int unsigned NOT NULL,
     last_seen int unsigned NOT NULL, last_tried int unsigned NOT NULL, recent varchar(${RECENT}) NOT NULL DEFAULT ''
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+  await DB.query('ALTER TABLE chain_nodes ADD COLUMN IF NOT EXISTS checked int unsigned NULL, ADD COLUMN IF NOT EXISTS tip int NULL');
   await DB.query(`CREATE TABLE IF NOT EXISTS chain_nodes_crawls (
     time int unsigned NOT NULL PRIMARY KEY, duration int unsigned NOT NULL, tried int unsigned NOT NULL,
     reachable int unsigned NOT NULL, known int unsigned NOT NULL, versions json NOT NULL
@@ -396,12 +469,14 @@ async function $load(): Promise<void> {
     nodes.set(r.address, {
       address: r.address, ip: r.ip, port: r.port, userAgent: r.user_agent, protocol: r.protocol, services: r.services,
       height: r.height, latency: r.latency, firstSeen: r.first_seen, lastSeen: r.last_seen, lastTried: r.last_tried, recent: r.recent,
+      checked: r.checked ?? null, tip: r.tip ?? null,
     });
   }
   const [snaps]: any = await DB.query('SELECT * FROM chain_nodes_crawls WHERE time >= UNIX_TIMESTAMP() - 90 * 86400 ORDER BY time');
   for (const s of snaps) {
     crawls.push({ ...s, versions: typeof s.versions === 'string' ? JSON.parse(s.versions) : s.versions });
   }
+  lastCheck = Math.max(0, ...[...nodes.values()].map(n => n.checked ?? 0)) || null;
   logger.info(`Nodes crawler: ${nodes.size} known nodes, ${crawls.length} crawls loaded`, 'Nodes');
 }
 
@@ -411,19 +486,28 @@ async function $save(snap: CrawlSnapshot): Promise<void> {
     return;
   }
   await DB.query('DELETE FROM chain_nodes WHERE last_seen < ?', [snap.time - FORGET_UNREACHABLE]);
+  await $saveNodes();
+  await DB.query('INSERT INTO chain_nodes_crawls (time, duration, tried, reachable, known, versions) VALUES (?,?,?,?,?,?)',
+    [snap.time, snap.duration, snap.tried, snap.reachable, snap.known, JSON.stringify(snap.versions)]);
+  await DB.query('DELETE FROM chain_nodes_crawls WHERE time < ?', [snap.time - 90 * 86400]);
+}
+
+/** @asyncUnsafe */
+async function $saveNodes(): Promise<void> {
+  if (!db()) {
+    return;
+  }
   const all = [...nodes.values()];
   for (let i = 0; i < all.length; i += 200) {
     const part = all.slice(i, i + 200);
     await DB.query(
-      `INSERT INTO chain_nodes (address, ip, port, user_agent, protocol, services, height, latency, first_seen, last_seen, last_tried, recent)
-       VALUES ${part.map(() => '(?,?,?,?,?,?,?,?,?,?,?,?)').join(',')}
+      `INSERT INTO chain_nodes (address, ip, port, user_agent, protocol, services, height, latency, first_seen, last_seen, last_tried, recent, checked, tip)
+       VALUES ${part.map(() => '(?,?,?,?,?,?,?,?,?,?,?,?,?,?)').join(',')}
        ON DUPLICATE KEY UPDATE user_agent = VALUES(user_agent), protocol = VALUES(protocol), services = VALUES(services),
-         height = VALUES(height), latency = VALUES(latency), last_seen = VALUES(last_seen), last_tried = VALUES(last_tried), recent = VALUES(recent)`,
-      part.flatMap(n => [n.address, n.ip, n.port, n.userAgent, n.protocol, n.services, n.height, n.latency, n.firstSeen, n.lastSeen, n.lastTried, n.recent]));
+         height = VALUES(height), latency = VALUES(latency), last_seen = VALUES(last_seen), last_tried = VALUES(last_tried), recent = VALUES(recent),
+         checked = VALUES(checked), tip = VALUES(tip)`,
+      part.flatMap(n => [n.address, n.ip, n.port, n.userAgent, n.protocol, n.services, n.height, n.latency, n.firstSeen, n.lastSeen, n.lastTried, n.recent, n.checked, n.tip]));
   }
-  await DB.query('INSERT INTO chain_nodes_crawls (time, duration, tried, reachable, known, versions) VALUES (?,?,?,?,?,?)',
-    [snap.time, snap.duration, snap.tried, snap.reachable, snap.known, JSON.stringify(snap.versions)]);
-  await DB.query('DELETE FROM chain_nodes_crawls WHERE time < ?', [snap.time - 90 * 86400]);
 }
 
 // --- the schedule ---------------------------------------------------------------------------------------------------
@@ -446,5 +530,6 @@ export function startCrawler(): void {
       setTimeout(run, CRAWL_EVERY);
     };
     setTimeout(run, FIRST_CRAWL);
+    setInterval(() => void $check(), CHECK_EVERY); // (skipped while a crawl runs)
   })();
 }
