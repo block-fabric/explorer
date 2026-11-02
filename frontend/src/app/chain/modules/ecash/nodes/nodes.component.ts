@@ -84,6 +84,9 @@ export class ChainNodesComponent implements OnInit, OnDestroy {
   versions: { label: string; count: number; share: number; color: string }[] = [];
   latest = '';
   synced = 0;
+  /** the figures of the page's tiles and breakdowns (the reachable nodes of the last crawl) */
+  stats: any = {};
+  breakdowns: { title: string; sub: string; rows: { label: string; count: number; share: number; color: string; title?: string }[] }[] = [];
   chart: any = null;
   chartInitOptions = { renderer: 'svg' };
   private sub: Subscription;
@@ -96,7 +99,7 @@ export class ChainNodesComponent implements OnInit, OnDestroy {
     { key: 'services', label: 'Services', hide: 'md' },
     { key: 'protocol', label: 'Protocol', align: 'right', sort: true, hide: 'lg' },
     { key: 'latency', label: 'Latency', align: 'right', sort: true, hide: 'sm', title: 'the handshake, from the explorer\'s server' },
-    { key: 'uptime', label: 'Uptime', align: 'right', sort: true, title: 'reached in the crawls of the last day (one every 10 minutes)' },
+    { key: 'uptime', label: 'Uptime (24h)', sort: true, nowrap: true, title: 'reached in the crawls of the last day (one every 10 minutes), hour by hour' },
     { key: 'firstSeen', label: 'First seen', align: 'right', sort: true, hide: 'md' },
     { key: 'lastSeen', label: 'Last seen', align: 'right', sort: true },
   ];
@@ -148,6 +151,61 @@ export class ChainNodesComponent implements OnInit, OnDestroy {
       { label: 'Node', options: this.versions.map(v => ({ label: v.label, test: (r: any) => r.agent.node === v.label })) },
     ];
     this.chart = this.historyChart(d.history ?? []);
+    this.buildStats(d, up);
+  }
+
+  private buildStats(d: any, up: any[]): void {
+    const n = up.length || 1;
+    const now = d.last.time;
+    const lat = up.map(r => r.latency).filter((x: any) => x !== null).sort((a: number, b: number) => a - b);
+    const hist = d.history ?? [];
+    const dayAgo = [...hist].reverse().find((c: any) => c.time <= now - 86400) ?? hist[0];
+    const count = (f: (r: any) => boolean) => up.filter(f).length;
+    const svc = (bit: number) => count(r => !!r.services && (BigInt(r.services) & BigInt(bit)) !== BigInt(0));
+    this.stats = {
+      avgUptime: up.length ? up.reduce((a, r) => a + r.uptime, 0) / up.length : 0,
+      stable: count(r => r.uptime >= 0.99),
+      full: count(r => r.chain === 'Full'),
+      pruned: count(r => r.chain === 'Pruned'),
+      ipv6: count(r => r.ip.includes(':')),
+      medianLatency: lat.length ? lat[Math.floor(lat.length / 2)] : null,
+      fresh: count(r => r.firstSeen >= now - 86400),
+      gone: this.rows.length - up.length,
+      peak: Math.max(0, ...hist.map((c: any) => c.reachable)),
+      change: dayAgo && dayAgo.time < now ? up.length - dayAgo.reachable : null,
+      changeSince: dayAgo?.time ?? null,
+    };
+    const bars = (rows: [string, number, string, string?][]) => rows.filter(r => r[1] > 0)
+      .map(([label, c, color, title]) => ({ label, count: c, share: c / n, color, title }));
+    this.breakdowns = [
+      { title: 'Chain', sub: 'what the nodes serve', rows: bars([
+        ['Full', this.stats.full, '#3bd16f', 'every block (NODE_NETWORK)'],
+        ['Pruned', this.stats.pruned, '#f5b83d', 'the last 288 blocks (NODE_NETWORK_LIMITED)'],
+        ['No blocks', up.length - this.stats.full - this.stats.pruned, '#9aa4b2']]) },
+      { title: 'Network', sub: 'how they are reached', rows: bars([
+        ['IPv4', up.length - this.stats.ipv6, '#5aa6ff'], ['IPv6', this.stats.ipv6, '#a585ff'],
+        [`port ${d.port}`, count(r => r.port === d.port), PROFILE.color, 'the network\'s default port'],
+        ['other ports', count(r => r.port !== d.port), '#ff8a3d']]) },
+      { title: 'Services', sub: 'the features they advertise', rows: bars([
+        ['witness', svc(8), '#2bc79a', 'NODE_WITNESS'], ['v2 transport', svc(2048), '#5aa6ff', 'NODE_P2P_V2: BIP324 encryption'],
+        ['compact filters', svc(64), '#f26b9c', 'NODE_COMPACT_FILTERS: BIP157/158'], ['bloom', svc(4), '#a585ff', 'NODE_BLOOM: BIP37']]) },
+    ];
+  }
+
+  /** a node's last day as 24 hourly cells: the share of its crawls it was reached in, null before it was seen */
+  strip(recent: string): (number | null)[] {
+    const per = 6; // crawls an hour (every 10 minutes)
+    const cells: (number | null)[] = [];
+    for (let h = 23; h >= 0; h--) {
+      const end = recent.length - h * per;
+      const part = recent.slice(Math.max(0, end - per), Math.max(0, end));
+      cells.push(part.length ? [...part].filter(c => c === '1').length / part.length : null);
+    }
+    return cells;
+  }
+
+  cellColor(x: number | null): string {
+    return x === null ? '#ffffff10' : x >= 0.99 ? '#3bd16f' : x >= 0.5 ? '#f5b83d' : '#ff6b6b';
   }
 
   latestShare(): number {

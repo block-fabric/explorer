@@ -16,26 +16,47 @@
   <div *ngIf="data && !data.last" class="alert alert-info">The first crawl has not finished yet: the list fills in a minute or two.</div>
 
   <ng-container *ngIf="data?.last">
-    <div class="kpis">
+    <div class="kpis nd-kpis">
       <div class="kpi">
         <div class="k-label">Reachable nodes</div>
-        <div class="k-value">{{ reachable() | number }}</div>
-        <div class="k-sub">accepting connections · of {{ data.last.known | number }} addresses heard of (the others do not listen, or not on a public address)</div>
+        <div class="k-value">{{ reachable() | number }}
+          @if (stats.change !== null && stats.change !== 0) {<small [class.pos]="stats.change > 0" [class.neg]="stats.change < 0">{{ stats.change > 0 ? '+' : '' }}{{ stats.change }}</small>}</div>
+        <div class="k-sub">of {{ data.last.known | number }} addresses heard of · peak {{ stats.peak | number }}@if (stats.change !== null) {<span>, {{ stats.change >= 0 ? '+' : '' }}{{ stats.change }} in 24 h</span>}</div>
       </div>
       <div class="kpi">
         <div class="k-label">At the tip</div>
         <div class="k-value">{{ synced | number }}<small> / {{ reachable() | number }}</small></div>
-        <div class="k-sub">within 2 blocks of the tip in the last crawl</div>
+        <div class="k-sub">within 2 blocks, at the last crawl</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">Average uptime</div>
+        <div class="k-value">{{ pct(stats.avgUptime, 1) }}</div>
+        <div class="k-sub">over the last day · {{ stats.stable | number }} nodes always up</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">Full nodes</div>
+        <div class="k-value">{{ stats.full | number }}<small> / {{ reachable() | number }}</small></div>
+        <div class="k-sub">serve every block · {{ stats.pruned | number }} pruned</div>
       </div>
       <div class="kpi">
         <div class="k-label">Most run version</div>
         <div class="k-value">{{ pct(latestShare()) }}</div>
-        <div class="k-sub">of the reachable nodes run {{ latest || '–' }}</div>
+        <div class="k-sub">{{ latest || '–' }} · {{ versions.length | number }} versions in all</div>
       </div>
       <div class="kpi">
-        <div class="k-label">Versions</div>
-        <div class="k-value">{{ versions.length | number }}</div>
-        <div class="k-sub">client versions on the network</div>
+        <div class="k-label">Over IPv6</div>
+        <div class="k-value">{{ stats.ipv6 | number }}</div>
+        <div class="k-sub">{{ pct(stats.ipv6 / (reachable() || 1)) }} of the reachable nodes</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">Median latency</div>
+        <div class="k-value">{{ stats.medianLatency !== null ? (stats.medianLatency | number) : '–' }}<small> ms</small></div>
+        <div class="k-sub">the handshake, from the explorer's server</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">New · gone</div>
+        <div class="k-value"><span class="pos">+{{ stats.fresh | number }}</span><small> · </small><span [class.neg]="stats.gone > 0">−{{ stats.gone | number }}</span></div>
+        <div class="k-sub">first seen in 24 h · reached this week, not now</div>
       </div>
     </div>
 
@@ -63,6 +84,24 @@
       </div>
     </div>
 
+    <div class="row-3">
+      @for (g of breakdowns; track g.title) {
+        <div class="box">
+          <h5>{{ g.title }} <small>{{ g.sub }}</small></h5>
+          <div class="vers">
+            @for (v of g.rows; track v.label) {
+              <div class="ver" [title]="v.title ?? ''">
+                <span class="nm"><i class="dot" [style.background]="v.color"></i>{{ v.label }}</span>
+                <div class="bar" [style.--sc]="v.color"><div class="fill" [style.width.%]="100 * v.share"></div></div>
+                <span class="num">{{ v.count | number }}</span>
+                <span class="pc">{{ pct(v.share) }}</span>
+              </div>
+            }
+          </div>
+        </div>
+      }
+    </div>
+
     <section class="nd-sec">
       <h2 class="nd-h2">Nodes <span class="sub2">reachable in the last crawl, then those reached in the last week that have since gone</span></h2>
       <div class="asof">
@@ -71,7 +110,7 @@
       </div>
       <div class="box table-box">
         <app-chain-table [rows]="rows" [columns]="cols" [filters]="filters" [search]="match" searchPlaceholder="Address, client…"
-            [trackBy]="trackAddress" [pageSize]="50" sort="node" [asc]="true" empty="No node reached yet.">
+            [trackBy]="trackAddress" [pageSize]="100" sort="node" [asc]="true" empty="No node reached yet.">
           <ng-template cxCell="address" let-r>
             <span class="addr"><i class="st" [class.up]="r.up" [title]="r.up ? 'reachable in the last crawl' : 'not reachable in the last crawl'"></i><span [title]="r.address">{{ r.short }}</span></span>
           </ng-template>
@@ -91,9 +130,12 @@
           <ng-template cxCell="services" let-r>
             @for (s of services(r.services); track s.label) {<span class="svc" [title]="s.title">{{ s.label }}</span>}
           </ng-template>
-          <ng-template cxCell="latency" let-r>{{ r.latency !== null ? (r.latency | number) + ' ms' : '–' }}</ng-template>
+          <ng-template cxCell="latency" let-r><span class="lat" [class.slow]="r.latency > 300">{{ r.latency !== null ? (r.latency | number) + ' ms' : '–' }}</span></ng-template>
           <ng-template cxCell="uptime" let-r>
-            <span [class.pos]="r.uptime >= 0.95" [class.neg]="r.uptime < 0.5" [title]="'reached in ' + (r.recent.split('1').length - 1) + ' of the last ' + r.recent.length + ' crawls'">{{ pct(r.uptime) }}</span>
+            <span class="up" [title]="'reached in ' + (r.recent.split('1').length - 1) + ' of the last ' + r.recent.length + ' crawls (each cell: an hour)'">
+              <span class="strip">@for (c of strip(r.recent); track $index) {<i [style.background]="cellColor(c)"></i>}</span>
+              <span class="up-pc" [class.pos]="r.uptime >= 0.99" [class.neg]="r.uptime < 0.5">{{ pct(r.uptime) }}</span>
+            </span>
           </ng-template>
           <ng-template cxCell="firstSeen" let-r><app-time kind="since" [time]="r.firstSeen" [fastRender]="true"></app-time></ng-template>
           <ng-template cxCell="lastSeen" let-r>
