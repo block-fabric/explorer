@@ -3,18 +3,27 @@ import config from '../config';
 import logger from '../logger';
 import { handleError } from '../utils/api';
 import bitcoinClient from '../api/bitcoin/bitcoin-client';
+import l2Index from './l2/index';
+import { PROFILE } from './profile';
 import { getCrawls, getNodes, isCrawling, lastChecked, p2pParams, schedule, startCrawler } from './nodes';
 
 /**
  * GET /api/v1/chain/nodes: the network's reachable nodes, as the crawler (chain/nodes.ts) last found them, and its
- * crawls. On every explorer whose chain has a P2P network to crawl (eCash, Flush, FreeBank); the crawler starts with it.
+ * crawls. On every explorer whose chain has a P2P network to crawl (eCash, Flush, FreeBank, Thunder); the crawler starts with it.
  */
 
 const TIP_TIMEOUT = 5_000;
 let cache: { at: number; body: unknown } | null = null;
 
-/** this explorer's node's height, if it answers in time (a Flush explorer's node may not be reachable: null) @asyncSafe */
+/**
+ * this explorer's node's height, if it answers in time (a Flush explorer's node may not be reachable: null); a
+ * sidechain's (Thunder): its index's, as its node last told it (its RPC node is the eCash one) @asyncSafe
+ */
 async function $ourTip(): Promise<number | null> {
+  if (PROFILE.kind === 'l2') {
+    const h = l2Index.nodeTipHeight();
+    return h >= 0 ? h : null;
+  }
   try {
     return await Promise.race([
       bitcoinClient.getBlockCount() as Promise<number>,
@@ -48,6 +57,7 @@ class NodesRoutes {
             schedule: schedule(),
             checked: lastChecked(), // the heights' time (a crawl, or a check every 5 minutes between crawls)
             port: p2pParams()?.port,
+            quic: !!p2pParams()?.quic, // LayerTwo's protocol: no services, no protocol number, no addresses from the nodes
             last,
             // the nodes reached in the last crawl, and those reached in the last week that have gone since
             nodes: getNodes().map(n => ({ ...n, up: !!last && n.lastSeen >= last.time })),

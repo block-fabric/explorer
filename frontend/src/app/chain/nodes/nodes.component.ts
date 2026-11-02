@@ -66,7 +66,7 @@ export function chainKind(services: string | null): 'Full' | 'Pruned' | 'No bloc
 }
 
 /**
- * A chain's network (/nodes, on eCash, Flush and FreeBank): the reachable nodes the backend's crawler found on its P2P network, their clients and
+ * A chain's network (/nodes, on eCash, Flush, FreeBank and Thunder): the reachable nodes the backend's crawler found on its P2P network, their clients and
  * versions, services, heights and uptime, and the count over time (GET /api/v1/chain/nodes).
  */
 @Component({
@@ -92,7 +92,7 @@ export class ChainNodesComponent implements OnInit, OnDestroy {
   clock$: Observable<number> = timer(0, 1000).pipe(map(() => Date.now() / 1000));
   private sub: Subscription;
 
-  cols: CxColumn[] = [
+  private allCols: CxColumn[] = [
     { key: 'address', label: 'Address', sort: r => r.ip },
     { key: 'node', label: 'Node', sort: r => r.agent.node },
     { key: 'chain', label: 'Chain', sort: r => ['Full', 'Pruned', 'No blocks'].indexOf(r.chain), title: 'Full: serves every block; Pruned: the last 288 only' },
@@ -104,6 +104,9 @@ export class ChainNodesComponent implements OnInit, OnDestroy {
     { key: 'firstSeen', label: 'First seen', align: 'right', sort: true, hide: 'md' },
     { key: 'lastSeen', label: 'Last seen', align: 'right', sort: true },
   ];
+  /** a LayerTwo chain's nodes (Thunder: QUIC) tell no services nor protocol number: no Chain, Services, Protocol */
+  private static readonly BITCOIN_ONLY = ['chain', 'services', 'protocol'];
+  cols: CxColumn[] = this.allCols;
   filters: CxFilter[] = [];
   match = (r: any, q: string) => [r.address, r.userAgent].some(x => typeof x === 'string' && x.toLowerCase().includes(q));
   trackAddress = (r: any) => r.address;
@@ -123,6 +126,7 @@ export class ChainNodesComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void { this.sub?.unsubscribe(); }
 
   private build(d: any): void {
+    this.cols = d.quic ? this.allCols.filter(c => !ChainNodesComponent.BITCOIN_ONLY.includes(c.key)) : this.allCols;
     const tip = d.tip ?? Math.max(0, ...d.nodes.map((n: any) => n.height ?? 0));
     this.rows = d.nodes.map((n: any) => ({
       ...n,
@@ -148,7 +152,7 @@ export class ChainNodesComponent implements OnInit, OnDestroy {
 
     this.filters = [
       { label: 'Status', options: [{ label: 'reachable', test: r => r.up }, { label: 'gone', test: r => !r.up }] },
-      { label: 'Chain', options: ['Full', 'Pruned', 'No blocks'].map(k => ({ label: k, test: (r: any) => r.chain === k })) },
+      ...(d.quic ? [] : [{ label: 'Chain', options: ['Full', 'Pruned', 'No blocks'].map(k => ({ label: k, test: (r: any) => r.chain === k })) }]),
       { label: 'Node', options: this.versions.map(v => ({ label: v.label, test: (r: any) => r.agent.node === v.label })) },
     ];
     this.chart = this.historyChart(d.history ?? []);

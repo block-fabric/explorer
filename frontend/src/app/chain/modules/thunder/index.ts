@@ -14,9 +14,13 @@ const thunder: ChainFrontendModule = {
     blockWeightUnits: 4000000,
   },
   features: ['richlist'],
+  nav: [
+    { path: '/nodes', title: 'Nodes: the reachable nodes of the network, their versions', icon: 'nav-network' },
+  ],
   // the feature pages of its own (chain/l2/l2.routes.ts puts them ahead of the generic ones)
   routes: [
     { path: 'richlist', loadComponent: () => import('./richlist.page').then(m => m.ThunderRichlistPage) },
+    { path: 'nodes', loadChildren: () => import('@app/chain/nodes/nodes.module').then(m => m.ChainNodesModule) },
   ],
 };
 

@@ -29,7 +29,8 @@ FROM rust:1.84-bookworm AS runtime
 RUN apt-get update && \
     apt-get install -y curl ca-certificates && \
     curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && \
-    apt-get install -y nodejs=24.13.0-1nodesource1 && \
+    apt-get install -y nodejs=24.13.0-1nodesource1 python3-pip && \
+    pip install --no-cache-dir --break-system-packages aioquic==1.2.0 && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -38,7 +39,7 @@ WORKDIR /backend
 RUN chown 1000:1000 ./
 COPY --from=builder --chown=1000:1000 /build/package ./package/
 COPY --from=builder --chown=1000:1000 /build/GeoIP ./GeoIP/
-COPY --from=builder --chown=1000:1000 /build/mempool-config.json /build/start.sh /build/wait-for-it.sh ./
+COPY --from=builder --chown=1000:1000 /build/mempool-config.json /build/start.sh /build/wait-for-it.sh /build/quic-probe.py ./
 
 USER 1000
 

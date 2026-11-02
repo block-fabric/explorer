@@ -3,8 +3,13 @@
     <div>
       <h1><app-svg-images name="nav-network" width="28" height="28" class="nd-icon"></app-svg-images> Nodes</h1>
       <div class="nd-sub">
-        The reachable {{ profile.name }} nodes: the explorer crawls the P2P network (port {{ data?.port ?? 8533 }}) every 10 minutes, from the DNS
-        seeds and the addresses the nodes it reaches tell it of.
+        @if (data?.quic) {
+          The reachable {{ profile.name }} nodes: every 10 minutes, the explorer sends a heartbeat over QUIC (port {{ data.port }}) to the seeds,
+          the nodes it knows and every address of the eCash crawl (a {{ profile.name }} node tells of no other).
+        } @else {
+          The reachable {{ profile.name }} nodes: the explorer crawls the P2P network (port {{ data?.port ?? 8533 }}) every 10 minutes, from the DNS
+          seeds and the addresses the nodes it reaches tell it of.
+        }
         @if (data?.last; as c) {<span class="ms-1">Last crawl <app-time kind="since" [time]="c.time" [fastRender]="true"></app-time>, {{ c.tried | number }} addresses tried in {{ c.duration }} s.</span>}
         @if (data?.crawling) {<span class="ms-1">Crawling now…</span>}
       </div>

@@ -1,6 +1,9 @@
 import * as dns from 'dns';
 import * as net from 'net';
+import * as path from 'path';
+import { spawn } from 'child_process';
 import { createHash, randomBytes } from 'crypto';
+import axios from 'axios';
 import config from '../config';
 import DB from '../database';
 import logger from '../logger';
@@ -17,12 +20,15 @@ import { PROFILE } from './profile';
  * addresses are dialled (never a private, loopback or reserved one a peer could gossip), over IPv4 and IPv6.
  */
 
-interface P2PNetwork { magic: string; port: number; seeds: string[] }
+interface P2PNetwork {
+  magic: string; port: number; seeds: string[];
+  // LayerTwo's protocol (QUIC streams of magic || bincode, Backbone's bt/sidechain/p2p.h), not Bitcoin's: a heartbeat
+  // gives a node's height and P2P version, and nothing tells of other nodes (no getaddr). The client is the chain's
+  // name; a Backbone drop-in names itself in its certificate's CN ("Thunder 1.1.0 (Backbone drop-in)").
+  quic?: { client: string; version: [number, number, number] };
+}
 
-/**
- * The P2P network of each chain on each eCash network (its node's chainparams); none: no crawler. Thunder's nodes speak
- * LayerTwo's protocol (QUIC streams of bincode, Backbone's bt/sidechain/p2p.h), not Bitcoin's: none yet.
- */
+/** The P2P network of each chain on each eCash network (its node's chainparams); none: no crawler. */
 const P2P: Record<string, Partial<Record<NetworkId, P2PNetwork>>> = {
   // Backbone's src/kernel/chainparams.cpp
   ecash: {
@@ -35,6 +41,15 @@ const P2P: Record<string, Partial<Record<NetworkId, P2PNetwork>>> = {
   flush: { ecash: { magic: '666c7821', port: 8255, seeds: ['seed.mainnet.flush.markets'] } },
   // freebank src/chainparams.cpp (CMainParams: its own message start, beta's port and seed)
   freebank: { ecash: { magic: 'fb4bec58', port: 8455, seeds: ['seed.ecxfreebank.com'] } },
+  // backbone-thunder chains/thunder (net.cpp magic_bytes "THNDR" | Mainnet 0b101, DEFAULT_PORT 4000 + slot 9, node.cpp
+  // MAINNET_SEED_PEER_ADDRS); P2P version 0.19.1. With no peer exchange, the addresses tried are also those of the
+  // eCash crawl (its operators run Thunder next to eCash): CHAIN.MAINCHAIN_API's /chain/nodes.
+  thunder: {
+    ecash: {
+      magic: '85189505', port: 4009, seeds: ['seed.ecash.drivecha.in', 'seed.ecash.eu.com', 'seed.ecash.ninja'],
+      quic: { client: 'Thunder', version: [0, 19, 1] },
+    },
+  },
 };
 
 const CRAWL_EVERY = 10 * 60_000;
@@ -61,6 +76,10 @@ const RECENT = 144; // the crawls a node's uptime is over (a day)
 const FORGET_UNREACHABLE = 7 * 86400; // a node never reached, or not since, is forgotten after this many seconds
 const PROTOCOL_VERSION = 70016;
 const USER_AGENT = '/eCash-Explorer-Crawler:1.0/';
+const QUIC_PROBE = path.resolve(__dirname, '../../quic-probe.py'); // /backend/quic-probe.py (docker/backend)
+const QUIC_SESSION = 10_000; // a QUIC handshake and the node's heartbeat, at most
+const QUIC_RUN = 180_000; // a probe run, at most (it is killed then)
+const QUIC_OUTPUT = 4_000_000; // bytes of the helper's output read at most
 
 export interface CrawledNode {
   address: string; // ip:port, [ip]:port for IPv6
@@ -290,6 +309,83 @@ function probe(ip: string, port: number, magic: Buffer, addrs = true, session = 
   });
 }
 
+/** a LayerTwo node's heartbeat answer as a version handshake's: its user agent made from its certificate's CN */
+function quicVersion(q: NonNullable<P2PNetwork['quic']>, r: any): NonNullable<Probe['version']> {
+  const v = Array.isArray(r.version) ? r.version.slice(0, 3).map((x: unknown) => Number(x) || 0).join('.') : '?';
+  const cn = typeof r.cn === 'string' ? r.cn.replace(/[^\x20-\x7e]/g, '').slice(0, 128) : '';
+  const dropIn = /^(.+?) ([0-9][0-9.]*) \(Backbone drop-in\)$/.exec(cn);
+  return {
+    protocol: 0, services: '0', latency: Number(r.latency) || 0,
+    userAgent: dropIn ? `/${dropIn[1]} Backbone:${dropIn[2]}(P2P ${v})/` : `/${q.client}:${v}/`,
+    height: Number.isInteger(r.height) && r.height >= 0 ? r.height : 0,
+  };
+}
+
+/** a heartbeat with each of a LayerTwo network's nodes, by the QUIC helper (docker/backend/quic-probe.py) */
+function quicProbe(p2p: P2PNetwork, targets: { ip: string; port: number }[], timeout = QUIC_SESSION): Promise<Map<string, NonNullable<Probe['version']>>> {
+  return new Promise((resolve) => {
+    const out = new Map<string, NonNullable<Probe['version']>>();
+    if (!targets.length || !p2p.quic) {
+      return resolve(out);
+    }
+    const q = p2p.quic;
+    const wanted = new Set(targets.map(t => addressOf(t.ip, t.port)));
+    let buf = '';
+    let read = 0;
+    const child = spawn('python3', ['-I', QUIC_PROBE], { stdio: ['pipe', 'pipe', 'ignore'] });
+    const timer = setTimeout(() => child.kill('SIGKILL'), QUIC_RUN);
+    const line = (l: string) => {
+      try {
+        const r = JSON.parse(l);
+        const key = addressOf(String(r.ip), Number(r.port));
+        if (wanted.has(key)) {
+          out.set(key, quicVersion(q, r));
+        }
+      } catch { /* a partial line */ }
+    };
+    child.stdout.on('data', (chunk: Buffer) => {
+      read += chunk.length;
+      if (read > QUIC_OUTPUT) {
+        return child.kill('SIGKILL');
+      }
+      buf += chunk.toString('utf8');
+      const lines = buf.split('\n');
+      buf = lines.pop() ?? '';
+      lines.forEach(line);
+    });
+    const done = () => {
+      clearTimeout(timer);
+      resolve(out);
+    };
+    child.on('error', (e) => {
+      logger.warn(`Nodes crawler: the QUIC helper did not start: ${e.message}`, 'Nodes');
+      done();
+    });
+    child.on('close', done);
+    child.stdin.on('error', () => undefined);
+    child.stdin.end(JSON.stringify({
+      magic: p2p.magic, version: q.version, targets: targets.map(t => [t.ip, t.port]),
+      concurrency: CONCURRENCY, timeout: timeout / 1000,
+    }));
+  });
+}
+
+/** the addresses of the eCash crawl (the eCash explorer's /chain/nodes), at this network's port: a LayerTwo network's
+ * nodes tell of no others @asyncSafe */
+async function $mainchainAddresses(port: number): Promise<{ ip: string; port: number }[]> {
+  if (!config.CHAIN.MAINCHAIN_API) {
+    return [];
+  }
+  try {
+    const res = await axios.get(config.CHAIN.MAINCHAIN_API.replace(/\/+$/, '') + '/api/v1/chain/nodes',
+      { timeout: 15_000, maxContentLength: 20_000_000, validateStatus: () => true });
+    const list: any[] = res.status === 200 && Array.isArray(res.data?.nodes) ? res.data.nodes : [];
+    return list.filter(n => typeof n?.ip === 'string' && net.isIP(n.ip)).slice(0, MAX_TRIES).map(n => ({ ip: n.ip as string, port }));
+  } catch {
+    return [];
+  }
+}
+
 /** @asyncSafe */
 function sleep(ms: number): Promise<void> {
   return new Promise(r => setTimeout(r, ms));
@@ -334,6 +430,7 @@ async function $crawl(): Promise<void> {
     const startTip = await $startTip();
     const queue: { ip: string; port: number }[] = [
       ...await seedAddresses(p2p.seeds, p2p.port), ...[...nodes.values()].map(n => ({ ip: n.ip, port: n.port })),
+      ...(p2p.quic ? await $mainchainAddresses(p2p.port) : []),
     ];
     const heard = new Set<string>();
     const perIp = new Map<string, number>();
@@ -358,6 +455,22 @@ async function $crawl(): Promise<void> {
       }
       return null;
     };
+    const record = (a: { ip: string; port: number }, version: Probe['version']): void => {
+      const key = addressOf(a.ip, a.port);
+      const n = nodes.get(key);
+      if (version) {
+        reached.set(key, version);
+        nodes.set(key, {
+          address: key, ip: a.ip, port: a.port, userAgent: version.userAgent, protocol: version.protocol,
+          services: version.services, height: version.height, latency: version.latency,
+          firstSeen: n?.firstSeen ?? now, lastSeen: now, lastTried: now, recent: ((n?.recent ?? '') + '1').slice(-RECENT),
+          checked: now, tip: null,
+        });
+      } else if (n) {
+        n.lastTried = now;
+        n.recent = (n.recent + '0').slice(-RECENT);
+      }
+    };
     const worker = async () => {
       // (a worker waits while others may still add addresses: up to 30 s, longer than a session)
       for (let idle = 0; idle < 60 && tried < MAX_TRIES;) {
@@ -370,26 +483,24 @@ async function $crawl(): Promise<void> {
         idle = 0;
         tried++;
         const r = await probe(a.ip, a.port, magic);
+        record(a, r.version);
         if (r.version) {
-          reached.set(addressOf(a.ip, a.port), r.version);
           queue.push(...r.addrs.slice(0, Math.max(0, MAX_QUEUE - queue.length)));
-        }
-        const key = addressOf(a.ip, a.port);
-        const n = nodes.get(key);
-        if (r.version) {
-          nodes.set(key, {
-            address: key, ip: a.ip, port: a.port, userAgent: r.version.userAgent, protocol: r.version.protocol,
-            services: r.version.services, height: r.version.height, latency: r.version.latency,
-            firstSeen: n?.firstSeen ?? now, lastSeen: now, lastTried: now, recent: ((n?.recent ?? '') + '1').slice(-RECENT),
-            checked: now, tip: null,
-          });
-        } else if (n) {
-          n.lastTried = now;
-          n.recent = (n.recent + '0').slice(-RECENT);
         }
       }
     };
-    await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+    if (p2p.quic) {
+      // every address at once (none turns up during the pass)
+      const targets: { ip: string; port: number }[] = [];
+      for (let a = next(); a && targets.length < MAX_TRIES; a = next()) {
+        targets.push(a);
+      }
+      tried = targets.length;
+      const got = await quicProbe(p2p, targets);
+      targets.forEach(a => record(a, got.get(addressOf(a.ip, a.port)) ?? null));
+    } else {
+      await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+    }
     const passTip = passTipOf(startTip, [...reached.values()].map(v => v?.height ?? 0));
     for (const k of reached.keys()) {
       nodes.get(k)!.tip = passTip;
@@ -465,7 +576,7 @@ async function $check(): Promise<void> {
   try {
     const startTip = await $startTip();
     const todo = [...nodes.values()].filter(n => n.lastSeen >= last.time);
-    const got = new Map<string, NonNullable<Probe['version']>>();
+    let got = new Map<string, NonNullable<Probe['version']>>();
     const deadline = Date.now() + CHECK_DEADLINE;
     const worker = async (): Promise<void> => {
       for (let n = todo.shift(); n && !crawlPending && Date.now() < deadline; n = todo.shift()) {
@@ -475,7 +586,11 @@ async function $check(): Promise<void> {
         }
       }
     };
-    await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+    if (p2p.quic) {
+      got = await quicProbe(p2p, todo.splice(0), CHECK_SESSION);
+    } else {
+      await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+    }
     const passTip = passTipOf(startTip, [...got.values()].map(v => v.height));
     for (const [k, v] of got) {
       const n = nodes.get(k);

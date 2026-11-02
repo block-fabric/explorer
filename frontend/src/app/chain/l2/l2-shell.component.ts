@@ -6,7 +6,7 @@ import { Observable, Subscription, combineLatest, map, startWith } from 'rxjs';
 import { SharedModule } from '@app/shared/shared.module';
 import { StateService } from '@app/services/state.service';
 import { StorageService } from '@app/services/storage.service';
-import { CHAIN_NETWORK, NETWORK_NAME, NavItem, PROFILE } from '@app/chain/profiles';
+import { CHAIN_NETWORK, MODULE, NETWORK_NAME, NavItem, PROFILE } from '@app/chain/profiles';
 import { ChainApiService } from '@app/chain/chain-api.service';
 import { ChainSwitcherComponent } from '@app/chain/components/chain-switcher/chain-switcher.component';
 import { L2_AMOUNT_MODE_KEY } from '@components/amount-selector/amount-selector.component';
@@ -52,9 +52,10 @@ export class L2ShellComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
-    // the BMM page only where the backend reads the eCash explorer's drivechain index (GET /api/v1/chain bmm)
+    // the BMM page only where the backend reads the eCash explorer's drivechain index (GET /api/v1/chain bmm); then
+    // the chain's feature pages, and its module's own (Thunder's Nodes)
     this.nav$ = combineLatest([this.api.features$, this.chainApi.chain$().pipe(startWith(null))]).pipe(
-      map(([f, c]) => [...L2_NAV.filter(n => n.path !== '/bmm' || c?.bmm !== false), ...l2FeatureNav(f, true)]),
+      map(([f, c]) => [...L2_NAV.filter(n => n.path !== '/bmm' || c?.bmm !== false), ...l2FeatureNav(f, true), ...(MODULE.nav ?? [])]),
     );
     this.networks$ = this.chainApi.chain$().pipe(
       map(c => ({ others: (c?.networks ?? []).filter(n => n.id !== (c?.network ?? CHAIN_NETWORK) && !!n.explorer) })),
