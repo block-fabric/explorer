@@ -108,7 +108,7 @@
             <span class="nm" [title]="(p.name || p.tag) + ' · coinbase tag ' + p.tag"><img class="pool-logo" [src]="logoUrl(p.logo, p.name)" (error)="hideLogo($event)" alt="">{{ p.name || p.tag }}</span>
             <span class="bar"><span class="fill" [style.width.%]="100 * p.share"></span></span>
             <span class="num">{{ pct(p.share, 0) }}</span>
-            <span class="flow" [title]="p.datum ? 'DATUM: ' + p.miners.length + (p.miners.length === 1 ? ' miner builds' : ' miners build') + ' their own templates' : ''">{{ p.blocks }} {{ p.blocks === 1 ? 'block' : 'blocks' }}@if (p.datum) {<span class="datum">DATUM</span>}</span>
+            <span class="flow">{{ p.blocks }} {{ p.blocks === 1 ? 'block' : 'blocks' }}</span>
           </div>
         </div>
         <ng-container *ngIf="m.retarget as r">

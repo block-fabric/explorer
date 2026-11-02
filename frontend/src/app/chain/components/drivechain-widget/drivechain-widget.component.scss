@@ -24,7 +24,6 @@ $row: 22px;
 .li .bar { flex: 1; .fill { display: block; } }
 .li .num { width: 60px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
 .li .flow { min-width: 64px; text-align: right; font-size: 0.75rem; white-space: nowrap; }
-.li .flow .datum { font-size: 0.6rem; letter-spacing: 0.05em; margin-left: 5px; padding: 0 5px; border-radius: 99px; color: #a9cfff; border: 1px solid #5aa6ff55; background: #5aa6ff14; }
 
 .grid { display: flex; flex-direction: column; }
 .g-row { display: flex; align-items: center; gap: 6px; height: $row; }
