@@ -39,14 +39,16 @@ const P2P: Record<string, Partial<Record<NetworkId, P2PNetwork>>> = {
       seeds: ['seed.ecash.ninja', 'seed.bip300.xyz', 'seed.ecash.drivecha.in', 'seed.ecash.zuexeuz.net', 'seed.ecash.eu.com'],
     },
   },
-  // backbone-flush src/kernel/chainparams.cpp (CEcashSidechainParams, mainnet: "flx" + 0x21)
-  flush: { ecash: { magic: '666c7821', port: 8255, seeds: ['seed.mainnet.flush.markets'] } },
+  // backbone-flush src/kernel/chainparams.cpp (CEcashSidechainParams, mainnet: "flx" + 0x21); 149.248.62.245: ours,
+  // behind a VPN (a second address of 216's), which its peers had not told of
+  flush: { ecash: { magic: '666c7821', port: 8255, seeds: ['seed.mainnet.flush.markets'], peers: ['149.248.62.245:8255'] } },
   // freebank src/chainparams.cpp (CMainParams: its own message start, beta's port and seed). The seed lists one node,
-  // which answers no getaddr: the nodes it is known to peer with are dialled too (ours on 216, on 8455 like any)
+  // which answers no getaddr: the nodes it is known to peer with are dialled too (ours on 216, and ours behind a VPN at
+  // 149.248.62.245, once 67.68.165.91)
   freebank: {
     ecash: {
       magic: 'fb4bec58', port: 8455, seeds: ['seed.ecxfreebank.com'],
-      peers: ['216.128.183.114:8455', '67.68.165.91:8455'],
+      peers: ['216.128.183.114:8455', '149.248.62.245:8455'],
     },
   },
   // backbone-thunder chains/thunder (net.cpp magic_bytes "THNDR" | Mainnet 0b101, DEFAULT_PORT 4000 + slot 9, node.cpp
