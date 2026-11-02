@@ -22,6 +22,8 @@ import { PROFILE } from './profile';
 
 interface P2PNetwork {
   magic: string; port: number; seeds: string[];
+  // nodes dialled besides the seeds' (ip:port): where the seeds and getaddr do not lead to them
+  peers?: string[];
   // LayerTwo's protocol (QUIC streams of magic || bincode, Backbone's bt/sidechain/p2p.h), not Bitcoin's: a heartbeat
   // gives a node's height and P2P version, and nothing tells of other nodes (no getaddr). The client is the chain's
   // name; a Backbone drop-in names itself in its certificate's CN ("Thunder 1.1.0 (Backbone drop-in)").
@@ -39,8 +41,14 @@ const P2P: Record<string, Partial<Record<NetworkId, P2PNetwork>>> = {
   },
   // backbone-flush src/kernel/chainparams.cpp (CEcashSidechainParams, mainnet: "flx" + 0x21)
   flush: { ecash: { magic: '666c7821', port: 8255, seeds: ['seed.mainnet.flush.markets'] } },
-  // freebank src/chainparams.cpp (CMainParams: its own message start, beta's port and seed)
-  freebank: { ecash: { magic: 'fb4bec58', port: 8455, seeds: ['seed.ecxfreebank.com'] } },
+  // freebank src/chainparams.cpp (CMainParams: its own message start, beta's port and seed). The seed lists one node,
+  // which answers no getaddr: the nodes it is known to peer with are dialled too (ours on 216 listens on 8465)
+  freebank: {
+    ecash: {
+      magic: 'fb4bec58', port: 8455, seeds: ['seed.ecxfreebank.com'],
+      peers: ['216.128.183.114:8465', '67.68.165.91:8455'],
+    },
+  },
   // backbone-thunder chains/thunder (net.cpp magic_bytes "THNDR" | Mainnet 0b101, DEFAULT_PORT 4000 + slot 9, node.cpp
   // MAINNET_SEED_PEER_ADDRS); P2P version 0.19.1. With no peer exchange, the addresses tried are also those of the
   // eCash crawl (its operators run Thunder next to eCash): CHAIN.MAINCHAIN_API's /chain/nodes.
@@ -393,6 +401,12 @@ function sleep(ms: number): Promise<void> {
 
 // --- the crawl ------------------------------------------------------------------------------------------------------
 
+/** "ip:port" or "[ip]:port" */
+function peerAddresses(peers: string[]): { ip: string; port: number }[] {
+  return peers.map(p => /^\[?([^\]]+?)\]?:(\d+)$/.exec(p)).filter((m): m is RegExpExecArray => !!m && net.isIP(m[1]) !== 0)
+    .map(m => ({ ip: m[1], port: Number(m[2]) }));
+}
+
 /** @asyncSafe */
 async function seedAddresses(seeds: string[], port: number): Promise<{ ip: string; port: number }[]> {
   const out: { ip: string; port: number }[] = [];
@@ -429,7 +443,8 @@ async function $crawl(): Promise<void> {
   try {
     const startTip = await $startTip();
     const queue: { ip: string; port: number }[] = [
-      ...await seedAddresses(p2p.seeds, p2p.port), ...[...nodes.values()].map(n => ({ ip: n.ip, port: n.port })),
+      ...await seedAddresses(p2p.seeds, p2p.port), ...peerAddresses(p2p.peers ?? []),
+      ...[...nodes.values()].map(n => ({ ip: n.ip, port: n.port })),
       ...(p2p.quic ? await $mainchainAddresses(p2p.port) : []),
     ];
     const heard = new Set<string>();
@@ -548,7 +563,7 @@ async function $crawl(): Promise<void> {
 async function $startTip(): Promise<number | null> {
   try {
     const t = await ourTip();
-    return t !== null && t > 0 ? t : null;
+    return t !== null && t >= 0 ? t : null; // (0: a chain with no block past its genesis yet, FreeBank's)
   } catch {
     return null;
   }
