@@ -478,6 +478,7 @@ def main():
         if e['kind'] == 'l2':
             posts += f"    location = {b}/api/v1/l2/tx {{ {post} proxy_pass http://127.0.0.1:{e['api_port']}/api/v1/l2/tx; }}\n"
         idx = '' if e['kind'] != 'l2' else f'''    location = {b}/api/v1/chain {{ proxy_pass http://127.0.0.1:{e['api_port']}/api/v1/chain; }}
+    location = {b}/api/v1/chain/nodes {{ proxy_pass http://127.0.0.1:{e['api_port']}/api/v1/chain/nodes; }}
     location ^~ {b}/api/v1/l2/ {{ proxy_pass http://127.0.0.1:{e['api_port']}/api/v1/l2/; }}
 '''
         sub = f'''    location = {b} {{ return 301 {b}/; }}
