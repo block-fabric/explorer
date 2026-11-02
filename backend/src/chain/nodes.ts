@@ -42,11 +42,11 @@ const P2P: Record<string, Partial<Record<NetworkId, P2PNetwork>>> = {
   // backbone-flush src/kernel/chainparams.cpp (CEcashSidechainParams, mainnet: "flx" + 0x21)
   flush: { ecash: { magic: '666c7821', port: 8255, seeds: ['seed.mainnet.flush.markets'] } },
   // freebank src/chainparams.cpp (CMainParams: its own message start, beta's port and seed). The seed lists one node,
-  // which answers no getaddr: the nodes it is known to peer with are dialled too (ours on 216 listens on 8465)
+  // which answers no getaddr: the nodes it is known to peer with are dialled too (ours on 216, on 8455 like any)
   freebank: {
     ecash: {
       magic: 'fb4bec58', port: 8455, seeds: ['seed.ecxfreebank.com'],
-      peers: ['216.128.183.114:8465', '67.68.165.91:8455'],
+      peers: ['216.128.183.114:8455', '67.68.165.91:8455'],
     },
   },
   // backbone-thunder chains/thunder (net.cpp magic_bytes "THNDR" | Mainnet 0b101, DEFAULT_PORT 4000 + slot 9, node.cpp
