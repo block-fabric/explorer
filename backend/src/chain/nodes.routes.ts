@@ -5,7 +5,7 @@ import { handleError } from '../utils/api';
 import bitcoinClient from '../api/bitcoin/bitcoin-client';
 import l2Index from './l2/index';
 import { PROFILE } from './profile';
-import { getCrawls, getNodes, isCrawling, lastChecked, p2pParams, schedule, startCrawler } from './nodes';
+import { getCrawls, getNodes, isCrawling, lastChecked, p2pParams, rdnsOf, schedule, startCrawler } from './nodes';
 
 /**
  * GET /api/v1/chain/nodes: the network's reachable nodes, as the crawler (chain/nodes.ts) last found them, and its
@@ -60,7 +60,7 @@ class NodesRoutes {
             quic: !!p2pParams()?.quic, // LayerTwo's protocol: no services, no protocol number, no addresses from the nodes
             last,
             // the nodes reached in the last crawl, and those reached in the last week that have gone since
-            nodes: getNodes().map(n => ({ ...n, up: !!last && n.lastSeen >= last.time })),
+            nodes: getNodes().map(n => ({ ...n, up: !!last && n.lastSeen >= last.time, rdns: rdnsOf(n.ip) })),
             history: crawls.map(c => ({ time: c.time, reachable: c.reachable, known: c.known })),
           },
         };

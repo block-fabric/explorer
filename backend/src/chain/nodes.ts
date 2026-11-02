@@ -119,6 +119,11 @@ export interface CrawlSnapshot {
 }
 
 const nodes = new Map<string, CrawledNode>();
+/** reverse DNS of the reachable nodes' addresses (null: none), refreshed every RDNS_TTL; not kept in the database */
+const rdns = new Map<string, { name: string | null; at: number }>();
+const RDNS_TTL = 86400;
+const RDNS_TIMEOUT = 3_000;
+const MAX_RDNS = 20_000;
 const crawls: CrawlSnapshot[] = [];
 let crawling = false;
 let checking = false;
@@ -132,6 +137,11 @@ let started = false;
 
 export function p2pParams(): P2PNetwork | null {
   return P2P[PROFILE.id]?.[NETWORK.id] ?? null;
+}
+
+/** a node address's reverse DNS name, if it has one (resolved after each crawl) */
+export function rdnsOf(ip: string): string | null {
+  return rdns.get(ip)?.name ?? null;
 }
 
 export function getNodes(): CrawledNode[] {
@@ -409,6 +419,28 @@ function peerAddresses(peers: string[]): { ip: string; port: number }[] {
     .map(m => ({ ip: m[1], port: Number(m[2]) }));
 }
 
+/** the reverse DNS of these addresses, where not looked up in the last RDNS_TTL (a PTR record's first name) @asyncSafe */
+async function $resolveNames(ips: string[], now: number): Promise<void> {
+  const resolver = new dns.promises.Resolver({ timeout: RDNS_TIMEOUT, tries: 1 });
+  const todo = [...new Set(ips)].filter(ip => now - (rdns.get(ip)?.at ?? 0) > RDNS_TTL);
+  const worker = async (): Promise<void> => {
+    for (let ip = todo.shift(); ip; ip = todo.shift()) {
+      let name: string | null = null;
+      try {
+        const n = (await resolver.reverse(ip))[0];
+        // a hostname's characters only (a PTR record is anyone's to write), 253 at most
+        name = typeof n === 'string' && /^[a-z0-9._-]{1,253}$/i.test(n) ? n.replace(/\.$/, '').toLowerCase() : null;
+      } catch { /* no PTR record, or no answer in time */ }
+      rdns.delete(ip);
+      rdns.set(ip, { name, at: now });
+    }
+  };
+  await Promise.allSettled(Array.from({ length: 16 }, worker));
+  while (rdns.size > MAX_RDNS) {
+    rdns.delete(rdns.keys().next().value as string);
+  }
+}
+
 /** @asyncSafe */
 async function seedAddresses(seeds: string[], port: number): Promise<{ ip: string; port: number }[]> {
   const out: { ip: string; port: number }[] = [];
@@ -550,6 +582,7 @@ async function $crawl(): Promise<void> {
     }
     logger.info(`Nodes crawler: ${reached.size} reachable of ${tried} addresses tried in ${snap.duration}s`, 'Nodes');
     await $save(snap);
+    await $resolveNames([...reached.keys()].map(k => nodes.get(k)?.ip).filter((ip): ip is string => !!ip), now);
   } catch (e) {
     logger.err(`Nodes crawler failed: ${e instanceof Error ? e.message : e}`, 'Nodes');
   } finally {

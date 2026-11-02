@@ -108,7 +108,7 @@ export class ChainNodesComponent implements OnInit, OnDestroy {
   private static readonly BITCOIN_ONLY = ['chain', 'services', 'protocol'];
   cols: CxColumn[] = this.allCols;
   filters: CxFilter[] = [];
-  match = (r: any, q: string) => [r.address, r.userAgent].some(x => typeof x === 'string' && x.toLowerCase().includes(q));
+  match = (r: any, q: string) => [r.address, r.rdns, r.userAgent].some(x => typeof x === 'string' && x.toLowerCase().includes(q));
   trackAddress = (r: any) => r.address;
 
   constructor(private api: ChainApiService, private cd: ChangeDetectorRef, private seo: SeoService) {}
