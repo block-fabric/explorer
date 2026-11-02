@@ -84,6 +84,8 @@ let crawlPending = false; // a crawl waits: a check takes no new node
 /** the explorer's own node's height (the module's getblockcount): the reference a node's height is compared to */
 let ourTip: () => Promise<number | null> = async () => null;
 let lastCheck: number | null = null;
+let nextCrawlAt: number | null = null; // unix seconds
+let nextCheckAt: number | null = null;
 let started = false;
 
 export function p2pParams() {
@@ -96,6 +98,11 @@ export function getNodes(): CrawledNode[] {
 
 export function getCrawls(): CrawlSnapshot[] {
   return crawls;
+}
+
+/** the schedule: when the next crawl and the next check are due (unix seconds), and their intervals */
+export function schedule(): { nextCrawl: number | null; nextCheck: number | null; crawlEvery: number; checkEvery: number } {
+  return { nextCrawl: nextCrawlAt, nextCheck: nextCheckAt, crawlEvery: CRAWL_EVERY / 1000, checkEvery: CHECK_EVERY / 1000 };
 }
 
 /** when the reachable nodes' heights were last checked (a crawl or a check between crawls) */
@@ -552,11 +559,19 @@ export function startCrawler(tip: () => Promise<number | null>): void {
       logger.warn(`Nodes crawler: could not load the known nodes: ${e instanceof Error ? e.message : e}`, 'Nodes');
     }
     /** @asyncSafe */
+    const at = (ms: number): number => Math.round((Date.now() + ms) / 1000);
     const run = async (): Promise<void> => {
+      nextCrawlAt = null; // (crawling)
       await $crawl();
       setTimeout(run, CRAWL_EVERY);
+      nextCrawlAt = at(CRAWL_EVERY);
     };
     setTimeout(run, FIRST_CRAWL);
-    setInterval(() => void $check(), CHECK_EVERY); // (skipped while a crawl runs)
+    nextCrawlAt = at(FIRST_CRAWL);
+    setInterval(() => {
+      nextCheckAt = at(CHECK_EVERY);
+      void $check(); // (skipped while a crawl runs)
+    }, CHECK_EVERY);
+    nextCheckAt = at(CHECK_EVERY);
   })();
 }

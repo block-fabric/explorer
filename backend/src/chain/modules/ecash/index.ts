@@ -1,5 +1,5 @@
 import { ChainModule } from '../../module';
-import { getCrawls, getNodes, isCrawling, lastChecked, p2pParams, startCrawler } from '../../nodes';
+import { getCrawls, getNodes, isCrawling, lastChecked, p2pParams, schedule, startCrawler } from '../../nodes';
 
 /**
  * eCash (ECX), the mainchain: a fork of Bitcoin with BIP300/BIP301 drivechains, enforced by a bip300301_enforcer next
@@ -17,13 +17,14 @@ const ecash: ChainModule = {
       if (!p2pParams()) {
         return ctx.fail(req, res, 404, 'No node crawler on this network');
       }
-      res.json(await ctx.cached('nodes', 30_000, /** @asyncUnsafe: cached() passes its errors on */ async () => {
+      res.json(await ctx.cached('nodes', 10_000, /** @asyncUnsafe: cached() passes its errors on */ async () => {
         const tip = await ctx.cached('blockcount', 10_000, () => ctx.node.call<number>('getblockcount').catch(() => null));
         const crawls = getCrawls();
         const last = crawls[crawls.length - 1] ?? null;
         return {
           tip,
           crawling: isCrawling(),
+          schedule: schedule(),
           checked: lastChecked(), // the heights' time (a crawl, or a check every 5 minutes between crawls)
           port: p2pParams()?.port,
           last,

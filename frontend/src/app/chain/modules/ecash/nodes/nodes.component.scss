@@ -11,8 +11,21 @@ h5 small { color: var(--cx-ink-3); font-size: 0.75rem; font-weight: normal; marg
 .muted { color: var(--cx-ink-3); }
 .pos { color: #3bd16f; } .neg { color: #ff6b6b; }
 .k-value small { font-size: 0.9rem; color: var(--cx-ink-3); font-weight: normal; }
-.row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; > * { min-width: 0; } }
-@media (max-width: 900px) { .row-2 { grid-template-columns: 1fr; } }
+.row-2 { display: grid; grid-template-columns: 1.25fr 0.8fr 1.45fr; gap: 12px; margin-top: 12px; > * { min-width: 0; } }
+@media (max-width: 1100px) { .row-2 { grid-template-columns: 1fr 1fr; } .row-2 > :last-child { grid-column: span 2; } }
+@media (max-width: 700px) { .row-2 { grid-template-columns: 1fr; } .row-2 > :last-child { grid-column: auto; } }
+
+// the crawler's countdowns
+.sched { display: flex; flex-direction: column; }
+.cd { margin-top: 12px; & + .cd { margin-top: 18px; padding-top: 14px; border-top: 1px solid #ffffff12; } }
+.cd-l { font-size: 0.74rem; color: var(--cx-ink-3); }
+.cd-v { font-size: 1.9rem; font-weight: 600; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1.2; margin: 2px 0 8px;
+  &.sm { font-size: 1.25rem; } &.live { font-size: 1.25rem; color: var(--accent); } }
+.cd-s { font-size: 0.72rem; color: var(--cx-ink-3); margin-top: 8px; line-height: 1.4; }
+.cd .bar .fill { transition: width 1s linear; }
+.cd .bar.thin { height: 4px; }
+.cd .bar.busy { overflow: hidden; .fill { width: 35%; animation: nd-busy 1.4s ease-in-out infinite; } }
+@keyframes nd-busy { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
 .chart { height: 240px; width: 100%; }
 .chart-empty { height: 240px; display: flex; align-items: center; justify-content: center; margin: 0; font-size: 0.85rem; }
 
@@ -35,8 +48,8 @@ h5 small { color: var(--cx-ink-3); font-size: 0.75rem; font-weight: normal; marg
 .note { font-size: 0.78rem; margin-top: 10px; }
 
 // the tiles: four a row (two on a phone)
-.nd-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-@media (max-width: 900px) { .nd-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.kpis.nd-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 900px) { .kpis.nd-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .nd-kpis .k-value small { margin-left: 2px; }
 .row-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
 @media (max-width: 900px) { .row-3 { grid-template-columns: 1fr; } }

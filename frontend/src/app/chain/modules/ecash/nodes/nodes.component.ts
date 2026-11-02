@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
-import { Subscription, catchError, of, switchMap, timer } from 'rxjs';
+import { Observable, Subscription, catchError, map, of, switchMap, timer } from 'rxjs';
 import { ChainApiService } from '@app/chain/chain-api.service';
 import { PROFILE } from '@app/chain/profiles';
 import { CxColumn, CxFilter } from '@app/chain/components/chain-table/chain-table.component';
@@ -89,6 +89,8 @@ export class ChainNodesComponent implements OnInit, OnDestroy {
   breakdowns: { title: string; sub: string; rows: { label: string; count: number; share: number; color: string; title?: string }[] }[] = [];
   chart: any = null;
   chartInitOptions = { renderer: 'svg' };
+  /** the time, every second (the countdowns) */
+  clock$: Observable<number> = timer(0, 1000).pipe(map(() => Date.now() / 1000));
   private sub: Subscription;
 
   cols: CxColumn[] = [
@@ -111,7 +113,7 @@ export class ChainNodesComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.seo.setTitle('Nodes');
-    this.sub = timer(0, 60_000).pipe(
+    this.sub = timer(0, 20_000).pipe(
       switchMap(() => this.api.get<any>('chain/nodes').pipe(catchError((e) => { this.error = e?.error?.error || 'unavailable'; return of(null); }))),
     ).subscribe((d) => {
       if (d) { this.data = d; this.error = null; this.build(d); }
@@ -202,6 +204,16 @@ export class ChainNodesComponent implements OnInit, OnDestroy {
       cells.push(part.length ? [...part].filter(c => c === '1').length / part.length : null);
     }
     return cells;
+  }
+
+  /** a countdown to `at` (unix seconds), as m:ss; and how far the interval before it has run, 0..1 */
+  countdown(at: number | null, now: number): string {
+    const t = Math.max(0, Math.round((at ?? now) - now));
+    return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
+  }
+
+  elapsed(at: number | null, every: number, now: number): number {
+    return at ? Math.min(1, Math.max(0, 1 - (at - now) / every)) : 1;
   }
 
   cellColor(x: number | null): string {
