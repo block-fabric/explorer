@@ -7,23 +7,47 @@ import { SeoService } from '@app/services/seo.service';
 
 const PALETTE = [PROFILE.color, '#5aa6ff', '#ff8a3d', '#f26b9c', '#a585ff', '#2bc79a', '#f5b83d', '#9aa4b2'];
 
-/** the service bits a node advertises in its version message, as the table shows them */
+/** the service bits a node advertises in its version message, as the table shows them (its chain: chainKind) */
 const SERVICES: { bit: number; label: string; title: string }[] = [
-  { bit: 1, label: 'full', title: 'NODE_NETWORK: serves the whole chain' },
-  { bit: 1024, label: 'limited', title: 'NODE_NETWORK_LIMITED: serves the last 288 blocks (a pruned node, unless it is full too)' },
   { bit: 8, label: 'witness', title: 'NODE_WITNESS' },
   { bit: 4, label: 'bloom', title: 'NODE_BLOOM: BIP37 filters' },
   { bit: 64, label: 'filters', title: 'NODE_COMPACT_FILTERS: BIP157/158' },
   { bit: 2048, label: 'v2', title: 'NODE_P2P_V2: BIP324 encrypted transport' },
 ];
+const NODE_NETWORK = 1;
+const NODE_NETWORK_LIMITED = 1024;
 
-/** a user agent, "/eCash Satoshi:1.2.0(Bitcoin Core 32.1.0; BitWindow-0.2)/": its client, version and comments */
-export function parseAgent(ua: string | null): { client: string; version: string; comments: string[]; label: string } {
-  const m = (ua ?? '').match(/^\/?([^:/(]+)(?::([^(/]+))?(?:\(([^)]*)\))?/);
-  const client = m?.[1]?.trim() || ua || 'unknown';
-  const version = m?.[2]?.trim() || '';
-  const comments = (m?.[3] ?? '').split(';').map(s => s.trim()).filter(Boolean);
-  return { client, version, comments, label: version ? `${client} ${version}` : client };
+export interface NodeAgent {
+  /** "Backbone 0.2.5", "eCash 1.2.0" (eCash's client calls itself "eCash Satoshi") */
+  node: string;
+  backbone: boolean;
+  comments: string[];
+  /** the Node column's order: Backbone first (the network's newest client), newest first; then the other clients from
+   * the newest Bitcoin Core they build on; the unknown last (Backbone's app, src/webui/app/src/lib/peers.ts) */
+  order: number;
+}
+
+/** a user agent, "/eCash Satoshi:1.2.0(Bitcoin Core 32.1.0; BitWindow-0.2)/": its node, comments and order */
+export function parseAgent(ua: string | null): NodeAgent {
+  const m = /^\/?([^:/()]+):([0-9][0-9.]*)(?:\(([^)]*)\))?/.exec(ua ?? '');
+  if (!m) {
+    return { node: (ua ?? '').replace(/^\/|\/$/g, '') || 'unknown', backbone: false, comments: [], order: 3e9 };
+  }
+  const product = m[1].trim();
+  const backbone = /\bBackbone\b/.test(product);
+  const comments = (m[3] ?? '').split(';').map(c => c.trim()).filter(Boolean);
+  const core = /Bitcoin Core ([0-9][0-9.]*)/.exec(m[3] ?? '')?.[1];
+  const [a = 0, b = 0, c = 0] = (core ?? m[2]).split('.').map(x => Number(x) || 0);
+  const newer = Math.min(a, 999) * 1e6 + Math.min(b, 999) * 1e3 + Math.min(c, 999);
+  const name = backbone ? 'Backbone' : product.replace(/^eCash Satoshi$/, 'eCash');
+  return { node: `${name} ${m[2]}`, backbone, comments, order: (backbone ? 1e9 : 2e9) - newer };
+}
+
+/** whether a node keeps the whole chain: Full (NODE_NETWORK), Pruned (NODE_NETWORK_LIMITED alone: the last 288
+ * blocks), or No blocks */
+export function chainKind(services: string | null): 'Full' | 'Pruned' | 'No blocks' {
+  const v = BigInt(services || '0');
+  return (v & BigInt(NODE_NETWORK)) !== BigInt(0) ? 'Full' : (v & BigInt(NODE_NETWORK_LIMITED)) !== BigInt(0) ? 'Pruned' : 'No blocks';
 }
 
 /**
@@ -51,7 +75,8 @@ export class ChainNodesComponent implements OnInit, OnDestroy {
 
   cols: CxColumn[] = [
     { key: 'address', label: 'Address', sort: r => r.ip },
-    { key: 'agent', label: 'Client', sort: r => r.agent.label },
+    { key: 'node', label: 'Node', sort: r => r.agent.order, title: 'Backbone first, newest first; then the clients from the newest Bitcoin Core they build on' },
+    { key: 'chain', label: 'Chain', sort: r => ['Full', 'Pruned', 'No blocks'].indexOf(r.chain), title: 'Full: serves every block; Pruned: the last 288 only' },
     { key: 'height', label: 'Height', align: 'right', sort: true },
     { key: 'services', label: 'Services', hide: 'md' },
     { key: 'protocol', label: 'Protocol', align: 'right', sort: true, hide: 'lg' },
@@ -83,16 +108,17 @@ export class ChainNodesComponent implements OnInit, OnDestroy {
     this.rows = d.nodes.map((n: any) => ({
       ...n,
       agent: parseAgent(n.userAgent),
+      chain: chainKind(n.services),
       behind: n.height !== null && tip ? tip - n.height : null,
       uptime: n.recent ? [...n.recent].filter(c => c === '1').length / n.recent.length : 0,
-    })).sort((a: any, b: any) => Number(b.up) - Number(a.up) || b.lastSeen - a.lastSeen);
+    })).sort((a: any, b: any) => a.agent.order - b.agent.order || Number(b.up) - Number(a.up) || b.lastSeen - a.lastSeen);
     const up = this.rows.filter(r => r.up);
     // a node's height is the one it had when the crawler reached it: synced, within 2 blocks of the tip then
     this.synced = up.filter(r => r.behind !== null && r.behind <= 2).length;
 
     const byVersion = new Map<string, number>();
     for (const r of up) {
-      byVersion.set(r.agent.label, (byVersion.get(r.agent.label) ?? 0) + 1);
+      byVersion.set(r.agent.node, (byVersion.get(r.agent.node) ?? 0) + 1);
     }
     this.versions = [...byVersion.entries()].sort((a, b) => b[1] - a[1])
       .map(([label, count], i) => ({ label, count, share: up.length ? count / up.length : 0, color: PALETTE[i % PALETTE.length] }));
@@ -100,7 +126,8 @@ export class ChainNodesComponent implements OnInit, OnDestroy {
 
     this.filters = [
       { label: 'Status', options: [{ label: 'reachable', test: r => r.up }, { label: 'gone', test: r => !r.up }] },
-      { label: 'Version', options: this.versions.map(v => ({ label: v.label, test: (r: any) => r.agent.label === v.label })) },
+      { label: 'Chain', options: ['Full', 'Pruned', 'No blocks'].map(k => ({ label: k, test: (r: any) => r.chain === k })) },
+      { label: 'Node', options: this.versions.map(v => ({ label: v.label, test: (r: any) => r.agent.node === v.label })) },
     ];
     this.chart = this.historyChart(d.history ?? []);
   }
@@ -116,9 +143,7 @@ export class ChainNodesComponent implements OnInit, OnDestroy {
   services(s: string | null): { label: string; title: string }[] {
     if (!s) { return []; }
     const v = BigInt(s);
-    const on = SERVICES.filter(x => (v & BigInt(x.bit)) !== BigInt(0));
-    // full and limited: a full node (limited is its promise for the recent blocks only)
-    return on.some(x => x.bit === 1) ? on.filter(x => x.bit !== 1024) : on;
+    return SERVICES.filter(x => (v & BigInt(x.bit)) !== BigInt(0));
   }
 
   pct(x: number, d = 0): string { return ((x || 0) * 100).toFixed(d) + '%'; }

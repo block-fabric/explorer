@@ -41,7 +41,7 @@
 
     <div class="row-2">
       <div class="box">
-        <h5>Versions <small>the reachable nodes by client and version</small></h5>
+        <h5>Versions <small>the reachable nodes by node and version</small></h5>
         <div class="vers">
           @for (v of versions; track v.label) {
             <div class="ver">
@@ -67,13 +67,17 @@
       <h2 class="nd-h2">Nodes <span class="sub2">reachable in the last crawl, then those reached in the last week that have since gone</span></h2>
       <div class="box table-box">
         <app-chain-table [rows]="rows" [columns]="cols" [filters]="filters" [search]="match" searchPlaceholder="Address, client…"
-            [trackBy]="trackAddress" [pageSize]="50" empty="No node reached yet.">
+            [trackBy]="trackAddress" [pageSize]="50" sort="node" [asc]="true" empty="No node reached yet.">
           <ng-template cxCell="address" let-r>
             <span class="addr"><i class="st" [class.up]="r.up" [title]="r.up ? 'reachable in the last crawl' : 'not reachable in the last crawl'"></i>{{ r.address }}</span>
           </ng-template>
-          <ng-template cxCell="agent" let-r>
-            <span class="agent" [title]="r.userAgent">{{ r.agent.label }}</span>
+          <ng-template cxCell="node" let-r>
+            <span class="agent" [class.bb]="r.agent.backbone" [title]="r.userAgent">{{ r.agent.node }}</span>
             @for (c of r.agent.comments; track $index) {<span class="cmt">{{ c }}</span>}
+          </ng-template>
+          <ng-template cxCell="chain" let-r>
+            <span class="pill" [class.ok]="r.chain === 'Full'" [class.warn]="r.chain === 'Pruned'"
+              [title]="r.chain === 'Full' ? 'serves every block (NODE_NETWORK)' : r.chain === 'Pruned' ? 'serves the last 288 blocks (NODE_NETWORK_LIMITED)' : 'serves no blocks'">{{ r.chain }}</span>
           </ng-template>
           <ng-template cxCell="height" let-r>
             @if (r.height !== null) {
