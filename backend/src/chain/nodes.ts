@@ -331,6 +331,7 @@ async function $crawl(): Promise<void> {
   const now = Math.floor(t0 / 1000);
   const magic = Buffer.from(p2p.magic, 'hex');
   try {
+    const startTip = await $startTip();
     const queue: { ip: string; port: number }[] = [
       ...await seedAddresses(p2p.seeds, p2p.port), ...[...nodes.values()].map(n => ({ ip: n.ip, port: n.port })),
     ];
@@ -389,7 +390,7 @@ async function $crawl(): Promise<void> {
       }
     };
     await Promise.all(Array.from({ length: CONCURRENCY }, worker));
-    const passTip = await $passTip([...reached.values()].map(v => v?.height ?? 0));
+    const passTip = passTipOf(startTip, [...reached.values()].map(v => v?.height ?? 0));
     for (const k of reached.keys()) {
       nodes.get(k)!.tip = passTip;
     }
@@ -429,17 +430,24 @@ async function $crawl(): Promise<void> {
 }
 
 /**
- * The tip at the end of a pass: the explorer's node's height; without it, the highest height at least TIP_QUORUM of
- * the pass's nodes report (null with fewer)
+ * The explorer's node's height, read as a pass starts (a node reached later in the pass, on a chain of 15 s blocks
+ * such as Flush's, is at least there: one read after the pass would count it behind); null if it does not answer
  * @asyncSafe
  */
-async function $passTip(heights: number[]): Promise<number | null> {
+async function $startTip(): Promise<number | null> {
   try {
     const t = await ourTip();
-    if (t !== null && t > 0) {
-      return t;
-    }
-  } catch { /* the node is not answering: the nodes' own heights */ }
+    return t !== null && t > 0 ? t : null;
+  } catch {
+    return null;
+  }
+}
+
+/** the tip of a pass: its start's (the node's), else the highest height at least TIP_QUORUM of its nodes report */
+function passTipOf(start: number | null, heights: number[]): number | null {
+  if (start !== null) {
+    return start;
+  }
   const h = heights.filter(x => x > 0).sort((a, b) => b - a);
   return h.length >= TIP_QUORUM ? h[TIP_QUORUM - 1] : null;
 }
@@ -455,6 +463,7 @@ async function $check(): Promise<void> {
   const now = Math.floor(Date.now() / 1000);
   const magic = Buffer.from(p2p.magic, 'hex');
   try {
+    const startTip = await $startTip();
     const todo = [...nodes.values()].filter(n => n.lastSeen >= last.time);
     const got = new Map<string, NonNullable<Probe['version']>>();
     const deadline = Date.now() + CHECK_DEADLINE;
@@ -467,7 +476,7 @@ async function $check(): Promise<void> {
       }
     };
     await Promise.all(Array.from({ length: CONCURRENCY }, worker));
-    const passTip = await $passTip([...got.values()].map(v => v.height));
+    const passTip = passTipOf(startTip, [...got.values()].map(v => v.height));
     for (const [k, v] of got) {
       const n = nodes.get(k);
       if (n) {
