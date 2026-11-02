@@ -3,7 +3,7 @@
     <div>
       <h1><app-svg-images name="nav-network" width="28" height="28" class="nd-icon"></app-svg-images> Nodes</h1>
       <div class="nd-sub">
-        The reachable {{ profile.name }} nodes: the explorer crawls the P2P network (port {{ data?.port ?? 8533 }}) every 30 minutes, from the DNS
+        The reachable {{ profile.name }} nodes: the explorer crawls the P2P network (port {{ data?.port ?? 8533 }}) every 10 minutes, from the DNS
         seeds and the addresses the nodes it reaches tell it of.
         @if (data?.last; as c) {<span class="ms-1">Last crawl <app-time kind="since" [time]="c.time" [fastRender]="true"></app-time>, {{ c.tried | number }} addresses tried in {{ c.duration }} s.</span>}
         @if (data?.crawling) {<span class="ms-1">Crawling now…</span>}
@@ -25,7 +25,7 @@
       <div class="kpi">
         <div class="k-label">At the tip</div>
         <div class="k-value">{{ synced | number }}<small> / {{ reachable() | number }}</small></div>
-        <div class="k-sub">within 2 blocks of the tip when last checked</div>
+        <div class="k-sub">within 2 blocks of the tip in the last crawl</div>
       </div>
       <div class="kpi">
         <div class="k-label">Most run version</div>
@@ -66,7 +66,7 @@
     <section class="nd-sec">
       <h2 class="nd-h2">Nodes <span class="sub2">reachable in the last crawl, then those reached in the last week that have since gone</span></h2>
       <div class="asof">
-        <span>Status, versions and uptime: last crawl <app-time kind="since" [time]="data.last.time" [fastRender]="true"></app-time> (every 30 min)</span>
+        <span>Status, versions and uptime: last crawl <app-time kind="since" [time]="data.last.time" [fastRender]="true"></app-time> (every 10 min)</span>
         @if (data.checked) {<span>Heights: checked <app-time kind="since" [time]="data.checked" [fastRender]="true"></app-time> (every 5 min)</span>}
       </div>
       <div class="box table-box">
@@ -76,8 +76,7 @@
             <span class="addr"><i class="st" [class.up]="r.up" [title]="r.up ? 'reachable in the last crawl' : 'not reachable in the last crawl'"></i><span [title]="r.address">{{ r.short }}</span></span>
           </ng-template>
           <ng-template cxCell="node" let-r>
-            <span class="agent" [class.bb]="r.agent.backbone" [title]="r.userAgent">{{ r.agent.node }}</span>
-            @for (c of r.agent.comments; track $index) {<span class="cmt">{{ c }}</span>}
+            <span [title]="r.userAgent"><span class="agent">{{ r.agent.node }}</span>@if (r.note) {<span class="cmt">{{ r.note }}</span>}</span>
           </ng-template>
           <ng-template cxCell="chain" let-r>
             <span class="pill" [class.ok]="r.chain === 'Full'" [class.warn]="r.chain === 'Pruned'"

@@ -24,9 +24,11 @@ const P2P: Partial<Record<NetworkId, { magic: string; port: number; seeds: strin
   },
 };
 
-const CRAWL_EVERY = 30 * 60_000;
+const CRAWL_EVERY = 10 * 60_000;
 const CHECK_EVERY = 5 * 60_000; // between crawls, the reachable nodes' heights are checked again (a handshake, no getaddr)
-const TIP_QUORUM = 3; // the tip of a pass: the highest height at least this many nodes report (no single node sets it)
+const TIP_QUORUM = 3; // without the explorer's node: the highest height at least this many nodes report (no single node sets it)
+const CHECK_DEADLINE = 60_000; // a check takes no new node after this
+const CHECK_SESSION = 10_000; // a check's handshake, at most
 const FIRST_CRAWL = 60_000;
 const CONCURRENCY = 32;
 const CONNECT_TIMEOUT = 8_000;
@@ -42,7 +44,7 @@ const MAX_VERSIONS = 30; // user agents per crawl snapshot; the rest count as "o
 const PER_IP = 1;
 const PER_SUBNET = 8;
 const MIN_PORT = 1024;
-const RECENT = 48; // the crawls a node's uptime is over (a day)
+const RECENT = 144; // the crawls a node's uptime is over (a day)
 const FORGET_UNREACHABLE = 7 * 86400; // a node never reached, or not since, is forgotten after this many seconds
 const PROTOCOL_VERSION = 70016;
 const USER_AGENT = '/eCash-Explorer-Crawler:1.0/';
@@ -61,7 +63,7 @@ export interface CrawledNode {
   lastTried: number;
   recent: string; // the last RECENT crawls, newest last: 1 reached, 0 not
   checked: number | null; // when its height was read (a crawl or a check)
-  tip: number | null; // the network's tip then: the height of the pass the node was checked in (TIP_QUORUM)
+  tip: number | null; // the tip then: the explorer's node's height at the end of the pass the node was checked in
 }
 
 export interface CrawlSnapshot {
@@ -70,6 +72,7 @@ export interface CrawlSnapshot {
   tried: number;
   reachable: number;
   known: number; // addresses heard of in this crawl
+  atTip: number | null; // reachable nodes within 2 blocks of the tip when reached
   versions: Record<string, number>; // user agent: nodes
 }
 
@@ -77,6 +80,9 @@ const nodes = new Map<string, CrawledNode>();
 const crawls: CrawlSnapshot[] = [];
 let crawling = false;
 let checking = false;
+let crawlPending = false; // a crawl waits: a check takes no new node
+/** the explorer's own node's height (the module's getblockcount): the reference a node's height is compared to */
+let ourTip: () => Promise<number | null> = async () => null;
 let lastCheck: number | null = null;
 let started = false;
 
@@ -193,7 +199,7 @@ interface Probe {
 }
 
 /** a handshake with one node, and the addresses it answers getaddr with */
-function probe(ip: string, port: number, magic: Buffer, addrs = true): Promise<Probe> {
+function probe(ip: string, port: number, magic: Buffer, addrs = true, session = SESSION_TIMEOUT): Promise<Probe> {
   return new Promise((resolve) => {
     const res: Probe = { version: null, addrs: [] };
     const t0 = Date.now();
@@ -208,7 +214,7 @@ function probe(ip: string, port: number, magic: Buffer, addrs = true): Promise<P
         resolve(res);
       }
     };
-    const timer = setTimeout(finish, SESSION_TIMEOUT);
+    const timer = setTimeout(finish, session);
     sock.setTimeout(CONNECT_TIMEOUT, finish);
     sock.on('error', finish);
     sock.on('close', finish);
@@ -289,8 +295,13 @@ async function seedAddresses(seeds: string[], port: number): Promise<{ ip: strin
 /** @asyncSafe */
 async function $crawl(): Promise<void> {
   const p2p = p2pParams();
-  for (let i = 0; checking && i < 120; i++) {
-    await sleep(500); // a check finishes first (a minute at most)
+  crawlPending = true;
+  for (let i = 0; checking && i < 180; i++) {
+    await sleep(500); // a check winds down first (its handshakes in flight: CHECK_SESSION)
+  }
+  crawlPending = false;
+  if (checking) {
+    logger.warn('Nodes crawler: a check is still running, this crawl is skipped', 'Nodes');
   }
   if (!p2p || crawling || checking) {
     return;
@@ -358,7 +369,7 @@ async function $crawl(): Promise<void> {
       }
     };
     await Promise.all(Array.from({ length: CONCURRENCY }, worker));
-    const passTip = tipOf([...reached.values()].map(v => v?.height ?? 0));
+    const passTip = await $passTip([...reached.values()].map(v => v?.height ?? 0));
     for (const k of reached.keys()) {
       nodes.get(k)!.tip = passTip;
     }
@@ -382,7 +393,8 @@ async function $crawl(): Promise<void> {
       const k = i < MAX_VERSIONS ? ua : 'other';
       versions[k] = (versions[k] ?? 0) + c;
     });
-    const snap: CrawlSnapshot = { time: now, duration: Math.round((Date.now() - t0) / 1000), tried, reachable: reached.size, known: heard.size, versions };
+    const atTip = passTip === null ? null : [...reached.values()].filter(v => (v?.height ?? 0) >= passTip - 2).length;
+    const snap: CrawlSnapshot = { time: now, duration: Math.round((Date.now() - t0) / 1000), tried, reachable: reached.size, known: heard.size, atTip, versions };
     crawls.push(snap);
     while (crawls.length && crawls[0].time < now - 90 * 86400) {
       crawls.shift();
@@ -396,10 +408,20 @@ async function $crawl(): Promise<void> {
   }
 }
 
-/** the tip of a pass: the highest height at least TIP_QUORUM of its nodes are at or above; null with fewer nodes */
-function tipOf(heights: number[]): number | null {
+/**
+ * The tip at the end of a pass: the explorer's node's height; without it, the highest height at least TIP_QUORUM of
+ * the pass's nodes report (null with fewer)
+ * @asyncSafe
+ */
+async function $passTip(heights: number[]): Promise<number | null> {
+  try {
+    const t = await ourTip();
+    if (t !== null && t > 0) {
+      return t;
+    }
+  } catch { /* the node is not answering: the nodes' own heights */ }
   const h = heights.filter(x => x > 0).sort((a, b) => b - a);
-  return h.length >= TIP_QUORUM ? h[TIP_QUORUM - 1] : h[h.length - 1] ?? null;
+  return h.length >= TIP_QUORUM ? h[TIP_QUORUM - 1] : null;
 }
 
 /** between crawls: the heights of the nodes reachable in the last crawl, again (a handshake each) @asyncSafe */
@@ -415,16 +437,17 @@ async function $check(): Promise<void> {
   try {
     const todo = [...nodes.values()].filter(n => n.lastSeen >= last.time);
     const got = new Map<string, NonNullable<Probe['version']>>();
+    const deadline = Date.now() + CHECK_DEADLINE;
     const worker = async (): Promise<void> => {
-      for (let n = todo.shift(); n; n = todo.shift()) {
-        const r = await probe(n.ip, n.port, magic, false);
+      for (let n = todo.shift(); n && !crawlPending && Date.now() < deadline; n = todo.shift()) {
+        const r = await probe(n.ip, n.port, magic, false, CHECK_SESSION);
         if (r.version) {
           got.set(n.address, r.version);
         }
       }
     };
     await Promise.all(Array.from({ length: CONCURRENCY }, worker));
-    const passTip = tipOf([...got.values()].map(v => v.height));
+    const passTip = await $passTip([...got.values()].map(v => v.height));
     for (const [k, v] of got) {
       const n = nodes.get(k);
       if (n) {
@@ -451,11 +474,13 @@ async function $ensureTables(): Promise<void> {
     protocol int NULL, services varchar(24) NULL, height int NULL, latency int NULL, first_seen int unsigned NOT NULL,
     last_seen int unsigned NOT NULL, last_tried int unsigned NOT NULL, recent varchar(${RECENT}) NOT NULL DEFAULT ''
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
-  await DB.query('ALTER TABLE chain_nodes ADD COLUMN IF NOT EXISTS checked int unsigned NULL, ADD COLUMN IF NOT EXISTS tip int NULL');
+  await DB.query(`ALTER TABLE chain_nodes ADD COLUMN IF NOT EXISTS checked int unsigned NULL, ADD COLUMN IF NOT EXISTS tip int NULL,
+    MODIFY recent varchar(${RECENT}) NOT NULL DEFAULT ''`);
   await DB.query(`CREATE TABLE IF NOT EXISTS chain_nodes_crawls (
     time int unsigned NOT NULL PRIMARY KEY, duration int unsigned NOT NULL, tried int unsigned NOT NULL,
     reachable int unsigned NOT NULL, known int unsigned NOT NULL, versions json NOT NULL
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+  await DB.query('ALTER TABLE chain_nodes_crawls ADD COLUMN IF NOT EXISTS at_tip int unsigned NULL');
 }
 
 /** @asyncUnsafe */
@@ -474,7 +499,8 @@ async function $load(): Promise<void> {
   }
   const [snaps]: any = await DB.query('SELECT * FROM chain_nodes_crawls WHERE time >= UNIX_TIMESTAMP() - 90 * 86400 ORDER BY time');
   for (const s of snaps) {
-    crawls.push({ ...s, versions: typeof s.versions === 'string' ? JSON.parse(s.versions) : s.versions });
+    crawls.push({ time: s.time, duration: s.duration, tried: s.tried, reachable: s.reachable, known: s.known, atTip: s.at_tip ?? null,
+      versions: typeof s.versions === 'string' ? JSON.parse(s.versions) : s.versions });
   }
   lastCheck = Math.max(0, ...[...nodes.values()].map(n => n.checked ?? 0)) || null;
   logger.info(`Nodes crawler: ${nodes.size} known nodes, ${crawls.length} crawls loaded`, 'Nodes');
@@ -487,8 +513,8 @@ async function $save(snap: CrawlSnapshot): Promise<void> {
   }
   await DB.query('DELETE FROM chain_nodes WHERE last_seen < ?', [snap.time - FORGET_UNREACHABLE]);
   await $saveNodes();
-  await DB.query('INSERT INTO chain_nodes_crawls (time, duration, tried, reachable, known, versions) VALUES (?,?,?,?,?,?)',
-    [snap.time, snap.duration, snap.tried, snap.reachable, snap.known, JSON.stringify(snap.versions)]);
+  await DB.query('INSERT INTO chain_nodes_crawls (time, duration, tried, reachable, known, at_tip, versions) VALUES (?,?,?,?,?,?,?)',
+    [snap.time, snap.duration, snap.tried, snap.reachable, snap.known, snap.atTip, JSON.stringify(snap.versions)]);
   await DB.query('DELETE FROM chain_nodes_crawls WHERE time < ?', [snap.time - 90 * 86400]);
 }
 
@@ -512,12 +538,13 @@ async function $saveNodes(): Promise<void> {
 
 // --- the schedule ---------------------------------------------------------------------------------------------------
 
-/** start crawling this network, if it has a P2P network to crawl */
-export function startCrawler(): void {
+/** start crawling this network, if it has a P2P network to crawl; `tip`: the explorer's node's height */
+export function startCrawler(tip: () => Promise<number | null>): void {
   if (started || !p2pParams()) {
     return;
   }
   started = true;
+  ourTip = tip;
   void (/** @asyncSafe */ async () => {
     try {
       await $load();

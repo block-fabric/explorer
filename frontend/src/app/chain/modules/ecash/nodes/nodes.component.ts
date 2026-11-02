@@ -52,6 +52,12 @@ export function shortAddress(ip: string, port: number): string {
   return g.length > 3 ? `[${g[0]}:${g[1]}:…:${g[g.length - 1]}]:${port}` : `[${ip}]:${port}`;
 }
 
+/** a user agent's comments, as the Node column's small print: about "Bitcoin Core 32.1.0" long (the whole on hover) */
+export function shortNote(comments: string[], max = 22): string {
+  const t = comments.join('; ');
+  return t.length > max ? t.slice(0, max - 1).trimEnd() + '…' : t;
+}
+
 /** whether a node keeps the whole chain: Full (NODE_NETWORK), Pruned (NODE_NETWORK_LIMITED alone: the last 288
  * blocks), or No blocks */
 export function chainKind(services: string | null): 'Full' | 'Pruned' | 'No blocks' {
@@ -90,7 +96,7 @@ export class ChainNodesComponent implements OnInit, OnDestroy {
     { key: 'services', label: 'Services', hide: 'md' },
     { key: 'protocol', label: 'Protocol', align: 'right', sort: true, hide: 'lg' },
     { key: 'latency', label: 'Latency', align: 'right', sort: true, hide: 'sm', title: 'the handshake, from the explorer\'s server' },
-    { key: 'uptime', label: 'Uptime', align: 'right', sort: true, title: 'reached in the crawls of the last day (one every 30 minutes)' },
+    { key: 'uptime', label: 'Uptime', align: 'right', sort: true, title: 'reached in the crawls of the last day (one every 10 minutes)' },
     { key: 'firstSeen', label: 'First seen', align: 'right', sort: true, hide: 'md' },
     { key: 'lastSeen', label: 'Last seen', align: 'right', sort: true },
   ];
@@ -121,11 +127,12 @@ export class ChainNodesComponent implements OnInit, OnDestroy {
       // behind the tip when its height was read (a crawl, or a check between crawls), not the tip now
       behind: n.height !== null && (n.tip ?? tip) ? Math.max(0, (n.tip ?? tip) - n.height) : null,
       short: shortAddress(n.ip, n.port),
+      note: shortNote(parseAgent(n.userAgent).comments),
       uptime: n.recent ? [...n.recent].filter(c => c === '1').length / n.recent.length : 0,
     })).sort((a: any, b: any) => a.agent.order - b.agent.order || Number(b.up) - Number(a.up) || b.lastSeen - a.lastSeen);
     const up = this.rows.filter(r => r.up);
-    // a node's height is the one it had when the crawler reached it: synced, within 2 blocks of the tip then
-    this.synced = up.filter(r => r.behind !== null && r.behind <= 2).length;
+    // at the tip in the last crawl, as the crawl counted it (within 2 blocks of the tip when reached)
+    this.synced = d.last?.atTip ?? up.filter(r => r.behind !== null && r.behind <= 2).length;
 
     const byVersion = new Map<string, number>();
     for (const r of up) {

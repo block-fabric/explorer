@@ -28,7 +28,7 @@ h5 small { color: var(--cx-ink-3); font-size: 0.75rem; font-weight: normal; marg
 .addr { font-family: var(--cx-mono); font-size: 0.8rem; white-space: nowrap; display: inline-flex; align-items: center; }
 .st { width: 7px; height: 7px; border-radius: 50%; margin-right: 8px; background: #ff6b6b; flex: none;
   &.up { background: #3bd16f; box-shadow: 0 0 6px #3bd16f99; } }
-.agent { white-space: nowrap; &.bb { color: var(--accent); font-weight: 600; } }
+.agent { white-space: nowrap; }
 .cmt { font-size: 0.7rem; color: var(--cx-ink-3); margin-left: 6px; white-space: nowrap; }
 .svc { font-family: var(--cx-mono); font-size: 0.64rem; letter-spacing: 0.04em; padding: 0 6px; border-radius: 99px; margin-right: 4px;
   border: 1px solid #ffffff2a; color: var(--cx-ink-2, #ffffffcc); white-space: nowrap; }

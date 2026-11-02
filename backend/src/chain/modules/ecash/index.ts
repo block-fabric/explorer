@@ -35,8 +35,8 @@ const ecash: ChainModule = {
     }));
   },
 
-  start() {
-    startCrawler();
+  start(ctx) {
+    startCrawler(() => ctx.node.call<number>('getblockcount'));
   },
 };
 
