@@ -18,7 +18,7 @@ const NODE_NETWORK = 1;
 const NODE_NETWORK_LIMITED = 1024;
 
 export interface NodeAgent {
-  /** "Backbone 0.2.5", "eCash 1.2.0" (eCash's client calls itself "eCash Satoshi") */
+  /** "eCash Backbone 0.2.5", "eCash Satoshi 1.2.0", "Backbone Flush 8.3.7": the client's whole name and version */
   node: string;
   backbone: boolean;
   comments: string[];
@@ -39,8 +39,8 @@ export function parseAgent(ua: string | null): NodeAgent {
   const core = /Bitcoin Core ([0-9][0-9.]*)/.exec(m[3] ?? '')?.[1];
   const [a = 0, b = 0, c = 0] = (core ?? m[2]).split('.').map(x => Number(x) || 0);
   const newer = Math.min(a, 999) * 1e6 + Math.min(b, 999) * 1e3 + Math.min(c, 999);
-  const name = backbone ? 'Backbone' : product.replace(/^eCash Satoshi$/, 'eCash');
-  return { node: `${name} ${m[2]}`, backbone, comments, order: (backbone ? 1e9 : 2e9) - newer };
+  // the client's whole name, as it gives it: eCash Backbone, Backbone Flush, Thunder Backbone, eCash Satoshi
+  return { node: `${product} ${m[2]}`, backbone, comments, order: (backbone ? 1e9 : 2e9) - newer };
 }
 
 /** an address to fit the table: an IPv6 one as its first two groups … its last ("[2a01:e0a:…:b43a]:8533") */
