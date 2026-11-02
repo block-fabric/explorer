@@ -84,9 +84,8 @@ export class ChainNodesComponent implements OnInit, OnDestroy {
   versions: { label: string; count: number; share: number; color: string }[] = [];
   latest = '';
   synced = 0;
-  /** the figures of the page's tiles and breakdowns (the reachable nodes of the last crawl) */
+  /** the figures of the page's tiles (the reachable nodes of the last crawl) */
   stats: any = {};
-  breakdowns: { title: string; sub: string; rows: { label: string; count: number; share: number; color: string; title?: string }[] }[] = [];
   chart: any = null;
   chartInitOptions = { renderer: 'svg' };
   /** the time, every second (the countdowns) */
@@ -95,7 +94,7 @@ export class ChainNodesComponent implements OnInit, OnDestroy {
 
   cols: CxColumn[] = [
     { key: 'address', label: 'Address', sort: r => r.ip },
-    { key: 'node', label: 'Node', sort: r => r.agent.order, title: 'Backbone first, newest first; then the clients from the newest Bitcoin Core they build on' },
+    { key: 'node', label: 'Node', sort: r => r.agent.node },
     { key: 'chain', label: 'Chain', sort: r => ['Full', 'Pruned', 'No blocks'].indexOf(r.chain), title: 'Full: serves every block; Pruned: the last 288 only' },
     { key: 'height', label: 'Height', align: 'right', sort: true },
     { key: 'services', label: 'Services', hide: 'md' },
@@ -134,7 +133,7 @@ export class ChainNodesComponent implements OnInit, OnDestroy {
       short: shortAddress(n.ip, n.port),
       note: shortNote(parseAgent(n.userAgent).comments),
       uptime: n.recent ? [...n.recent].filter(c => c === '1').length / n.recent.length : 0,
-    })).sort((a: any, b: any) => a.agent.order - b.agent.order || Number(b.up) - Number(a.up) || b.lastSeen - a.lastSeen);
+    })).sort((a: any, b: any) => Number(b.up) - Number(a.up) || b.lastSeen - a.lastSeen || a.ip.localeCompare(b.ip));
     const up = this.rows.filter(r => r.up);
     // at the tip in the last crawl, as the crawl counted it (within 2 blocks of the tip when reached)
     this.synced = d.last?.atTip ?? up.filter(r => r.behind !== null && r.behind <= 2).length;
@@ -157,41 +156,15 @@ export class ChainNodesComponent implements OnInit, OnDestroy {
   }
 
   private buildStats(d: any, up: any[]): void {
-    const n = up.length || 1;
     const now = d.last.time;
-    const lat = up.map(r => r.latency).filter((x: any) => x !== null).sort((a: number, b: number) => a - b);
     const hist = d.history ?? [];
     const dayAgo = [...hist].reverse().find((c: any) => c.time <= now - 86400) ?? hist[0];
-    const count = (f: (r: any) => boolean) => up.filter(f).length;
-    const svc = (bit: number) => count(r => !!r.services && (BigInt(r.services) & BigInt(bit)) !== BigInt(0));
     this.stats = {
       avgUptime: up.length ? up.reduce((a, r) => a + r.uptime, 0) / up.length : 0,
-      stable: count(r => r.uptime >= 0.99),
-      full: count(r => r.chain === 'Full'),
-      pruned: count(r => r.chain === 'Pruned'),
-      ipv6: count(r => r.ip.includes(':')),
-      medianLatency: lat.length ? lat[Math.floor(lat.length / 2)] : null,
-      fresh: count(r => r.firstSeen >= now - 86400),
-      gone: this.rows.length - up.length,
+      stable: up.filter(r => r.uptime >= 0.99).length,
       peak: Math.max(0, ...hist.map((c: any) => c.reachable)),
       change: dayAgo && dayAgo.time < now ? up.length - dayAgo.reachable : null,
-      changeSince: dayAgo?.time ?? null,
     };
-    const bars = (rows: [string, number, string, string?][]) => rows.filter(r => r[1] > 0)
-      .map(([label, c, color, title]) => ({ label, count: c, share: c / n, color, title }));
-    this.breakdowns = [
-      { title: 'Chain', sub: 'what the nodes serve', rows: bars([
-        ['Full', this.stats.full, '#3bd16f', 'every block (NODE_NETWORK)'],
-        ['Pruned', this.stats.pruned, '#f5b83d', 'the last 288 blocks (NODE_NETWORK_LIMITED)'],
-        ['No blocks', up.length - this.stats.full - this.stats.pruned, '#9aa4b2']]) },
-      { title: 'Network', sub: 'how they are reached', rows: bars([
-        ['IPv4', up.length - this.stats.ipv6, '#5aa6ff'], ['IPv6', this.stats.ipv6, '#a585ff'],
-        [`port ${d.port}`, count(r => r.port === d.port), PROFILE.color, 'the network\'s default port'],
-        ['other ports', count(r => r.port !== d.port), '#ff8a3d']]) },
-      { title: 'Services', sub: 'the features they advertise', rows: bars([
-        ['witness', svc(8), '#2bc79a', 'NODE_WITNESS'], ['v2 transport', svc(2048), '#5aa6ff', 'NODE_P2P_V2: BIP324 encryption'],
-        ['compact filters', svc(64), '#f26b9c', 'NODE_COMPACT_FILTERS: BIP157/158'], ['bloom', svc(4), '#a585ff', 'NODE_BLOOM: BIP37']]) },
-    ];
   }
 
   /** a node's last day as 24 hourly cells: the share of its crawls it was reached in, null before it was seen */

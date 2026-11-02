@@ -47,13 +47,10 @@ h5 small { color: var(--cx-ink-3); font-size: 0.75rem; font-weight: normal; marg
   border: 1px solid #ffffff2a; color: var(--cx-ink-2, #ffffffcc); white-space: nowrap; }
 .note { font-size: 0.78rem; margin-top: 10px; }
 
-// the tiles: four a row (two on a phone)
-.kpis.nd-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-@media (max-width: 900px) { .kpis.nd-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+// the tiles: three a row (one on a phone)
+.kpis.nd-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 700px) { .kpis.nd-kpis { grid-template-columns: 1fr; } }
 .nd-kpis .k-value small { margin-left: 2px; }
-.row-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
-@media (max-width: 900px) { .row-3 { grid-template-columns: 1fr; } }
-.row-3 .ver { grid-template-columns: minmax(0, 1.1fr) minmax(50px, 1fr) 32px 40px; }
 
 // the uptime column: the last day hour by hour, then the share
 .up { display: inline-flex; align-items: center; gap: 8px; }

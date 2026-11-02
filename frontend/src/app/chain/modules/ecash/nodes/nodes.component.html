@@ -33,31 +33,6 @@
         <div class="k-value">{{ pct(stats.avgUptime, 1) }}</div>
         <div class="k-sub">over the last day · {{ stats.stable | number }} nodes always up</div>
       </div>
-      <div class="kpi">
-        <div class="k-label">Full nodes</div>
-        <div class="k-value">{{ stats.full | number }}<small> / {{ reachable() | number }}</small></div>
-        <div class="k-sub">serve every block · {{ stats.pruned | number }} pruned</div>
-      </div>
-      <div class="kpi">
-        <div class="k-label">Most run version</div>
-        <div class="k-value">{{ pct(latestShare()) }}</div>
-        <div class="k-sub">{{ latest || '–' }} · {{ versions.length | number }} versions in all</div>
-      </div>
-      <div class="kpi">
-        <div class="k-label">Over IPv6</div>
-        <div class="k-value">{{ stats.ipv6 | number }}</div>
-        <div class="k-sub">{{ pct(stats.ipv6 / (reachable() || 1)) }} of the reachable nodes</div>
-      </div>
-      <div class="kpi">
-        <div class="k-label">Median latency</div>
-        <div class="k-value">{{ stats.medianLatency !== null ? (stats.medianLatency | number) : '–' }}<small> ms</small></div>
-        <div class="k-sub">the handshake, from the explorer's server</div>
-      </div>
-      <div class="kpi">
-        <div class="k-label">New · gone</div>
-        <div class="k-value"><span class="pos">+{{ stats.fresh | number }}</span><small> · </small><span [class.neg]="stats.gone > 0">−{{ stats.gone | number }}</span></div>
-        <div class="k-sub">first seen in 24 h · reached this week, not now</div>
-      </div>
     </div>
 
     <div class="row-2">
@@ -108,24 +83,6 @@
       </div>
     </div>
 
-    <div class="row-3">
-      @for (g of breakdowns; track g.title) {
-        <div class="box">
-          <h5>{{ g.title }} <small>{{ g.sub }}</small></h5>
-          <div class="vers">
-            @for (v of g.rows; track v.label) {
-              <div class="ver" [title]="v.title ?? ''">
-                <span class="nm"><i class="dot" [style.background]="v.color"></i>{{ v.label }}</span>
-                <div class="bar" [style.--sc]="v.color"><div class="fill" [style.width.%]="100 * v.share"></div></div>
-                <span class="num">{{ v.count | number }}</span>
-                <span class="pc">{{ pct(v.share) }}</span>
-              </div>
-            }
-          </div>
-        </div>
-      }
-    </div>
-
     <section class="nd-sec">
       <h2 class="nd-h2">Nodes <span class="sub2">reachable in the last crawl, then those reached in the last week that have since gone</span></h2>
       <div class="asof">
@@ -134,7 +91,7 @@
       </div>
       <div class="box table-box">
         <app-chain-table [rows]="rows" [columns]="cols" [filters]="filters" [search]="match" searchPlaceholder="Address, client…"
-            [trackBy]="trackAddress" [pageSize]="100" sort="node" [asc]="true" empty="No node reached yet.">
+            [trackBy]="trackAddress" [pageSize]="100" empty="No node reached yet.">
           <ng-template cxCell="address" let-r>
             <span class="addr"><i class="st" [class.up]="r.up" [title]="r.up ? 'reachable in the last crawl' : 'not reachable in the last crawl'"></i><span [title]="r.address">{{ r.short }}</span></span>
           </ng-template>
