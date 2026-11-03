@@ -6,7 +6,8 @@ import logger from '../logger';
 /**
  * The console's outside data (/console, eCash mainnet's explorer only): ECX's markets and eCash's news.
  *
- *   markets  wECX on Solana (DexScreener's public API: every pool of its mint), ECX on neoxa.exchange
+ *   markets  wECX on Solana (DexScreener's public API: every pool of its mint; Jupiter's aggregated price and
+ *            volume, shown, not counted: it routes through those pools), ECX on neoxa.exchange
  *            (its CoinGecko-format tickers: ECX_USDC, ECX_USDT, ECX_BTC, the BTC pair priced with its BTC_USDC),
  *            and ECX's price over them weighted by their 24 h volume in USD. A snapshot every SNAPSHOT_EVERY is kept
  *            (chain_intel_prices, INTEL_KEEP), for the price over time; neoxa's hourly candles besides.
@@ -132,6 +133,23 @@ async function $solanaPairs(mint: string, asset: MarketPair['asset']): Promise<M
     });
 }
 
+/** wECX as Jupiter sees it: its price over the routes, its buys and sells over 24 h (they are the pools' trades) @asyncUnsafe */
+async function $jupiterPair(): Promise<MarketPair[]> {
+  const list: any[] = await $get(JUPITER_TOKEN + WECX);
+  const t = (Array.isArray(list) ? list : []).find((x: any) => x?.id === WECX);
+  if (!t) {
+    return [];
+  }
+  const buys = num(t.stats24h?.buyVolume);
+  const sells = num(t.stats24h?.sellVolume);
+  return [{
+    venue: 'jupiter', chain: 'solana', pair: 'wECX/USD', asset: 'ECX', quote: 'USD', counted: false,
+    priceUsd: num(t.usdPrice), priceQuote: num(t.usdPrice), volume24hUsd: buys !== null || sells !== null ? (buys ?? 0) + (sells ?? 0) : null,
+    liquidityUsd: num(t.liquidity), change24h: num(t.stats24h?.priceChange) !== null ? Math.round((num(t.stats24h?.priceChange) as number) * 100) / 100 : null,
+    high24h: null, low24h: null, url: `https://jup.ag/tokens/${WECX}`,
+  }];
+}
+
 /** @asyncUnsafe */
 async function $neoxaPairs(): Promise<MarketPair[]> {
   const list: any[] = await $get(NEOXA + '/api/v1/cg/tickers');
@@ -160,7 +178,8 @@ async function $neoxaPairs(): Promise<MarketPair[]> {
 /** ECX's price over the pairs that count: weighted by volume (capped at liquidity on a pool), outliers left out */
 function weigh(pairs: MarketPair[]): Markets['ecx'] {
   const weight = (p: MarketPair): number => Math.min(p.volume24hUsd ?? 0, p.chain === 'solana' ? p.liquidityUsd ?? 0 : Infinity);
-  let cand = pairs.filter(p => p.asset === 'ECX' && p.priceUsd !== null && p.priceUsd > 0 && weight(p) > 0
+  // (Jupiter's trades are the pools': not counted twice)
+  let cand = pairs.filter(p => p.asset === 'ECX' && p.venue !== 'jupiter' && p.priceUsd !== null && p.priceUsd > 0 && weight(p) > 0
     && (p.chain !== 'solana' || (COUNTED_QUOTES.includes(p.quote) && (p.liquidityUsd ?? 0) >= MIN_LIQUIDITY)));
   if (cand.length >= 2) {
     const sorted = cand.map(p => p.priceUsd as number).sort((a, b) => a - b);
@@ -188,7 +207,7 @@ export async function $getMarkets(): Promise<Markets | null> {
 async function $loadMarkets(): Promise<Markets | null> {
   marketsAt = Date.now();
   const old = markets?.pairs ?? [];
-  const parts = await Promise.allSettled([$solanaPairs(WECX, 'ECX'), $neoxaPairs()]);
+  const parts = await Promise.allSettled([$solanaPairs(WECX, 'ECX'), $neoxaPairs(), $jupiterPair()]);
   const keep = (i: number, pick: (p: MarketPair) => boolean): MarketPair[] => {
     const r = parts[i];
     if (r.status === 'fulfilled') {
@@ -198,7 +217,7 @@ async function $loadMarkets(): Promise<Markets | null> {
     return old.filter(pick);
   };
   const pairs = [
-    ...keep(0, p => p.chain === 'solana'), ...keep(1, p => p.venue === 'neoxa'),
+    ...keep(0, p => p.chain === 'solana' && p.venue !== 'jupiter'), ...keep(1, p => p.venue === 'neoxa'), ...keep(2, p => p.venue === 'jupiter'),
   ];
   pairs.forEach(p => { p.counted = false; });
   if (!pairs.length) {

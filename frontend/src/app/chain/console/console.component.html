@@ -40,8 +40,8 @@
         <thead><tr><th>Venue</th><th>Pair</th><th class="r">Price</th><th class="r">24h vol</th><th class="r sm-hide">Liquidity</th><th class="r sm-hide">24h</th></tr></thead>
         <tbody>
           @for (p of ecxPairs(); track p.url + p.pair) {
-            <tr [class.uncounted]="!p.counted" [title]="p.counted ? 'counted in the weighted price' : 'not counted: an unverified quote token, under $10k of liquidity, or over 25% off the other venues'">
-              <td><a [href]="p.url" target="_blank" rel="noopener">{{ p.venue }}</a> <span class="dim">{{ p.chain === 'solana' ? 'Solana' : '' }}</span></td>
+            <tr [class.uncounted]="!p.counted" [title]="p.counted ? 'counted in the weighted price' : p.venue === 'jupiter' ? 'Jupiter aggregates wECX\'s pools (Orca\'s): its price and volume are theirs, shown, not counted twice' : 'not counted: an unverified quote token, under $10k of liquidity, or over 25% off the other venues'">
+              <td class="venue"><a [href]="p.url" target="_blank" rel="noopener">{{ venueName(p.venue) }}</a>@if (p.chain === 'solana') {<span class="dim">Solana</span>}</td>
               <td>{{ p.pair }}</td>
               <td class="r">{{ usd(p.priceUsd) }}</td>
               <td class="r">{{ usd(p.volume24hUsd, 0) }}</td>

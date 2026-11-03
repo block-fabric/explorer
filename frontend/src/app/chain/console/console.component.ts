@@ -813,7 +813,15 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
   }
 
   ecxPairs(): any[] {
-    return (this.markets?.pairs ?? []).filter((p: any) => p.asset === 'ECX').sort((a: any, b: any) => (b.volume24hUsd ?? 0) - (a.volume24hUsd ?? 0));
+    // the venues counted in the price first, by volume; then the others (Jupiter's aggregate)
+    return (this.markets?.pairs ?? []).filter((p: any) => p.asset === 'ECX')
+      .sort((a: any, b: any) => Number(b.counted) - Number(a.counted) || (b.volume24hUsd ?? 0) - (a.volume24hUsd ?? 0));
+  }
+
+  /** a venue's name as it writes it ("orca" is Orca) */
+  venueName(v: string): string {
+    const names: Record<string, string> = { orca: 'Orca', neoxa: 'Neoxa', jupiter: 'Jupiter', raydium: 'Raydium', meteora: 'Meteora' };
+    return names[v] ?? (v ? v[0].toUpperCase() + v.slice(1) : v);
   }
 
   /** a ratio above 1 as "26%" */
