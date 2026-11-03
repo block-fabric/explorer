@@ -257,16 +257,6 @@
         </tbody>
       </table></div>
       <div class="dim note">A transaction's outputs include its change: what left its owner is at most this.</div>
-      <h4 class="pad">To exchanges and bridges <span class="dim">payments to known addresses</span></h4>
-      <div class="hscroll"><table class="tbl small pad-tbl">
-        <thead><tr><th>When</th><th>To</th><th class="r">ECX</th><th class="r">Transaction</th></tr></thead>
-        <tbody>
-          @for (f of (whales?.flows ?? []).slice(0, 10); track f.txid + f.address) {
-            <tr><td>{{ ago(f.time) }} ago</td><td>{{ f.name }} <span class="dim">{{ f.kind }}</span></td><td class="r">{{ coins(f.value) }}</td>
-              <td class="r"><a class="mono" [routerLink]="'/tx/' + f.txid">{{ short(f.txid) }}</a></td></tr>
-          } @empty {<tr><td colspan="4" class="dim">{{ whales?.labels ? 'None in the blocks read.' : 'No exchange address is known yet.' }}</td></tr>}
-        </tbody>
-      </table></div>
     </section>
 
     <!-- fees -->
