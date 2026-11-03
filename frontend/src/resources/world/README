@@ -1,2 +1,2 @@
-countries-110m.json: world-atlas 2.0.2 (https://github.com/topojson/world-atlas, ISC), from Natural Earth (public domain).
+countries-50m.json: world-atlas 2.0.2 (https://github.com/topojson/world-atlas, ISC), from Natural Earth (public domain).
 The nodes map (chain/nodes/nodes-globe.component.ts) draws the land from it.

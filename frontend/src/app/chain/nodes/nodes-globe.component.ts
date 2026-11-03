@@ -12,7 +12,8 @@ export interface GlobeNode {
 interface Place { key: string; lat: number; lng: number; name: string; nodes: GlobeNode[]; color: string }
 interface Arc { a: Place; b: Place }
 
-const LAND = '/resources/world/countries-110m.json';
+// Natural Earth's 1:50m countries (world-atlas): Europe's coasts and islands as they are (1:110m mangles them)
+const LAND = '/resources/world/countries-50m.json';
 const MAX_ARCS = 400;
 
 /** text for an HTML label: a node's user agent and host name are anyone's to write */
@@ -94,11 +95,11 @@ export class NodesGlobeComponent implements AfterViewInit, OnChanges, OnDestroy 
       const globe = new Globe(el, { animateIn: true })
         .width(el.clientWidth).height(el.clientHeight)
         .backgroundColor('rgba(0,0,0,0)')
-        .globeMaterial(new three.MeshPhongMaterial({ color: '#0c1122', emissive: '#060913', shininess: 6 }))
+        .globeMaterial(new three.MeshPhongMaterial({ color: '#070b17', emissive: '#03050b', shininess: 4 }))
         .showGraticules(true)
         .showAtmosphere(true).atmosphereColor(this.accent).atmosphereAltitude(0.16)
-        .hexPolygonsData(countries).hexPolygonResolution(3).hexPolygonMargin(0.35).hexPolygonUseDots(true)
-        .hexPolygonColor(() => 'rgba(255,255,255,0.22)')
+        .polygonsData(countries).polygonAltitude(0.004).polygonCapColor(() => '#2a3550').polygonSideColor(() => 'rgba(0,0,0,0)')
+        .polygonStrokeColor(() => 'rgba(255,255,255,0.28)')
         .pointLat('lat').pointLng('lng').pointColor('color')
         .pointAltitude((p: Place) => 0.015 + 0.02 * Math.log2(p.nodes.length + 1))
         .pointRadius((p: Place) => 0.32 + 0.12 * Math.sqrt(p.nodes.length))
