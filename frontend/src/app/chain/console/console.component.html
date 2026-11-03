@@ -200,8 +200,12 @@
           <span>{{ a.why }}.</span>
         </div>
         <div class="metrics">
+          <div title="the hashrate that, added to eCash's own, does 51% of the work: 51/49 of eCash's hashrate">
+            <label>Hashrate for 51%</label><b>{{ a.need ? hash(a.need.hashrate) : '–' }}</b><small>rented, beside eCash's {{ hash(a.need ? a.need.hashrate * 49 / 51 : null) }}</small></div>
+          <div title="renting that hashrate, at Bitcoin's hashprice">
+            <label>Rent 51%, 1 h</label><b>{{ usd(a.need?.perHour ?? null, 0) }}</b><small>{{ a.need?.perHour != null ? usd(a.need.perHour * 24, 0) + ' a day' : 'at Bitcoin\'s hashprice' }}</small></div>
           <div title="eCash's whole hashrate for an hour, at Bitcoin's hashprice (the market value of SHA-256 work): the attacker then mines as fast as everyone else together">
-            <label>Rent the hashrate, 1 h</label><b>{{ usd(a.perHour, 0) }}</b><small>at Bitcoin's hashprice</small></div>
+            <label>Rent entire net hash, 1 h</label><b>{{ usd(a.perHour, 0) }}</b><small>at Bitcoin's hashprice</small></div>
           <div><label>Per block outmined</label><b>{{ usd(a.perBlock, 0) }}</b><small>a block every {{ secs(a.blockTime) }}</small></div>
           <div title="ECX's 24 h trading volume, in hours of rented hashrate: a double spend can only take what the markets can pay out">
             <label>24 h volume</label><b>{{ a.volumeHours !== null ? a.volumeHours.toFixed(0) + ' h' : '–' }}</b><small>of rented hashrate</small></div>

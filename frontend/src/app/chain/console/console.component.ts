@@ -74,6 +74,8 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
   attack: {
     level: 'Critical' | 'High' | 'Moderate' | 'Low'; why: string; perHour: number | null; perBlock: number | null; blockTime: number | null;
     volumeHours: number | null; majority: { name: string; share: number } | null;
+    /** the rented hashrate that makes 51% of the work with eCash's own, and its rent an hour */
+    need: { hashrate: number; perHour: number | null } | null;
     escrow: { usd: number | null; ecx: number; blocks: number; cost: number | null } | null;
   } | null = null;
   /** the drivechain's constants (bundle threshold, max age) */
@@ -465,7 +467,7 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
       ecxPerPh: ecash.reward !== null && ecash.difficulty ? ecash.reward * (PH * 86400) / (ecash.difficulty * 2 ** 32) : null,
       btcPerPh: btc.reward !== null && btc.difficulty ? btc.reward * (PH * 86400) / (btc.difficulty * 2 ** 32) : null,
     };
-    this.attack = this.attackCost(rent, ecash.blockTime, ecxUsd);
+    this.attack = this.attackCost(rent, ecash.blockTime, ecxUsd, ecash.hashrate, t.hashprice);
     const coin = (x: Chain, unit: string) => x.reward !== null ? x.reward.toFixed(3) + ' ' + unit : '–';
     const feeShare = (x: Chain) => x.fees !== null && x.reward ? (x.fees / x.reward * 100).toFixed(2) + '%' : '–';
     const kwh = (v: number | null) => v !== null ? '$' + v.toFixed(3) + '/kWh' : '–';
@@ -524,10 +526,14 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
    * sidechain's escrow takes a withdrawal bundle's acks (the drivechain's threshold, in blocks) under the attacker's
    * majority. A pool with the majority already needs no rental at all.
    */
-  private attackCost(perHour: number | null, blockTime: number | null, ecxUsd: number | null): ChainConsoleComponent['attack'] {
+  private attackCost(perHour: number | null, blockTime: number | null, ecxUsd: number | null, hashrate: number | null,
+    btcHashprice: number | null): ChainConsoleComponent['attack'] {
     const top = this.decent?.top ?? null;
     const majority = top && top.share > 0.5 ? top : null;
     const perBlock = perHour !== null && blockTime ? perHour * blockTime / 3600 : null;
+    // (51% of the work against eCash's hashrate: 51/49 of it rented)
+    const needed = hashrate ? hashrate * 51 / 49 : null;
+    const need = needed !== null ? { hashrate: needed, perHour: btcHashprice !== null ? (needed / 1e15) * btcHashprice / 24 : null } : null;
     const volume = this.markets?.ecx?.volume24hUsd ?? null;
     const escrowSats = this.sidechains.reduce((sum, c) => sum + (c.escrow ?? 0), 0);
     const threshold = this.dcInfo?.bundleThreshold ?? null;
@@ -540,7 +546,7 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
       : perHour !== null && perHour < 10_000 ? `an hour of eCash's whole hashrate rents for ${this.usd(perHour, 0)}: within reach of one actor`
       : perHour !== null ? `an hour of eCash's whole hashrate rents for ${this.usd(perHour, 0)}` : 'Bitcoin\'s hashprice is not known yet';
     return {
-      level, why, perHour, perBlock, blockTime, majority, escrow,
+      level, why, perHour, perBlock, blockTime, majority, escrow, need,
       volumeHours: perHour && volume ? volume / perHour : null,
     };
   }
