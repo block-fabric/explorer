@@ -127,24 +127,24 @@
             @for (c of e.cards; track c.name) {
               <div class="ecard" [class.best]="c.best" [style.--c]="c.color">
                 <div class="ec-name"><i [style.background]="c.color"></i>{{ c.name }}@if (c.best) {<span class="badge">best per hash</span>}</div>
-                <div class="ec-big">{{ usd(c.hashprice) }}<small>per PH a day, at the current difficulty</small></div>
+                <div class="ec-big">{{ usd(c.hashprice) }}@if (vsBtc(c.vsBtc); as v) {<span class="ec-pct" [class.up]="v.n > 100" [class.down]="v.n < 100" title="its hashprice, Bitcoin's at 100%">{{ v.s }}</span>}<small>per PH a day, at the current difficulty</small></div>
                 <div class="ec-bar"><i [style.width.%]="c.width" [style.background]="c.color"></i></div>
-                <div class="ec-row" [title]="'an hour of ' + c.name + '\'s whole hashrate, at Bitcoin\'s hashprice (SHA-256 work\'s market price)'"><span>Rent the hashrate, 1 h</span><b>{{ usd(c.rent, 0) }}</b></div>
+                <div class="ec-row" [title]="'an hour of ' + c.name + '\'s whole hashrate, at Bitcoin\'s hashprice (SHA-256 work\'s market price)'"><span>Rent entire net hash, 1 h</span><b>{{ usd(c.rent, 0) }}</b></div>
                 <div class="ec-row" [title]="'the power to mine one ' + c.unit"><span>Cost to make 1 {{ c.unit }}</span><b>{{ usd(c.coinCost, c.coinCost !== null && c.coinCost > 1000 ? 0 : 2) }}</b></div>
                 <div class="ec-row"><span>{{ c.unit }} price</span><b [class.up]="c.coinCost !== null && c.price !== null && c.price > c.coinCost" [class.down]="c.coinCost !== null && c.price !== null && c.price < c.coinCost">{{ usd(c.price, c.price !== null && c.price > 1000 ? 0 : 2) }}</b></div>
               </div>
             }
           </div>
-          <div class="dim note">Hashprice: what a petahash earns a day at the current difficulty. Rent: the whole hashrate for an hour at Bitcoin's hashprice. Cost to make a coin: power only, at {{ efficiency }} J/TH and {{ '$' + power }}/kWh (green: the price is above it). Details: the whole comparison.</div>
+          <div class="dim note">Hashprice: what a petahash earns a day at the current difficulty; the percentage, against Bitcoin's (100%). Rent: the whole hashrate for an hour at Bitcoin's hashprice. Cost to make a coin: power only, at {{ efficiency }} J/TH and {{ '$' + power }}/kWh (green: the price is above it). Details: the whole comparison.</div>
         } @else {
         <div class="hscroll"><table class="tbl econ-tbl">
-          <thead><tr><th></th><th class="r">eCash</th><th class="r">Bitcoin</th><th class="r">Bitcoin Cash</th><th class="sm-hide"></th></tr></thead>
+          <thead><tr><th></th><th class="r">eCash</th><th class="r">Bitcoin Cash</th><th class="r">Bitcoin</th><th class="sm-hide"></th></tr></thead>
           <tbody>
             @for (r of e.rows; track r.label) {
               <tr><td>{{ r.label }}@if (r.note) {<small class="note-sm">{{ r.note }}</small>}</td>
                 <td class="r" [class.up]="r.good === true" [class.down]="r.good === false">{{ r.ecash }}</td>
-                <td class="r">{{ r.btc }}</td>
                 <td class="r">{{ r.bch }}</td>
+                <td class="r">{{ r.btc }}</td>
                 <td class="dim note-cell sm-hide">{{ r.note ?? '' }}</td></tr>
             }
           </tbody>

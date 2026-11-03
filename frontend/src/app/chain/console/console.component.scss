@@ -175,7 +175,8 @@ h4.pad { margin-top: 10px; }
   i { width: 9px; height: 9px; border-radius: 50%; }
   .badge { margin-left: auto; font-size: 0.6rem; letter-spacing: 0.06em; text-transform: uppercase; color: #3bd16f; border: 1px solid #3bd16f66; border-radius: 99px; padding: 1px 7px; } }
 .ec-big { font-family: var(--mono); font-size: 1.75rem; font-weight: 700; margin: 8px 0 2px; line-height: 1.1;
-  small { display: block; font-family: inherit; font-size: 0.66rem; font-weight: 400; color: var(--dim); } }
+  small { display: block; font-family: inherit; font-size: 0.66rem; font-weight: 400; color: var(--dim); }
+  .ec-pct { margin-left: 10px; font-size: 1.05rem; font-weight: 600; color: var(--dim); vertical-align: 3px; &.up { color: #3bd16f; } &.down { color: #ff6b6b; } } }
 .ec-bar { height: 6px; background: #ffffff0d; border-radius: 3px; overflow: hidden; margin: 8px 0 10px; i { display: block; height: 100%; border-radius: 3px; } }
 .ec-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 0.74rem; padding: 3px 0; border-top: 1px solid #ffffff0a;
   span { color: var(--dim); } b { font-family: var(--mono); font-weight: 600; white-space: nowrap; } small { font-weight: 400; } }
