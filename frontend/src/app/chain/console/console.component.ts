@@ -27,7 +27,7 @@ const TOOLTIP = { backgroundColor: 'rgba(10,12,20,0.95)', borderColor: '#000', t
 /**
  * The console (/console, eCash mainnet's explorer): one screen over eCash and its sidechains, their markets and
  * mining. Every number is one of this site's explorers' (their /api, same origin) or the eCash backend's outside data
- * (chain/intel: markets on Solana and neoxa.exchange, Bitcoin's mining from mempool.space, eCash's big moves, news).
+ * (chain/intel: markets on Solana and neoxa.exchange, wECX on Solana, Bitcoin's mining from mempool.space, eCash's activity).
  */
 @Component({
   selector: 'app-chain-console',
@@ -92,7 +92,12 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
   markets: any = null;
   candles: any[] = [];
   priceChart: any = null;
-  news: { title: string; link: string; time: number }[] = [];
+  solana: any = null;
+  supplyChart: any = null;
+  activityChart: any = null;
+  /** miners' revenue over the window, by source: the subsidy, the transactions' fees, the sidechains' BMM bids (sats) */
+  revenue: { subsidy: number; fees: number; bids: number; total: number } | null = null;
+  feePools: { name: string; fees: number; blocks: number; perBlock: number }[] = [];
   feed: FeedItem[] = [];
 
   private feedData: any = null;
@@ -104,7 +109,7 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
     this.seo.setTitle('Console');
     this.subs.push(timer(0, 1000).subscribe(() => { this.now = Date.now() / 1000; this.cd.markForCheck(); }));
     this.subs.push(timer(0, 30_000).subscribe(() => this.loadChains()));
-    this.subs.push(timer(0, 60_000).subscribe(() => this.loadMarkets()));
+    this.subs.push(timer(0, 60_000).subscribe(() => { this.loadMarkets(); this.loadSolana(); }));
     this.subs.push(timer(0, 120_000).subscribe(() => { this.loadNodes(); this.loadWhales(); }));
     this.subs.push(timer(0, 5 * 60_000).subscribe(() => this.loadMining()));
     this.subs.push(timer(0, 15 * 60_000).subscribe(() => this.loadSlow()));
@@ -179,8 +184,18 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
         this.diffChart = this.buildDiffChart(mining);
         this.histChart = this.buildHistChart(mining);
       }
+      if (mining?.totals && cockpit?.totals) {
+        const t = mining.totals;
+        const fees = t.fees ?? 0;
+        const bids = cockpit.totals.bids ?? 0; // (paid to miners in the BMM transactions: not in the coinbase's fees)
+        const subsidy = Math.max(0, (t.reward ?? 0) - fees);
+        this.revenue = { subsidy, fees, bids, total: subsidy + fees + bids };
+      }
       if (cockpit) {
         this.cockpit = cockpit;
+        this.feePools = (cockpit.miners ?? []).filter((m: any) => m.blocks > 0)
+          .map((m: any) => ({ name: m.name ?? m.tag, fees: m.fees ?? 0, blocks: m.blocks, perBlock: (m.fees ?? 0) / m.blocks }))
+          .sort((a: any, b: any) => b.fees - a.fees).slice(0, 6);
         this.bmmMiners = (cockpit.miners ?? []).filter((m: any) => m.accepts > 0 || m.bids > 0)
           .map((m: any) => ({ name: m.name ?? m.tag, blocks: m.blocks, accepts: m.accepts, bids: m.bids, perBlock: m.acceptsPerBlock ?? 0 }))
           .sort((a: any, b: any) => b.bids - a.bids).slice(0, 8);
@@ -218,6 +233,8 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
       if (w) {
         this.whales = w;
         this.volumeChart = this.buildVolumeChart(w.daily ?? []);
+        this.activityChart = this.buildActivityChart(w.daily ?? []);
+        this.buildFeed();
         this.cd.markForCheck();
       }
     });
@@ -277,12 +294,21 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
     });
   }
 
+  private loadSolana(): void {
+    this.get<any>('/api/v1/chain/intel/solana').subscribe((s) => {
+      if (s) {
+        this.solana = s;
+        this.supplyChart = this.buildSupplyChart(s.supplyHistory ?? []);
+        this.buildFeed();
+        this.cd.markForCheck();
+      }
+    });
+  }
+
   private loadSlow(): void {
     forkJoin({
-      news: this.get<any>('/api/v1/chain/intel/news'),
       rich: this.get<any>('/thunder/api/v1/l2/feature/richlist'),
-    }).subscribe(({ news, rich }) => {
-      this.news = news?.items ?? this.news;
+    }).subscribe(({ rich }) => {
       this.holders = (rich?.items ?? []).slice(0, 6).map((r: any) => ({ address: r.address, balance: r.balance, share: r.share }));
       this.buildFeed();
       this.cd.markForCheck();
@@ -315,8 +341,15 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
       items.push({ time: b.time, kind: 'block', net: 'Thunder', color: NETS[2].color, link: `/thunder/block/${b.hash}`, ext: true,
         text: `Thunder block ${b.height} · ${b.txCount} txs, BMM bid ${b.bmm?.bid ?? '–'} sats` });
     }
-    for (const n of this.news.slice(0, 5)) {
-      items.push({ time: n.time, kind: 'news', net: 'ecash.com', color: '#ffffff', link: n.link, ext: true, text: n.title });
+    for (const e of (this.solana?.events ?? []).slice(0, 20)) {
+      const what = e.kind === 'mint' ? `${this.coins(e.amount)} wECX minted on Solana` : e.kind === 'burn' ? `${this.coins(e.amount)} wECX burned (back to eCash)`
+        : e.kind === 'add' ? `Liquidity added to Orca's wECX/USDC: ${this.coins(e.amount)} wECX` : `Liquidity taken from Orca's wECX/USDC: ${this.coins(e.amount)} wECX`;
+      items.push({ time: e.time, kind: e.kind, net: 'Solana', color: e.kind === 'mint' || e.kind === 'add' ? GREEN : RED,
+        text: what + (e.usd !== null ? ` (${this.usd(e.usd, 0)})` : '') });
+    }
+    for (const f of (this.whales?.flows ?? []).slice(0, 20)) {
+      items.push({ time: f.time, kind: 'flow', net: f.name, color: '#5aa6ff', link: `/tx/${f.txid}`,
+        text: `${this.coins(f.value)} ECX to ${f.name} (${f.kind})` });
     }
     this.feed = items.filter(i => i.time).sort((a, b) => b.time - a.time).slice(0, 60);
   }
@@ -621,6 +654,44 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
     };
   }
 
+  /** eCash's transactions and fees a day */
+  private buildActivityChart(daily: any[]): any {
+    if (daily.length < 2) {
+      return null;
+    }
+    return {
+      animation: false, grid: { left: 44, right: 50, top: 24, bottom: 22 },
+      legend: { top: 0, right: 0, textStyle: { color: '#ffffffaa', fontSize: 10 }, itemWidth: 10, itemHeight: 6 },
+      tooltip: { trigger: 'axis', ...TOOLTIP },
+      xAxis: { type: 'time', ...AXIS, splitLine: { show: false } },
+      yAxis: [
+        { type: 'value', ...AXIS, axisLabel: { ...AXIS.axisLabel, formatter: (v: number) => this.big(v) } },
+        { type: 'value', ...AXIS, splitLine: { show: false }, axisLabel: { ...AXIS.axisLabel, formatter: (v: number) => v.toFixed(2) } },
+      ],
+      series: [
+        { name: 'Transactions', type: 'bar', data: daily.map(d => [d.day * 1000 + 43_200_000, d.txs]), itemStyle: { color: '#5aa6ffcc', borderRadius: [3, 3, 0, 0] }, barMaxWidth: 26,
+          tooltip: { valueFormatter: (v: number) => Math.round(v).toLocaleString() } },
+        { name: 'Fees (ECX)', type: 'line', yAxisIndex: 1, data: daily.map(d => [d.day * 1000 + 43_200_000, d.fees]), lineStyle: { width: 2, color: '#f5a623' }, itemStyle: { color: '#f5a623' },
+          tooltip: { valueFormatter: (v: number) => v.toFixed(4) + ' ECX' } },
+      ],
+    };
+  }
+
+  /** wECX's supply on Solana over time (the snapshots) */
+  private buildSupplyChart(h: any[]): any {
+    if (h.length < 2) {
+      return null;
+    }
+    return {
+      animation: false, grid: { left: 52, right: 8, top: 10, bottom: 22 },
+      tooltip: { trigger: 'axis', ...TOOLTIP, valueFormatter: (v: number) => v.toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' wECX' },
+      xAxis: { type: 'time', ...AXIS, splitLine: { show: false } },
+      yAxis: { type: 'value', scale: true, ...AXIS, axisLabel: { ...AXIS.axisLabel, formatter: (v: number) => this.big(v) } },
+      series: [{ name: 'Supply', type: 'line', step: 'end', showSymbol: false, data: h.map(x => [x.time * 1000, x.supply]), lineStyle: { width: 1.5, color: '#3bd1c4' },
+        itemStyle: { color: '#3bd1c4' }, areaStyle: { color: '#3bd1c414' } }],
+    };
+  }
+
   /** eCash's on-chain volume a day (its blocks' non-coinbase outputs) */
   private buildVolumeChart(daily: any[]): any {
     if (daily.length < 2) {
@@ -732,6 +803,10 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
 
   ecxPairs(): any[] {
     return (this.markets?.pairs ?? []).filter((p: any) => p.asset === 'ECX').sort((a: any, b: any) => (b.volume24hUsd ?? 0) - (a.volume24hUsd ?? 0));
+  }
+
+  share(part: number, total: number): string {
+    return total ? (part / total * 100).toFixed(part / total < 0.01 ? 3 : 1) + '%' : '–';
   }
 
   levelColor(level: string | undefined): string {

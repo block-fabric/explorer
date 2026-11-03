@@ -55,7 +55,7 @@
 
     <!-- events -->
     <section class="pane feed">
-      <header><span class="tag">EVENTS</span> blocks, the peg, sidechain blocks, news</header>
+      <header><span class="tag">EVENTS</span> blocks, the peg, sidechain blocks, wECX on Solana</header>
       <div class="scroll">
         @for (e of feed; track e.time + e.text) {
           <div class="ev">
@@ -106,6 +106,98 @@
             <label>Empty blocks</label><b [style.color]="d.empty > 0.2 ? '#f5b83d' : null">{{ pct(d.empty) }}</b><small>coinbase only</small></div>
         </div>
       } @else {<div class="dim pad">Loading…</div>}
+    </section>
+
+    <!-- activity -->
+    <section class="pane activity">
+      <header><span class="tag">ACTIVITY</span> eCash's transactions and the ECX they moved
+        @if (whales) {<span class="dim right">{{ whales.blocks | number }} blocks read</span>}</header>
+      @if (whales?.today; as t) {
+        <div class="big">
+          <div><label>Transactions, today</label><b>{{ t.txs | number }}</b><small>{{ t.blocks }} blocks since 00:00 UTC</small></div>
+          <div><label>ECX moved, today</label><b>{{ coins(t.volume) }}</b><small>{{ markets?.ecx?.priceUsd ? usd(t.volume * markets.ecx.priceUsd, 0) : '–' }}</small></div>
+          <div><label>Fees, today</label><b>{{ t.fees.toFixed(4) }}</b><small>ECX · {{ markets?.ecx?.priceUsd ? usd(t.fees * markets.ecx.priceUsd) : '–' }}</small></div>
+        </div>
+      }
+      @if (whales?.last24h; as d) {
+        <div class="metrics three">
+          <div><label>Transactions, 24 h</label><b>{{ d.txs | number }}</b><small>{{ (d.txs / 86400).toFixed(3) }} a second</small></div>
+          <div><label>ECX moved, 24 h</label><b>{{ coins(d.volume) }}</b><small>{{ d.txs ? coins(d.volume / d.txs) + ' a transaction' : '–' }}</small></div>
+          <div><label>Largest, 24 h</label><b>{{ d.largest ? coins(d.largest.value) : '–' }}</b><small>@if (d.largest) {<a class="mono" [routerLink]="'/tx/' + d.largest.txid">{{ short(d.largest.txid) }}</a>}</small></div>
+          <div><label>Blocks, 24 h</label><b>{{ d.blocks }}</b><small>{{ d.emptyBlocks }} empty</small></div>
+          <div><label>Block space used</label><b>{{ d.blocks ? big(d.vsize / d.blocks) : '–' }}</b><small>vbytes a block</small></div>
+          <div><label>Fees, 24 h</label><b>{{ d.fees.toFixed(4) }}</b><small>ECX</small></div>
+        </div>
+      }
+      @if (activityChart) {<h4 class="pad">A day at a time <span class="dim">UTC days</span></h4><div echarts class="chart act" [options]="activityChart" [initOpts]="chartInit"></div>}
+      @if (!whales?.blocks) {<div class="dim pad note">Reading the last week's blocks…</div>}
+    </section>
+
+    <!-- fees -->
+    <section class="pane fees">
+      <header><span class="tag">FEES</span> what miners earn, and what transactions pay</header>
+      @if (revenue; as r) {
+        <h4 class="pad">Miners' revenue <span class="dim">the last 1,008 blocks</span></h4>
+        <div class="stack-bar">
+          <i [style.width]="share(r.subsidy, r.total)" class="sub" [title]="'Subsidy: ' + ecx(r.subsidy)"></i>
+          <i [style.width]="share(r.fees, r.total)" class="fee" [title]="'Transaction fees: ' + ecx(r.fees)"></i>
+          <i [style.width]="share(r.bids, r.total)" class="bid" [title]="'BMM bids: ' + ecx(r.bids)"></i>
+        </div>
+        <div class="hscroll"><table class="tbl small pad-tbl">
+          <thead><tr><th>Source</th><th class="r">ECX</th><th class="r">USD</th><th class="r">Share</th></tr></thead>
+          <tbody>
+            <tr><td><i class="sw" style="background:#5aa6ff"></i>Block subsidy</td><td class="r">{{ coins(r.subsidy / 1e8) }}</td><td class="r">{{ markets?.ecx?.priceUsd ? usd(r.subsidy / 1e8 * markets.ecx.priceUsd, 0) : '–' }}</td><td class="r">{{ share(r.subsidy, r.total) }}</td></tr>
+            <tr><td><i class="sw" style="background:#f5a623"></i>Transaction fees</td><td class="r">{{ (r.fees / 1e8).toFixed(4) }}</td><td class="r">{{ markets?.ecx?.priceUsd ? usd(r.fees / 1e8 * markets.ecx.priceUsd) : '–' }}</td><td class="r">{{ share(r.fees, r.total) }}</td></tr>
+            <tr><td><i class="sw" style="background:#3bd16f"></i>Sidechains' BMM bids</td><td class="r">{{ (r.bids / 1e8).toFixed(5) }}</td><td class="r">{{ markets?.ecx?.priceUsd ? usd(r.bids / 1e8 * markets.ecx.priceUsd) : '–' }}</td><td class="r">{{ share(r.bids, r.total) }}</td></tr>
+          </tbody>
+        </table></div>
+      }
+      @if (whales?.last24h; as d) {
+        <div class="metrics three">
+          <div title="half the transactions paid less than this"><label>Median fee rate</label><b>{{ d.feeRate.p50 !== null ? d.feeRate.p50.toFixed(1) : '–' }}</b><small>sat/vB, 24 h</small></div>
+          <div><label>10th – 90th</label><b>{{ d.feeRate.p10 !== null ? d.feeRate.p10.toFixed(1) + '–' + d.feeRate.p90?.toFixed(1) : '–' }}</b><small>sat/vB</small></div>
+          <div><label>Average fee</label><b>{{ d.feePerTx !== null ? (d.feePerTx * 1e8 | number:'1.0-0') : '–' }}</b><small>sats a transaction{{ d.feePerTx !== null && markets?.ecx?.priceUsd ? ' · ' + usd(d.feePerTx * markets.ecx.priceUsd, 4) : '' }}</small></div>
+        </div>
+      }
+      @if (feePools.length) {
+        <h4 class="pad">Fees by pool <span class="dim">the last 1,008 blocks</span></h4>
+        <div class="hscroll"><table class="tbl small pad-tbl">
+          <thead><tr><th>Pool</th><th class="r">Blocks</th><th class="r">Fees</th><th class="r">A block</th></tr></thead>
+          <tbody>@for (p of feePools; track p.name) {<tr><td>{{ p.name }}</td><td class="r">{{ p.blocks }}</td><td class="r">{{ ecx(p.fees) }}</td><td class="r">{{ (p.perBlock | number:'1.0-0') }} sats</td></tr>}</tbody>
+        </table></div>
+      }
+    </section>
+
+    <!-- wECX on Solana -->
+    <section class="pane sol">
+      <header><span class="tag">wECX ON SOLANA</span> ECX bridged to Solana: mints, burns, liquidity
+        @if (solana?.updated) {<span class="dim right">updated {{ ago(solana.updated) }} ago</span>}</header>
+      @if (solana?.token; as t) {
+        <div class="big">
+          <div><label>Supply</label><b>{{ t.supply !== null ? coins(t.supply) : '–' }}</b><small>wECX · {{ t.supply !== null && markets?.ecx?.priceUsd ? usd(t.supply * markets.ecx.priceUsd, 0) : '–' }}</small></div>
+          <div><label>Holders</label><b>{{ t.holders | number }}</b><small>{{ t.holderChange24h !== null ? (t.holderChange24h > 0 ? '+' : '') + t.holderChange24h.toFixed(1) + '% 24 h' : '' }}</small></div>
+          <div><label>Traders, 24 h</label><b>{{ t.traders24h ?? '–' }}</b><small>{{ t.buys24h ?? '–' }} buys · {{ t.sells24h ?? '–' }} sells</small></div>
+        </div>
+        <div class="metrics three">
+          <div><label>Bought, 24 h</label><b class="up">{{ usd(t.buyVolume24h, 0) }}</b><small>{{ t.organicBuyVolume24h !== null ? usd(t.organicBuyVolume24h, 0) + ' organic' : '' }}</small></div>
+          <div><label>Sold, 24 h</label><b class="down">{{ usd(t.sellVolume24h, 0) }}</b><small>net {{ t.buyVolume24h !== null && t.sellVolume24h !== null ? usd(t.buyVolume24h - t.sellVolume24h, 0) : '–' }}</small></div>
+          <div><label>Orca pool</label><b>{{ solana.pool?.wecx !== null && solana.pool?.wecx !== undefined ? coins(solana.pool.wecx) : '–' }}</b><small>wECX · {{ usd(solana.pool?.usdc, 0) }} USDC</small></div>
+        </div>
+      }
+      @if (supplyChart) {<h4 class="pad">Supply over time</h4><div echarts class="chart vol" [options]="supplyChart" [initOpts]="chartInit"></div>}
+      <h4 class="pad">Mints, burns and liquidity <span class="dim">between 5-minute snapshots</span></h4>
+      <div class="hscroll"><table class="tbl small pad-tbl">
+        <thead><tr><th>When</th><th>What</th><th class="r">wECX</th><th class="r">USD</th></tr></thead>
+        <tbody>
+          @for (e of (solana?.events ?? []).slice(0, 10); track e.time + e.kind) {
+            <tr><td>{{ ago(e.time) }} ago</td>
+              <td [class.up]="e.kind === 'mint' || e.kind === 'add'" [class.down]="e.kind === 'burn' || e.kind === 'remove'">{{ e.kind === 'mint' ? 'Minted' : e.kind === 'burn' ? 'Burned' : e.kind === 'add' ? 'Liquidity added' : 'Liquidity taken' }}</td>
+              <td class="r">{{ coins(e.amount) }}</td><td class="r">{{ usd(e.usd, 0) }}</td></tr>
+          } @empty {<tr><td colspan="4" class="dim">None seen yet: the supply and the pool are watched from now on.</td></tr>}
+        </tbody>
+      </table></div>
+      <div class="dim note">wECX's supply, holders and trading from <a href="https://jup.ag" target="_blank" rel="noopener">Jupiter</a>; the pool's reserves from DexScreener.
+        @if (solana?.token?.mintAuthority) {Minted by <a class="mono" [href]="'https://solscan.io/account/' + solana.token.mintAuthority" target="_blank" rel="noopener">{{ short(solana.token.mintAuthority) }}</a>.}</div>
     </section>
 
     <!-- mining economics -->
@@ -219,6 +311,16 @@
         </tbody>
       </table></div>
       <div class="dim note">A transaction's outputs include its change: what left its owner is at most this.</div>
+      <h4 class="pad">To exchanges and bridges <span class="dim">payments to known addresses</span></h4>
+      <div class="hscroll"><table class="tbl small pad-tbl">
+        <thead><tr><th>When</th><th>To</th><th class="r">ECX</th><th class="r">Transaction</th></tr></thead>
+        <tbody>
+          @for (f of (whales?.flows ?? []).slice(0, 10); track f.txid + f.address) {
+            <tr><td>{{ ago(f.time) }} ago</td><td>{{ f.name }} <span class="dim">{{ f.kind }}</span></td><td class="r">{{ coins(f.value) }}</td>
+              <td class="r"><a class="mono" [routerLink]="'/tx/' + f.txid">{{ short(f.txid) }}</a></td></tr>
+          } @empty {<tr><td colspan="4" class="dim">{{ whales?.labels ? 'None in the blocks read.' : 'No exchange address is known yet.' }}</td></tr>}
+        </tbody>
+      </table></div>
     </section>
 
     <!-- the drivechain's actors -->

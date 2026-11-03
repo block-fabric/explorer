@@ -11,6 +11,10 @@ import logger from '../logger';
  *            and ECX's price over them weighted by their 24 h volume in USD. A snapshot every SNAPSHOT_EVERY is kept
  *            (chain_intel_prices, INTEL_KEEP), for the price over time; neoxa's hourly candles besides.
  *   news     ecash.com's blog (its RSS).
+ *   solana   wECX on Solana: its supply, holders and traders (Jupiter's token API), its Orca pool's reserves
+ *            (DexScreener); a snapshot every SNAPSHOT_EVERY, the mints and burns (the supply's changes) and the liquidity
+ *            added or taken (both reserves moving the same way: a swap moves them opposite ways) between two
+ *            (chain_intel_sol, chain_intel_sol_events).
  *   bitcoin  Bitcoin's price, hashrate, difficulty and last day's rewards (mempool.space's public API), for the
  *            console's comparison of mining eCash and mining Bitcoin (the same SHA-256 machines).
  *
@@ -24,6 +28,12 @@ const NEOXA = 'https://neoxa.exchange';
 const NEOXA_PAIRS = ['ECX_USDC', 'ECX_USDT', 'ECX_BTC'];
 const ECASH_BLOG = 'https://ecash.com/blog/rss.xml';
 const MEMPOOL_SPACE = 'https://mempool.space/api';
+const JUPITER_TOKEN = 'https://lite-api.jup.ag/tokens/v2/search?query=';
+const ORCA_POOL = '7T4xAj1ENEuPckhWqz6nJP9ZkvDnFpVF7nLbUAvSwm43'; // wECX/USDC on Orca: wECX's liquidity
+const DEXSCREENER_PAIR = 'https://api.dexscreener.com/latest/dex/pairs/solana/';
+const MINT_MIN = 0.01; // wECX: a supply change below this is rounding
+const LIQUIDITY_MIN = 500; // USD: a smaller liquidity move between two snapshots is not one
+const SOL_EVENTS_KEEP = 200;
 const BITCOIN_TTL = 10 * 60_000;
 /**
  * The quote tokens a Solana pool's price counts with, by mint (not by symbol: anyone can mint a token called USDC).
@@ -265,6 +275,96 @@ async function $loadBitcoin(): Promise<BitcoinMining | null> {
   return bitcoin;
 }
 
+export interface SolanaEvent { time: number; kind: 'mint' | 'burn' | 'add' | 'remove'; amount: number; usd: number | null }
+export interface SolanaState {
+  updated: number;
+  token: { supply: number | null; holders: number | null; liquidityUsd: number | null; mintAuthority: string | null;
+    buyVolume24h: number | null; sellVolume24h: number | null; organicBuyVolume24h: number | null; buys24h: number | null; sells24h: number | null;
+    traders24h: number | null; holderChange24h: number | null } | null;
+  pool: { address: string; wecx: number | null; usdc: number | null; liquidityUsd: number | null } | null;
+  events: SolanaEvent[]; // newest first
+  supplyHistory: { time: number; supply: number }[];
+}
+const solana: SolanaState = { updated: 0, token: null, pool: null, events: [], supplyHistory: [] };
+let solanaAt = 0;
+let solanaLoading: Promise<SolanaState> | null = null;
+let lastSnap: { supply: number | null; wecx: number | null; usdc: number | null } | null = null;
+
+/** wECX on Solana now (refreshed every MARKETS_TTL; the events come from the snapshots) @asyncSafe */
+export async function $getSolana(): Promise<SolanaState> {
+  if (Date.now() - solanaAt < (solana.token ? MARKETS_TTL : RETRY_TTL)) {
+    return solana;
+  }
+  solanaLoading ??= $loadSolana().finally(() => { solanaLoading = null; });
+  return solanaLoading;
+}
+
+/** @asyncSafe */
+async function $loadSolana(): Promise<SolanaState> {
+  solanaAt = Date.now();
+  const [tok, pair] = await Promise.allSettled([$get(JUPITER_TOKEN + WECX), $get(DEXSCREENER_PAIR + ORCA_POOL)]);
+  if (tok.status === 'fulfilled') {
+    const t = (Array.isArray(tok.value) ? tok.value : []).find((x: any) => x?.id === WECX);
+    if (t) {
+      solana.token = {
+        supply: num(t.totalSupply), holders: num(t.holderCount), liquidityUsd: num(t.liquidity),
+        mintAuthority: typeof t.mintAuthority === 'string' && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(t.mintAuthority) ? t.mintAuthority : null,
+        buyVolume24h: num(t.stats24h?.buyVolume), sellVolume24h: num(t.stats24h?.sellVolume), organicBuyVolume24h: num(t.stats24h?.buyOrganicVolume),
+        buys24h: num(t.stats24h?.numBuys), sells24h: num(t.stats24h?.numSells), traders24h: num(t.stats24h?.numTraders),
+        holderChange24h: num(t.stats24h?.holderChange),
+      };
+    }
+  }
+  if (pair.status === 'fulfilled') {
+    const p = (Array.isArray(pair.value?.pairs) ? pair.value.pairs : [pair.value?.pair]).find((x: any) => x?.pairAddress === ORCA_POOL);
+    if (p && p.baseToken?.address === WECX) {
+      solana.pool = { address: ORCA_POOL, wecx: num(p.liquidity?.base), usdc: num(p.liquidity?.quote), liquidityUsd: num(p.liquidity?.usd) };
+    }
+  }
+  if (solana.token || solana.pool) {
+    solana.updated = Math.floor(Date.now() / 1000);
+  }
+  return solana;
+}
+
+/** a snapshot of wECX's supply and the pool's reserves; the mints, burns and liquidity moves since the last (its caller catches) @asyncUnsafe */
+async function $solanaSnapshot(time: number, ecxUsd: number | null): Promise<void> {
+  const s = await $getSolana();
+  const snap = { supply: s.token?.supply ?? null, wecx: s.pool?.wecx ?? null, usdc: s.pool?.usdc ?? null };
+  const found: SolanaEvent[] = [];
+  if (lastSnap) {
+    if (snap.supply !== null && lastSnap.supply !== null && Math.abs(snap.supply - lastSnap.supply) >= MINT_MIN) {
+      const amount = snap.supply - lastSnap.supply;
+      found.push({ time, kind: amount > 0 ? 'mint' : 'burn', amount: Math.abs(amount), usd: ecxUsd !== null ? Math.abs(amount) * ecxUsd : null });
+    }
+    if (snap.wecx !== null && snap.usdc !== null && lastSnap.wecx !== null && lastSnap.usdc !== null) {
+      const db = snap.wecx - lastSnap.wecx;
+      const dq = snap.usdc - lastSnap.usdc;
+      // both reserves up: liquidity added; both down: taken; (one up, one down: swaps)
+      if (Math.sign(db) === Math.sign(dq) && db !== 0 && Math.abs(dq) * 2 >= LIQUIDITY_MIN) {
+        found.push({ time, kind: db > 0 ? 'add' : 'remove', amount: Math.abs(db), usd: Math.abs(dq) * 2 });
+      }
+    }
+  }
+  if (snap.supply !== null) {
+    solana.supplyHistory.push({ time, supply: snap.supply });
+    while (solana.supplyHistory.length && solana.supplyHistory[0].time < time - INTEL_KEEP) {
+      solana.supplyHistory.shift();
+    }
+  }
+  solana.events.unshift(...found.reverse());
+  solana.events.splice(SOL_EVENTS_KEEP);
+  lastSnap = snap;
+  if (config.DATABASE.ENABLED) {
+    await DB.query('INSERT IGNORE INTO chain_intel_sol (time, supply, pool_wecx, pool_usdc) VALUES (?,?,?,?)', [time, snap.supply, snap.wecx, snap.usdc]);
+    for (const e of found) {
+      await DB.query('INSERT INTO chain_intel_sol_events (time, kind, amount, usd) VALUES (?,?,?,?)', [e.time, e.kind, e.amount, e.usd]);
+    }
+    await DB.query('DELETE FROM chain_intel_sol WHERE time < ?', [time - INTEL_KEEP]);
+    await DB.query('DELETE FROM chain_intel_sol_events WHERE time < ?', [time - INTEL_KEEP]);
+  }
+}
+
 /** a feed's text with its HTML entities as characters (&#39; is ') */
 function decode(s: string): string {
   const named: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: '\'', nbsp: ' ' };
@@ -322,6 +422,7 @@ async function $snapshot(): Promise<void> {
       await DB.query('INSERT IGNORE INTO chain_intel_prices (time, price_usd, volume_usd) VALUES (?,?,?)', [time, m.ecx.priceUsd, m.ecx.volume24hUsd]);
       await DB.query('DELETE FROM chain_intel_prices WHERE time < ?', [time - INTEL_KEEP]);
     }
+    await $solanaSnapshot(time, m.ecx.priceUsd);
   } catch (e) {
     logger.debug(`Console price snapshot: ${e instanceof Error ? e.message : e}`, 'Intel');
   }
@@ -340,6 +441,21 @@ export async function $startIntel(): Promise<void> {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
       const [rows]: any = await DB.query('SELECT time, price_usd, volume_usd FROM chain_intel_prices WHERE time >= UNIX_TIMESTAMP() - ? ORDER BY time', [INTEL_KEEP]);
       priceHistory.push(...rows.map((r: any) => ({ time: r.time, priceUsd: r.price_usd, volume24hUsd: r.volume_usd })));
+      await DB.query(`CREATE TABLE IF NOT EXISTS chain_intel_sol (
+        time int unsigned NOT NULL PRIMARY KEY, supply double NULL, pool_wecx double NULL, pool_usdc double NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+      await DB.query(`CREATE TABLE IF NOT EXISTS chain_intel_sol_events (
+        id int unsigned NOT NULL AUTO_INCREMENT PRIMARY KEY, time int unsigned NOT NULL, kind varchar(8) NOT NULL, amount double NOT NULL, usd double NULL,
+        KEY (time)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+      const [snaps]: any = await DB.query('SELECT time, supply, pool_wecx, pool_usdc FROM chain_intel_sol WHERE time >= UNIX_TIMESTAMP() - ? ORDER BY time', [INTEL_KEEP]);
+      solana.supplyHistory.push(...snaps.filter((r: any) => r.supply !== null).map((r: any) => ({ time: r.time, supply: r.supply })));
+      const last = snaps[snaps.length - 1];
+      if (last) {
+        lastSnap = { supply: last.supply, wecx: last.pool_wecx, usdc: last.pool_usdc };
+      }
+      const [evs]: any = await DB.query('SELECT time, kind, amount, usd FROM chain_intel_sol_events ORDER BY time DESC LIMIT ?', [SOL_EVENTS_KEEP]);
+      solana.events.push(...evs.map((r: any) => ({ time: r.time, kind: r.kind, amount: r.amount, usd: r.usd })));
     } catch (e) {
       logger.warn(`Console: could not load the price history: ${e instanceof Error ? e.message : e}`, 'Intel');
     }
