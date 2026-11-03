@@ -36,8 +36,8 @@
         <div><label>Venues</label><b>{{ markets?.ecx?.venues ?? '–' }}</b></div>
       </div>
       @if (priceChart) {<div echarts class="chart" [options]="priceChart" [initOpts]="chartInit"></div>}
-      <table class="tbl">
-        <thead><tr><th>Venue</th><th>Pair</th><th class="r">Price</th><th class="r">24h vol</th><th class="r">Liquidity</th><th class="r">24h</th></tr></thead>
+      <div class="hscroll"><table class="tbl">
+        <thead><tr><th>Venue</th><th>Pair</th><th class="r">Price</th><th class="r">24h vol</th><th class="r sm-hide">Liquidity</th><th class="r sm-hide">24h</th></tr></thead>
         <tbody>
           @for (p of ecxPairs(); track p.url + p.pair) {
             <tr [class.uncounted]="!p.counted" [title]="p.counted ? 'counted in the weighted price' : 'not counted: an unverified quote token, under $10k of liquidity, or over 25% off the other venues'">
@@ -45,12 +45,12 @@
               <td>{{ p.pair }}</td>
               <td class="r">{{ usd(p.priceUsd) }}</td>
               <td class="r">{{ usd(p.volume24hUsd, 0) }}</td>
-              <td class="r">{{ p.liquidityUsd !== null ? usd(p.liquidityUsd, 0) : '–' }}</td>
-              <td class="r" [class.up]="p.change24h > 0" [class.down]="p.change24h < 0">{{ p.change24h !== null ? (p.change24h > 0 ? '+' : '') + p.change24h + '%' : '–' }}</td>
+              <td class="r sm-hide">{{ p.liquidityUsd !== null ? usd(p.liquidityUsd, 0) : '–' }}</td>
+              <td class="r sm-hide" [class.up]="p.change24h > 0" [class.down]="p.change24h < 0">{{ p.change24h !== null ? (p.change24h > 0 ? '+' : '') + p.change24h + '%' : '–' }}</td>
             </tr>
           }
         </tbody>
-      </table>
+      </table></div>
     </section>
 
     <!-- events -->
@@ -118,13 +118,13 @@
       </header>
       @if (econ; as e) {
         <div class="hscroll"><table class="tbl econ-tbl">
-          <thead><tr><th></th><th class="r">eCash</th><th class="r">Bitcoin</th><th></th></tr></thead>
+          <thead><tr><th></th><th class="r">eCash</th><th class="r">Bitcoin</th><th class="sm-hide"></th></tr></thead>
           <tbody>
             @for (r of e.rows; track r.label) {
-              <tr><td>{{ r.label }}</td>
+              <tr><td>{{ r.label }}@if (r.note) {<small class="note-sm">{{ r.note }}</small>}</td>
                 <td class="r" [class.up]="r.good === true" [class.down]="r.good === false">{{ r.ecash }}</td>
                 <td class="r">{{ r.btc }}</td>
-                <td class="dim note-cell">{{ r.note ?? '' }}</td></tr>
+                <td class="dim note-cell sm-hide">{{ r.note ?? '' }}</td></tr>
             }
           </tbody>
         </table></div>
@@ -150,21 +150,70 @@
       @if (histChart) {<h4 class="pad">Time between blocks <span class="dim">median {{ secs(mining?.totals?.medianBlockTime) }}</span></h4><div echarts class="chart hist" [options]="histChart" [initOpts]="chartInit"></div>}
     </section>
 
+    <!-- hashprice -->
+    <section class="pane hashp">
+      <header><span class="tag">HASHPRICE</span> what a petahash earns a day, eCash and Bitcoin</header>
+      <div class="big">
+        <div><label>eCash</label><b>{{ usd(hashprice?.ecash) }}</b><small>per PH a day · {{ hashprice?.ecash !== null && hashprice?.ecash !== undefined ? usd(hashprice.ecash / 1000, 4) : '–' }}/TH</small></div>
+        <div><label>Bitcoin</label><b>{{ usd(hashprice?.btc) }}</b><small>per PH a day · {{ hashprice?.btc !== null && hashprice?.btc !== undefined ? usd(hashprice.btc / 1000, 4) : '–' }}/TH</small></div>
+        <div><label>eCash vs Bitcoin</label><b [class.up]="(hashprice?.ratio ?? 0) >= 1" [class.down]="(hashprice?.ratio ?? 1) < 1">{{ hashprice?.ratio ? hashprice.ratio.toFixed(2) + '×' : '–' }}</b>
+          <small>{{ (hashprice?.ratio ?? 0) >= 1 ? 'more per hash on eCash' : 'more per hash on Bitcoin' }}</small></div>
+      </div>
+      <div class="big">
+        <div title="the coins a petahash mines a day"><label>Hashvalue, eCash</label><b>{{ hashprice?.ecxPerPh !== null && hashprice?.ecxPerPh !== undefined ? hashprice.ecxPerPh.toFixed(3) : '–' }}</b><small>ECX per PH a day</small></div>
+        <div><label>Hashvalue, Bitcoin</label><b>{{ hashprice?.btcPerPh !== null && hashprice?.btcPerPh !== undefined ? (hashprice.btcPerPh * 1e8 | number:'1.0-0') : '–' }}</b><small>sats per PH a day</small></div>
+        <div title="the power price under which mining pays, at the efficiency set in Economics"><label>Break-even</label><b>{{ hashprice?.ecash ? '$' + (hashprice.ecash / (efficiency * 24)).toFixed(3) : '–' }}</b><small>$/kWh at {{ efficiency }} J/TH</small></div>
+      </div>
+      @if (hashpriceChart) {<h4 class="pad">eCash's hashprice over the week <span class="dim">at ECX's price then (neoxa, hourly)</span></h4><div echarts class="chart hp" [options]="hashpriceChart" [initOpts]="chartInit"></div>}
+      <div class="dim note">Rewards (subsidy and fees) at the coin's price, over the hashrate. A miner moves its machines to the chain that pays more per hash.</div>
+    </section>
+
+    <!-- 51% attack -->
+    <section class="pane attack">
+      <header><span class="tag">51% ATTACK</span> what it costs to reorganise eCash, and who could</header>
+      @if (attack; as a) {
+        <div class="grade" [style.borderColor]="levelColor(a.level)">
+          <b [style.color]="levelColor(a.level)">Risk: {{ a.level }}</b>
+          <span>{{ a.why }}.</span>
+        </div>
+        <div class="metrics">
+          <div title="eCash's whole hashrate for an hour, at Bitcoin's hashprice (the market value of SHA-256 work): the attacker then mines as fast as everyone else together">
+            <label>Rent the hashrate, 1 h</label><b>{{ usd(a.perHour, 0) }}</b><small>at Bitcoin's hashprice</small></div>
+          <div><label>Per block outmined</label><b>{{ usd(a.perBlock, 0) }}</b><small>a block every {{ secs(a.blockTime) }}</small></div>
+          <div title="ECX's 24 h trading volume, in hours of rented hashrate: a double spend can only take what the markets can pay out">
+            <label>24 h volume</label><b>{{ a.volumeHours !== null ? a.volumeHours.toFixed(0) + ' h' : '–' }}</b><small>of rented hashrate</small></div>
+          <div><label>Majority pool</label><b [style.color]="a.majority ? '#ff6b6b' : '#3bd16f'">{{ a.majority ? pct(a.majority.share) : 'none' }}</b><small>{{ a.majority?.name ?? 'no pool over 50%' }}</small></div>
+        </div>
+        <h4 class="pad">Confirmations to wait <span class="dim">so outmining them costs more than the deposit</span></h4>
+        <div class="hscroll"><table class="tbl small pad-tbl">
+          <thead><tr><th>Deposit</th><th class="r">Confirmations</th><th class="r">Wait</th></tr></thead>
+          <tbody>@for (d of a.deposits; track d.usd) {<tr><td>{{ usd(d.usd, 0) }}</td><td class="r">{{ d.blocks ?? '–' }}</td><td class="r">{{ span(d.time) }}</td></tr>}</tbody>
+        </table></div>
+        <ul class="risks">
+          @if (a.majority) {<li><b>A pool already has the majority.</b> {{ a.majority.name }} can reorganise blocks without renting anything: confirmations only protect against outsiders, and the pool's own blocks decide.</li>}
+          <li><b>Rentable.</b> eCash's hashrate is {{ econ?.share !== null && econ?.share !== undefined ? pct(econ.share, 2) : '–' }} of the SHA-256 hashrate of the two chains: the same machines mine Bitcoin, and hashrate markets sell more than eCash's whole network.</li>
+          <li><b>Double spends.</b> A deposit worth more than the blocks it waits for is worth attacking: exchanges should wait the confirmations above (more with a rental service's margin).</li>
+          @if (a.escrow) {<li><b>Sidechain escrow.</b> Taking a sidechain's escrow ({{ a.escrow.ecx | number:'1.0-4' }} ECX, {{ usd(a.escrow.usd, 0) }}) needs a withdrawal bundle's {{ a.escrow.blocks | number }} acks: holding the majority that long costs about {{ usd(a.escrow.cost, 0) }}, and everyone sees the bundle coming.</li>}
+          <li><b>Cost here is the floor.</b> Power and rental only: no hardware, no rental margin, no price drop from an attack seen.</li>
+        </ul>
+      } @else {<div class="dim pad">Loading…</div>}
+    </section>
+
     <!-- big moves -->
     <section class="pane moves">
       <header><span class="tag">BIG MOVES</span> eCash's largest transactions, the last {{ whales?.blocks ?? '…' }} blocks</header>
       @if (volumeChart) {<h4 class="pad">On-chain volume a day <span class="dim">outputs of non-coinbase transactions</span></h4><div echarts class="chart vol" [options]="volumeChart" [initOpts]="chartInit"></div>}
       <div class="hscroll"><table class="tbl">
-        <thead><tr><th>Transaction</th><th class="r">Moved</th><th class="r">USD</th><th>Largest output to</th><th class="r">In/out</th><th class="r">Block</th></tr></thead>
+        <thead><tr><th>Transaction</th><th class="r">Moved</th><th class="r">USD</th><th class="sm-hide">Largest output to</th><th class="r sm-hide">In/out</th><th class="r sm-hide">Block</th></tr></thead>
         <tbody>
           @for (w of whales?.moves ?? []; track w.txid) {
             <tr>
               <td><a class="mono" [routerLink]="'/tx/' + w.txid">{{ short(w.txid) }}</a> <span class="dim">{{ ago(w.time) }}</span></td>
               <td class="r">{{ coins(w.value) }} ECX</td>
               <td class="r">{{ markets?.ecx?.priceUsd ? usd(w.value * markets.ecx.priceUsd, 0) : '–' }}</td>
-              <td>@if (w.to) {<a class="mono" [routerLink]="'/address/' + w.to">{{ short(w.to) }}</a>} @else {–} <span class="dim">{{ coins(w.largest) }}</span></td>
-              <td class="r">{{ w.inputs }}/{{ w.outputs }}</td>
-              <td class="r"><a [routerLink]="'/block/' + w.height">{{ w.height | number }}</a></td>
+              <td class="sm-hide">@if (w.to) {<a class="mono" [routerLink]="'/address/' + w.to">{{ short(w.to) }}</a>} @else {–} <span class="dim">{{ coins(w.largest) }}</span></td>
+              <td class="r sm-hide">{{ w.inputs }}/{{ w.outputs }}</td>
+              <td class="r sm-hide"><a [routerLink]="'/block/' + w.height">{{ w.height | number }}</a></td>
             </tr>
           } @empty {<tr><td colspan="6" class="dim">Reading the last week's blocks…</td></tr>}
         </tbody>

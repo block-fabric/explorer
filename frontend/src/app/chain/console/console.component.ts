@@ -60,6 +60,16 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
   power = 0.05; // $/kWh
   bitcoin: any = null;
   econ: { rows: { label: string; ecash: string; btc: string; note?: string; good?: boolean | null }[]; share: number | null } | null = null;
+  hashprice: { ecash: number | null; btc: number | null; ratio: number | null; ecxPerPh: number | null; btcPerPh: number | null } | null = null;
+  hashpriceChart: any = null;
+  attack: {
+    level: 'Critical' | 'High' | 'Moderate' | 'Low'; why: string; perHour: number | null; perBlock: number | null; blockTime: number | null;
+    volumeHours: number | null; majority: { name: string; share: number } | null;
+    deposits: { usd: number; blocks: number | null; time: number | null }[];
+    escrow: { usd: number | null; ecx: number; blocks: number; cost: number | null } | null;
+  } | null = null;
+  /** the drivechain's constants (bundle threshold, max age) */
+  dcInfo: any = null;
   // sidechains, the peg's actors
   sidechains: { slot: number; name: string; color: string; tip: number | null; escrow: number | null; deposits: number; depositAmount: number;
     withdrawals: number; bmmBlocks: number; lastBmm: number | null; pending: number; link: string | null }[] = [];
@@ -135,6 +145,7 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
       }
       this.adjustment = d.adjustment ?? this.adjustment;
       this.mempool = d.mempool ?? this.mempool;
+      this.dcInfo = d.summary?.info ?? this.dcInfo;
       if (d.summary?.sidechains) {
         this.sidechains = d.summary.sidechains.filter((s: any) => s.profile).map((s: any) => {
           const net = NETS.find(n => n.id === s.profile);
@@ -151,6 +162,7 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
       }
       this.feedData = d;
       this.buildFeed();
+      this.econ = this.economics();
       this.cd.markForCheck();
     });
   }
@@ -178,6 +190,7 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
           .sort((a: any, b: any) => b.bids - a.bids);
       }
       this.econ = this.economics();
+      this.hashpriceChart = this.buildHashpriceChart();
       this.cd.markForCheck();
     });
   }
@@ -195,6 +208,7 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
       this.bitcoin = b ?? this.bitcoin;
       this.priceChart = this.buildPriceChart();
       this.econ = this.economics();
+      this.hashpriceChart = this.buildHashpriceChart();
       this.cd.markForCheck();
     });
   }
@@ -394,6 +408,12 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
     const t = derive(btc);
     const rent = ecash.hashrate && t.hashprice !== null ? (ecash.hashrate / PH) * t.hashprice / 24 : null;
     const ratio = e.hashprice !== null && t.hashprice !== null && t.hashprice > 0 ? e.hashprice / t.hashprice : null;
+    this.hashprice = {
+      ecash: e.hashprice, btc: t.hashprice, ratio,
+      ecxPerPh: ecash.reward !== null && e.perDay !== null && ecash.hashrate ? ecash.reward * e.perDay / (ecash.hashrate / PH) : null,
+      btcPerPh: btc.reward !== null && t.perDay !== null && btc.hashrate ? btc.reward * t.perDay / (btc.hashrate / PH) : null,
+    };
+    this.attack = this.attackCost(rent, ecash.blockTime, ecxUsd);
     const rows = [
       { label: 'Hashrate', ecash: this.hash(ecash.hashrate), btc: this.hash(btc.hashrate) },
       { label: 'Difficulty', ecash: this.big(ecash.difficulty), btc: this.big(btc.difficulty) },
@@ -414,6 +434,39 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
       { label: 'Rent eCash\'s hashrate for 1 h', ecash: this.usd(rent, 0), btc: '–', note: 'at Bitcoin\'s hashprice: a 51% attack\'s floor' },
     ];
     return { rows, share: ecash.hashrate && btc.hashrate ? ecash.hashrate / (ecash.hashrate + btc.hashrate) : null };
+  }
+
+  /**
+   * What a 51% attack on eCash costs, and who could make one. Renting eCash's whole hashrate (doubling it: the attacker
+   * then mines as fast as everyone else together) is priced at Bitcoin's hashprice, the market value of SHA-256 work
+   * (a rental service adds its margin): per hour and per block. A double spend of a deposit pays when the deposit is worth
+   * more than the blocks it must outmine, so a deposit of V wants about V / (cost of a block) confirmations. Stealing a
+   * sidechain's escrow takes a withdrawal bundle's acks (the drivechain's threshold, in blocks) under the attacker's
+   * majority. A pool with the majority already needs no rental at all.
+   */
+  private attackCost(perHour: number | null, blockTime: number | null, ecxUsd: number | null): ChainConsoleComponent['attack'] {
+    const top = this.decent?.top ?? null;
+    const majority = top && top.share > 0.5 ? top : null;
+    const perBlock = perHour !== null && blockTime ? perHour * blockTime / 3600 : null;
+    const volume = this.markets?.ecx?.volume24hUsd ?? null;
+    const deposits = [1_000, 10_000, 100_000, 1_000_000].map(usd => {
+      const blocks = perBlock ? Math.max(1, Math.ceil(usd / perBlock)) : null;
+      return { usd, blocks, time: blocks !== null && blockTime ? blocks * blockTime : null };
+    });
+    const escrowSats = this.sidechains.reduce((sum, c) => sum + (c.escrow ?? 0), 0);
+    const threshold = this.dcInfo?.bundleThreshold ?? null;
+    const escrow = threshold ? {
+      ecx: escrowSats / 1e8, usd: ecxUsd !== null ? escrowSats / 1e8 * ecxUsd : null, blocks: threshold,
+      cost: perBlock !== null ? perBlock * threshold : null,
+    } : null;
+    const level = majority ? 'Critical' : perHour === null ? 'High' : perHour < 10_000 ? 'High' : perHour < 100_000 ? 'Moderate' : 'Low';
+    const why = majority ? `${majority.name} alone has ${this.pct(majority.share)} of the work: it can reorganise eCash without renting anything`
+      : perHour !== null && perHour < 10_000 ? `an hour of eCash's whole hashrate rents for ${this.usd(perHour, 0)}: within reach of one actor`
+      : perHour !== null ? `an hour of eCash's whole hashrate rents for ${this.usd(perHour, 0)}` : 'Bitcoin\'s hashprice is not known yet';
+    return {
+      level, why, perHour, perBlock, blockTime, majority, deposits, escrow,
+      volumeHours: perHour && volume ? volume / perHour : null,
+    };
   }
 
   setEfficiency(v: string): void {
@@ -450,6 +503,53 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
         { name: 'neoxa ECX/USDC (1 h)', type: 'line', showSymbol: false, data: neoxa, lineStyle: { width: 1.5, color: '#5aa6ff' }, itemStyle: { color: '#5aa6ff' } },
         ...(ours.length >= 2 ? [{ name: 'ECX, all venues', type: 'line', showSymbol: false, data: ours, lineStyle: { width: 2, color: '#f5a623' }, itemStyle: { color: '#f5a623' },
           areaStyle: { color: '#f5a62318' } }] : []),
+      ],
+    };
+  }
+
+  /**
+   * eCash's hashprice bucket by bucket over the window: each bucket's rewards (subsidy and fees) at ECX's price then
+   * (neoxa's hourly close nearest it; none before its candles), over its hashrate and its duration; Bitcoin's now beside
+   */
+  private buildHashpriceChart(): any {
+    const m = this.mining;
+    if (!m?.series?.length || !this.candles.length) {
+      return null;
+    }
+    const subsidy = m.halving?.subsidy ?? 3.125;
+    const closes = this.candles.map(k => [k.time, k.close] as [number, number]);
+    const priceAt = (t: number): number | null => {
+      let best: [number, number] | null = null;
+      for (const c of closes) {
+        if (!best || Math.abs(c[0] - t) < Math.abs(best[0] - t)) {
+          best = c;
+        }
+      }
+      return best && Math.abs(best[0] - t) <= 2 * 3600 ? best[1] : null;
+    };
+    const data = m.series.map((b: any) => {
+      const price = priceAt(b.time);
+      const days = b.blocks * (b.blockTime ?? 0) / 86400;
+      if (price === null || !days || !b.hashrate) {
+        return null;
+      }
+      const reward = b.blocks * subsidy + (b.fees ?? 0) / 1e8;
+      return [b.time * 1000, reward * price / days / (b.hashrate / 1e15)];
+    }).filter((x: any) => x !== null);
+    if (data.length < 2) {
+      return null;
+    }
+    const btc = this.hashprice?.btc ?? null;
+    return {
+      animation: false, grid: { left: 44, right: 10, top: 24, bottom: 22 },
+      legend: { top: 0, right: 0, textStyle: { color: '#ffffffaa', fontSize: 10 }, itemWidth: 10, itemHeight: 6 },
+      tooltip: { trigger: 'axis', ...TOOLTIP, valueFormatter: (v: number) => '$' + v?.toFixed(2) + '/PH/day' },
+      xAxis: { type: 'time', ...AXIS, splitLine: { show: false } },
+      yAxis: { type: 'value', scale: true, ...AXIS, axisLabel: { ...AXIS.axisLabel, formatter: (v: number) => '$' + v } },
+      series: [
+        { name: 'eCash', type: 'line', showSymbol: false, smooth: 0.3, data, lineStyle: { width: 1.5, color: '#f5a623' }, itemStyle: { color: '#f5a623' }, areaStyle: { color: '#f5a62314' },
+          ...(btc !== null ? { markLine: { symbol: 'none', silent: true, label: { color: '#ffffffaa', fontSize: 10, formatter: 'Bitcoin now', position: 'insideEndTop' },
+            lineStyle: { color: '#5aa6ff', type: 'dashed' }, data: [{ yAxis: btc }] } } : {}) },
       ],
     };
   }
@@ -632,6 +732,18 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
 
   ecxPairs(): any[] {
     return (this.markets?.pairs ?? []).filter((p: any) => p.asset === 'ECX').sort((a: any, b: any) => (b.volume24hUsd ?? 0) - (a.volume24hUsd ?? 0));
+  }
+
+  levelColor(level: string | undefined): string {
+    return level === 'Low' ? GREEN : level === 'Moderate' ? AMBER : RED;
+  }
+
+  /** a duration in seconds, short */
+  span(s: number | null): string {
+    if (s === null) {
+      return '–';
+    }
+    return s < 3600 ? `${Math.round(s / 60)} min` : s < 172800 ? `${(s / 3600).toFixed(1)} h` : `${(s / 86400).toFixed(1)} d`;
   }
 
   gradeColor(): string {

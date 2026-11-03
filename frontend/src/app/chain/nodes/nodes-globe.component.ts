@@ -1,4 +1,4 @@
-import { AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, Input, NgZone, OnChanges, OnDestroy, ViewChild, Inject, PLATFORM_ID } from '@angular/core';
+import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, Input, NgZone, OnChanges, OnDestroy, ViewChild, Inject, PLATFORM_ID } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { hostName } from './nodes.component';
 
@@ -40,13 +40,18 @@ function ago(t: number): string {
 @Component({
   selector: 'app-nodes-globe',
   standalone: true,
-  template: `<div #host class="globe-host" [style.height.px]="height"></div>@if (failed) {<div class="globe-failed">The map needs WebGL, which this browser does not offer.</div>}`,
+  template: `<div #host class="globe-host" [class.locked]="locked" [style.height.px]="narrow ? Math.min(height, 330) : height"></div>
+    @if (touch && !failed) {<button type="button" class="globe-lock" (click)="setLocked(!locked)">{{ locked ? 'Tap to explore' : 'Done' }}</button>}
+    @if (failed) {<div class="globe-failed">The map needs WebGL, which this browser does not offer.</div>}`,
   styles: [`
     :host { display: block; position: relative; }
     .globe-host { width: 100%; height: 460px; cursor: grab; }
     .globe-host:active { cursor: grabbing; }
     .globe-failed { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--cx-ink-3); font-size: 0.85rem; }
-    @media (max-width: 767px) { .globe-host { height: 340px; } }
+    .globe-host.locked { cursor: default; }
+    .globe-host.locked ::ng-deep canvas { pointer-events: none; touch-action: pan-y !important; }
+    .globe-lock { position: absolute; right: 10px; bottom: 10px; z-index: 2; border: 1px solid #ffffff33; background: rgba(13,17,28,0.85); color: #fff;
+      font-size: 0.75rem; padding: 5px 12px; border-radius: 99px; backdrop-filter: blur(4px); }
   `],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -61,12 +66,24 @@ export class NodesGlobeComponent implements AfterViewInit, OnChanges, OnDestroy 
   @ViewChild('host', { static: true }) host: ElementRef<HTMLDivElement>;
 
   failed = false;
+  Math = Math;
+  /** a phone's screen: a shorter globe */
+  narrow = false;
+  /** a touch screen: the globe starts locked (turning by itself, the page scrolling over it) until "Tap to explore" */
+  touch = false;
+  locked = false;
   private globe: any = null;
   private resize: ResizeObserver | null = null;
   private shown = '';
   private destroyed = false;
 
-  constructor(private zone: NgZone, @Inject(PLATFORM_ID) private platformId: object) {}
+  constructor(private zone: NgZone, private cd: ChangeDetectorRef, @Inject(PLATFORM_ID) private platformId: object) {
+    if (isPlatformBrowser(platformId)) {
+      this.narrow = window.matchMedia('(max-width: 767px)').matches;
+      this.touch = window.matchMedia('(pointer: coarse)').matches;
+      this.locked = this.touch;
+    }
+  }
 
   ngAfterViewInit(): void {
     if (!isPlatformBrowser(this.platformId)) {
@@ -127,13 +144,23 @@ export class NodesGlobeComponent implements AfterViewInit, OnChanges, OnDestroy 
       controls.zoomSpeed = 0.6;
       controls.minDistance = 130;
       controls.maxDistance = 520;
+      controls.enabled = !this.locked;
       this.globe = globe;
       this.resize = new ResizeObserver(() => globe.width(el.clientWidth).height(el.clientHeight));
       this.resize.observe(el);
       this.shown = '';
       this.update();
     } catch {
-      this.zone.run(() => { this.failed = true; });
+      this.zone.run(() => { this.failed = true; this.cd.markForCheck(); });
+    }
+  }
+
+  /** lock the globe (a touch screen: the page scrolls over it) or let it be turned, zoomed and its points tapped */
+  setLocked(locked: boolean): void {
+    this.locked = locked;
+    if (this.globe) {
+      this.globe.controls().enabled = !locked;
+      this.globe.controls().autoRotate = locked;
     }
   }
 
