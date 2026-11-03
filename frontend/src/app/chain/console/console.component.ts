@@ -59,13 +59,13 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
   efficiency = 17.5; // J/TH: a current SHA-256 machine's
   power = 0.05; // $/kWh
   bitcoin: any = null;
-  econ: { rows: { label: string; ecash: string; btc: string; note?: string; good?: boolean | null }[]; share: number | null } | null = null;
-  hashprice: { ecash: number | null; btc: number | null; ratio: number | null; ecxPerPh: number | null; btcPerPh: number | null } | null = null;
+  bch: any = null;
+  econ: { rows: { label: string; ecash: string; btc: string; bch: string; note?: string; good?: boolean | null }[]; share: number | null; shareBch: number | null } | null = null;
+  hashprice: { ecash: number | null; btc: number | null; bch: number | null; ratio: number | null; ratioBch: number | null; ecxPerPh: number | null; btcPerPh: number | null } | null = null;
   hashpriceChart: any = null;
   attack: {
     level: 'Critical' | 'High' | 'Moderate' | 'Low'; why: string; perHour: number | null; perBlock: number | null; blockTime: number | null;
     volumeHours: number | null; majority: { name: string; share: number } | null;
-    deposits: { usd: number; blocks: number | null; time: number | null }[];
     escrow: { usd: number | null; ecx: number; blocks: number; cost: number | null } | null;
   } | null = null;
   /** the drivechain's constants (bundle threshold, max age) */
@@ -87,7 +87,8 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
   hosts: { name: string; count: number; title: string }[] = [];
   countries: { name: string; count: number }[] = [];
   clients: { name: string; count: number; color: string }[] = [];
-  holders: { address: string; balance: number; share: number }[] = [];
+  /** each sidechain's BMM over the window: the share of eCash blocks carrying it, its longest gap, last carried, contested */
+  liveness: { name: string; color: string; coverage: number; longestGap: number | null; lastHeight: number | null; contested: number }[] = [];
   // markets, events
   markets: any = null;
   candles: any[] = [];
@@ -113,7 +114,6 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
     this.subs.push(timer(0, 60_000).subscribe(() => { this.loadMarkets(); this.loadSolana(); }));
     this.subs.push(timer(0, 120_000).subscribe(() => { this.loadNodes(); this.loadWhales(); }));
     this.subs.push(timer(0, 5 * 60_000).subscribe(() => this.loadMining()));
-    this.subs.push(timer(0, 15 * 60_000).subscribe(() => this.loadSlow()));
   }
 
   ngOnDestroy(): void {
@@ -205,6 +205,10 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
           .map((s: any) => ({ name: s.name, color: NETS.find(n => n.id === s.profile)?.color ?? '#9aa4b2', requests: s.requests, accepts: s.accepts,
             bids: s.bids, avg: s.bidAvg, max: s.bidMax, coverage: s.coverage }))
           .sort((a: any, b: any) => b.bids - a.bids);
+        this.liveness = (cockpit.slots ?? []).filter((s: any) => s.profile || s.accepts > 0)
+          .map((s: any) => ({ name: s.name, color: NETS.find(n => n.id === s.profile)?.color ?? '#9aa4b2', coverage: s.coverage ?? 0,
+            longestGap: s.longestGap ?? null, lastHeight: s.lastAcceptHeight ?? null, contested: s.contested ?? 0 }))
+          .sort((a: any, b: any) => b.coverage - a.coverage);
       }
       this.econ = this.economics();
       this.hashpriceChart = this.buildHashpriceChart();
@@ -217,7 +221,9 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
       m: this.get<any>('/api/v1/chain/intel/markets'),
       c: this.get<any[]>('/api/v1/chain/intel/candles/ECX_USDC'),
       b: this.get<any>('/api/v1/chain/intel/bitcoin'),
-    }).subscribe(({ m, c, b }) => {
+      h: this.get<any>('/api/v1/chain/intel/bch'),
+    }).subscribe(({ m, c, b, h }) => {
+      this.bch = h ?? this.bch;
       this.markets = m ?? this.markets;
       if (c?.length) {
         this.candles = c;
@@ -307,15 +313,6 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
     });
   }
 
-  private loadSlow(): void {
-    forkJoin({
-      rich: this.get<any>('/thunder/api/v1/l2/feature/richlist'),
-    }).subscribe(({ rich }) => {
-      this.holders = (rich?.items ?? []).slice(0, 6).map((r: any) => ({ address: r.address, balance: r.balance, share: r.share }));
-      this.buildFeed();
-      this.cd.markForCheck();
-    });
-  }
 
   // --- derived ------------------------------------------------------------------------------------------------------
 
@@ -407,75 +404,89 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Mining eCash and mining Bitcoin, with the same machines: each chain's revenue per petahash a day (its hashprice),
-   * what that hashrate costs in power at the efficiency and price set above, the power price at which mining breaks
-   * even, what a coin costs to mine, and what renting eCash's whole hashrate for an hour would cost at Bitcoin's
+   * Mining eCash, Bitcoin and Bitcoin Cash, with the same machines: each chain's revenue per petahash a day (its
+   * hashprice), what that hashrate costs in power at the efficiency and price set above, the power price at which mining
+   * breaks even, what a coin costs to mine, and what renting eCash's whole hashrate for an hour would cost at Bitcoin's
    * hashprice (a 51% attack's floor, if hashrate can be rented).
    */
   economics(): ChainConsoleComponent['econ'] {
     const m = this.mining?.totals;
     const n = this.mining?.blocks ?? m?.blocks ?? 0; // (the window's block count is the answer's, not its totals')
     const b = this.bitcoin;
+    const c = this.bch;
     const ecxUsd = this.markets?.ecx?.priceUsd ?? null;
     if (!m || !b) {
       return null;
     }
     const PH = 1e15;
     const costPerPhDay = this.efficiency * 24 * this.power; // E J/TH: 1 PH = E kW; a day = 24 E kWh
-    const ecash = {
+    type Chain = { hashrate: number | null; difficulty: number | null; price: number | null; blockTime: number | null; reward: number | null; fees: number | null };
+    const ecash: Chain = {
       hashrate: m.hashrate ?? null, difficulty: m.difficulty ?? null, price: ecxUsd, blockTime: m.avgBlockTime ?? null,
       reward: n ? (m.reward ?? 0) / n / 1e8 : null, fees: n ? (m.fees ?? 0) / n / 1e8 : null,
     };
-    const btc = {
+    const btc: Chain = {
       hashrate: b.hashrate, difficulty: b.difficulty, price: b.priceUsd, blockTime: b.avgBlockTime ?? 600,
       reward: b.reward144 !== null ? b.reward144 / 144 / 1e8 : null, fees: b.fees144 !== null ? b.fees144 / 144 / 1e8 : null,
     };
-    const derive = (c: typeof ecash) => {
-      const perDay = c.blockTime ? 86400 / c.blockTime : null;
-      const revenue = c.reward !== null && c.price !== null && perDay !== null ? c.reward * c.price * perDay : null;
-      const hashprice = revenue !== null && c.hashrate ? revenue / (c.hashrate / PH) : null;
-      const cost = c.hashrate ? (c.hashrate / PH) * costPerPhDay : null;
-      const coins = c.reward !== null && perDay !== null ? c.reward * perDay : null;
+    const bch: Chain = {
+      hashrate: c?.hashrate ?? null, difficulty: c?.difficulty ?? null, price: c?.priceUsd ?? null, blockTime: c?.avgBlockTime ?? null,
+      reward: c?.rewardPerBlock ?? null, fees: c?.feesPerBlock ?? null,
+    };
+    const derive = (x: Chain) => {
+      const perDay = x.blockTime ? 86400 / x.blockTime : null;
+      const revenue = x.reward !== null && x.price !== null && perDay !== null ? x.reward * x.price * perDay : null;
+      const hashprice = revenue !== null && x.hashrate ? revenue / (x.hashrate / PH) : null;
+      const cost = x.hashrate ? (x.hashrate / PH) * costPerPhDay : null;
+      const coins = x.reward !== null && perDay !== null ? x.reward * perDay : null;
       return { perDay, revenue, hashprice, cost, coinCost: cost !== null && coins ? cost / coins : null,
         breakeven: hashprice !== null ? hashprice / (this.efficiency * 24) : null };
     };
     const e = derive(ecash);
     const t = derive(btc);
+    const h = derive(bch);
     const rent = ecash.hashrate && t.hashprice !== null ? (ecash.hashrate / PH) * t.hashprice / 24 : null;
     const ratio = e.hashprice !== null && t.hashprice !== null && t.hashprice > 0 ? e.hashprice / t.hashprice : null;
+    const ratioBch = e.hashprice !== null && h.hashprice !== null && h.hashprice > 0 ? e.hashprice / h.hashprice : null;
     this.hashprice = {
-      ecash: e.hashprice, btc: t.hashprice, ratio,
+      ecash: e.hashprice, btc: t.hashprice, bch: h.hashprice, ratio, ratioBch,
       ecxPerPh: ecash.reward !== null && e.perDay !== null && ecash.hashrate ? ecash.reward * e.perDay / (ecash.hashrate / PH) : null,
       btcPerPh: btc.reward !== null && t.perDay !== null && btc.hashrate ? btc.reward * t.perDay / (btc.hashrate / PH) : null,
     };
     this.attack = this.attackCost(rent, ecash.blockTime, ecxUsd);
+    const coin = (x: Chain, unit: string) => x.reward !== null ? x.reward.toFixed(3) + ' ' + unit : '–';
+    const feeShare = (x: Chain) => x.fees !== null && x.reward ? (x.fees / x.reward * 100).toFixed(2) + '%' : '–';
+    const kwh = (v: number | null) => v !== null ? '$' + v.toFixed(3) + '/kWh' : '–';
+    const best = Math.max(...[e.hashprice, t.hashprice, h.hashprice].map(v => v ?? -Infinity));
     const rows = [
-      { label: 'Hashrate', ecash: this.hash(ecash.hashrate), btc: this.hash(btc.hashrate) },
-      { label: 'Difficulty', ecash: this.big(ecash.difficulty), btc: this.big(btc.difficulty) },
-      { label: 'Block time', ecash: this.secs(ecash.blockTime), btc: this.secs(btc.blockTime) },
-      { label: 'Reward per block', ecash: ecash.reward !== null ? ecash.reward.toFixed(3) + ' ECX' : '–', btc: btc.reward !== null ? btc.reward.toFixed(3) + ' BTC' : '–',
-        note: `fees: ${ecash.fees !== null ? (ecash.fees / (ecash.reward || 1) * 100).toFixed(2) : '–'}% · ${btc.fees !== null ? (btc.fees / (btc.reward || 1) * 100).toFixed(2) : '–'}%` },
-      { label: 'Coin price', ecash: this.usd(ecash.price), btc: this.usd(btc.price, 0) },
-      { label: 'Miners\' revenue a day', ecash: this.usd(e.revenue, 0), btc: this.usd(t.revenue, 0) },
-      { label: 'Hashprice ($/PH/day)', ecash: this.usd(e.hashprice), btc: this.usd(t.hashprice), good: ratio !== null ? ratio >= 1 : null,
-        note: ratio !== null ? `eCash pays ${ratio.toFixed(2)}x Bitcoin per hash` : undefined },
-      { label: 'Power cost ($/PH/day)', ecash: this.usd(costPerPhDay), btc: this.usd(costPerPhDay), note: 'the same machines' },
+      { label: 'Hashrate', ecash: this.hash(ecash.hashrate), btc: this.hash(btc.hashrate), bch: this.hash(bch.hashrate) },
+      { label: 'Difficulty', ecash: this.big(ecash.difficulty), btc: this.big(btc.difficulty), bch: this.big(bch.difficulty) },
+      { label: 'Block time', ecash: this.secs(ecash.blockTime), btc: this.secs(btc.blockTime), bch: this.secs(bch.blockTime) },
+      { label: 'Reward per block', ecash: coin(ecash, 'ECX'), btc: coin(btc, 'BTC'), bch: coin(bch, 'BCH'),
+        note: `fees: ${feeShare(ecash)} · ${feeShare(btc)} · ${feeShare(bch)}` },
+      { label: 'Coin price', ecash: this.usd(ecash.price), btc: this.usd(btc.price, 0), bch: this.usd(bch.price) },
+      { label: 'Miners\' revenue a day', ecash: this.usd(e.revenue, 0), btc: this.usd(t.revenue, 0), bch: this.usd(h.revenue, 0) },
+      { label: 'Hashprice ($/PH/day)', ecash: this.usd(e.hashprice), btc: this.usd(t.hashprice), bch: this.usd(h.hashprice),
+        good: e.hashprice !== null ? e.hashprice >= best : null,
+        note: ratio !== null ? `eCash pays ${ratio.toFixed(2)}x Bitcoin${ratioBch !== null ? `, ${ratioBch.toFixed(2)}x Bitcoin Cash` : ''} per hash` : undefined },
+      { label: 'Power cost ($/PH/day)', ecash: this.usd(costPerPhDay), btc: this.usd(costPerPhDay), bch: this.usd(costPerPhDay), note: 'the same machines' },
       { label: 'Margin ($/PH/day)', ecash: this.usd(e.hashprice !== null ? e.hashprice - costPerPhDay : null), btc: this.usd(t.hashprice !== null ? t.hashprice - costPerPhDay : null),
-        good: e.hashprice !== null ? e.hashprice > costPerPhDay : null },
-      { label: 'Break-even power price', ecash: e.breakeven !== null ? '$' + e.breakeven.toFixed(3) + '/kWh' : '–', btc: t.breakeven !== null ? '$' + t.breakeven.toFixed(3) + '/kWh' : '–' },
-      { label: 'Power cost of a coin', ecash: this.usd(e.coinCost), btc: this.usd(t.coinCost, 0),
+        bch: this.usd(h.hashprice !== null ? h.hashprice - costPerPhDay : null), good: e.hashprice !== null ? e.hashprice > costPerPhDay : null },
+      { label: 'Break-even power price', ecash: kwh(e.breakeven), btc: kwh(t.breakeven), bch: kwh(h.breakeven) },
+      { label: 'Power cost of a coin', ecash: this.usd(e.coinCost), btc: this.usd(t.coinCost, 0), bch: this.usd(h.coinCost),
         note: e.coinCost !== null && ecash.price ? `${(e.coinCost / ecash.price * 100).toFixed(0)}% of ECX's price` : undefined },
-      { label: 'Network power cost a day', ecash: this.usd(e.cost, 0), btc: this.usd(t.cost, 0) },
-      { label: 'Rent eCash\'s hashrate for 1 h', ecash: this.usd(rent, 0), btc: '–', note: 'at Bitcoin\'s hashprice: a 51% attack\'s floor' },
+      { label: 'Network power cost a day', ecash: this.usd(e.cost, 0), btc: this.usd(t.cost, 0), bch: this.usd(h.cost, 0) },
+      { label: 'Rent the hashrate for 1 h', ecash: this.usd(rent, 0), btc: '–',
+        bch: bch.hashrate && t.hashprice !== null ? this.usd((bch.hashrate / PH) * t.hashprice / 24, 0) : '–', note: 'at Bitcoin\'s hashprice: a 51% attack\'s floor' },
     ];
-    return { rows, share: ecash.hashrate && btc.hashrate ? ecash.hashrate / (ecash.hashrate + btc.hashrate) : null };
+    const total = (ecash.hashrate ?? 0) + (btc.hashrate ?? 0) + (bch.hashrate ?? 0);
+    return { rows, share: ecash.hashrate && total ? ecash.hashrate / total : null, shareBch: bch.hashrate && total ? bch.hashrate / total : null };
   }
 
   /**
    * What a 51% attack on eCash costs, and who could make one. Renting eCash's whole hashrate (doubling it: the attacker
    * then mines as fast as everyone else together) is priced at Bitcoin's hashprice, the market value of SHA-256 work
-   * (a rental service adds its margin): per hour and per block. A double spend of a deposit pays when the deposit is worth
-   * more than the blocks it must outmine, so a deposit of V wants about V / (cost of a block) confirmations. Stealing a
+   * (a rental service adds its margin): per hour and per block. Stealing a
    * sidechain's escrow takes a withdrawal bundle's acks (the drivechain's threshold, in blocks) under the attacker's
    * majority. A pool with the majority already needs no rental at all.
    */
@@ -484,10 +495,6 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
     const majority = top && top.share > 0.5 ? top : null;
     const perBlock = perHour !== null && blockTime ? perHour * blockTime / 3600 : null;
     const volume = this.markets?.ecx?.volume24hUsd ?? null;
-    const deposits = [1_000, 10_000, 100_000, 1_000_000].map(usd => {
-      const blocks = perBlock ? Math.max(1, Math.ceil(usd / perBlock)) : null;
-      return { usd, blocks, time: blocks !== null && blockTime ? blocks * blockTime : null };
-    });
     const escrowSats = this.sidechains.reduce((sum, c) => sum + (c.escrow ?? 0), 0);
     const threshold = this.dcInfo?.bundleThreshold ?? null;
     const escrow = threshold ? {
@@ -499,7 +506,7 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
       : perHour !== null && perHour < 10_000 ? `an hour of eCash's whole hashrate rents for ${this.usd(perHour, 0)}: within reach of one actor`
       : perHour !== null ? `an hour of eCash's whole hashrate rents for ${this.usd(perHour, 0)}` : 'Bitcoin\'s hashprice is not known yet';
     return {
-      level, why, perHour, perBlock, blockTime, majority, deposits, escrow,
+      level, why, perHour, perBlock, blockTime, majority, escrow,
       volumeHours: perHour && volume ? volume / perHour : null,
     };
   }

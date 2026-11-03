@@ -205,7 +205,7 @@
 
     <!-- mining economics -->
     <section class="pane econ">
-      <header><span class="tag">ECONOMICS</span> mining eCash vs Bitcoin, the same SHA-256 machines
+      <header><span class="tag">ECONOMICS</span> mining eCash, Bitcoin and Bitcoin Cash, the same SHA-256 machines
         <span class="inputs right">
           <label>Efficiency <input type="number" step="0.5" min="1" [value]="efficiency" (change)="setEfficiency($any($event.target).value)"> J/TH</label>
           <label>Power <input type="number" step="0.01" min="0" [value]="power" (change)="setPower($any($event.target).value)"> $/kWh</label>
@@ -213,18 +213,20 @@
       </header>
       @if (econ; as e) {
         <div class="hscroll"><table class="tbl econ-tbl">
-          <thead><tr><th></th><th class="r">eCash</th><th class="r">Bitcoin</th><th class="sm-hide"></th></tr></thead>
+          <thead><tr><th></th><th class="r">eCash</th><th class="r">Bitcoin</th><th class="r">Bitcoin Cash</th><th class="sm-hide"></th></tr></thead>
           <tbody>
             @for (r of e.rows; track r.label) {
               <tr><td>{{ r.label }}@if (r.note) {<small class="note-sm">{{ r.note }}</small>}</td>
                 <td class="r" [class.up]="r.good === true" [class.down]="r.good === false">{{ r.ecash }}</td>
                 <td class="r">{{ r.btc }}</td>
+                <td class="r">{{ r.bch }}</td>
                 <td class="dim note-cell sm-hide">{{ r.note ?? '' }}</td></tr>
             }
           </tbody>
         </table></div>
-        <div class="dim note">eCash has {{ e.share !== null ? pct(e.share, 3) : '–' }} of the two chains' SHA-256 hashrate. eCash's numbers over the last 1,008 blocks;
-          Bitcoin's from <a href="https://mempool.space" target="_blank" rel="noopener">mempool.space</a> (the last 144 blocks' rewards). Power only: no hardware, hosting or pool fees.</div>
+        <div class="dim note">Of the three chains' SHA-256 hashrate, eCash has {{ e.share !== null ? pct(e.share, 3) : '–' }} and Bitcoin Cash {{ e.shareBch !== null ? pct(e.shareBch, 2) : '–' }}.
+          eCash's numbers over the last 1,008 blocks; Bitcoin's from <a href="https://mempool.space" target="_blank" rel="noopener">mempool.space</a> (the last 144 blocks' rewards);
+          Bitcoin Cash's from <a href="https://blockchair.com/bitcoin-cash" target="_blank" rel="noopener">Blockchair</a> (the last 24 h). Power only: no hardware, hosting or pool fees.</div>
       } @else {<div class="dim pad">Loading…</div>}
     </section>
 
@@ -247,12 +249,12 @@
 
     <!-- hashprice -->
     <section class="pane hashp">
-      <header><span class="tag">HASHPRICE</span> what a petahash earns a day, eCash and Bitcoin</header>
+      <header><span class="tag">HASHPRICE</span> what a petahash earns a day, eCash, Bitcoin and Bitcoin Cash</header>
       <div class="big">
         <div><label>eCash</label><b>{{ usd(hashprice?.ecash) }}</b><small>per PH a day · {{ hashprice?.ecash !== null && hashprice?.ecash !== undefined ? usd(hashprice.ecash / 1000, 4) : '–' }}/TH</small></div>
         <div><label>Bitcoin</label><b>{{ usd(hashprice?.btc) }}</b><small>per PH a day · {{ hashprice?.btc !== null && hashprice?.btc !== undefined ? usd(hashprice.btc / 1000, 4) : '–' }}/TH</small></div>
         <div><label>eCash vs Bitcoin</label><b [class.up]="(hashprice?.ratio ?? 0) >= 1" [class.down]="(hashprice?.ratio ?? 1) < 1">{{ hashprice?.ratio ? hashprice.ratio.toFixed(2) + '×' : '–' }}</b>
-          <small>{{ (hashprice?.ratio ?? 0) >= 1 ? 'more per hash on eCash' : 'more per hash on Bitcoin' }}</small></div>
+          <small>{{ (hashprice?.ratio ?? 0) >= 1 ? 'more per hash on eCash' : 'more per hash on Bitcoin' }}{{ hashprice?.ratioBch ? ' · ' + hashprice.ratioBch.toFixed(2) + '× Bitcoin Cash' : '' }}</small></div>
       </div>
       <div class="big">
         <div title="the coins a petahash mines a day"><label>Hashvalue, eCash</label><b>{{ hashprice?.ecxPerPh !== null && hashprice?.ecxPerPh !== undefined ? hashprice.ecxPerPh.toFixed(3) : '–' }}</b><small>ECX per PH a day</small></div>
@@ -279,15 +281,10 @@
             <label>24 h volume</label><b>{{ a.volumeHours !== null ? a.volumeHours.toFixed(0) + ' h' : '–' }}</b><small>of rented hashrate</small></div>
           <div><label>Majority pool</label><b [style.color]="a.majority ? '#ff6b6b' : '#3bd16f'">{{ a.majority ? pct(a.majority.share) : 'none' }}</b><small>{{ a.majority?.name ?? 'no pool over 50%' }}</small></div>
         </div>
-        <h4 class="pad">Confirmations to wait <span class="dim">so outmining them costs more than the deposit</span></h4>
-        <div class="hscroll"><table class="tbl small pad-tbl">
-          <thead><tr><th>Deposit</th><th class="r">Confirmations</th><th class="r">Wait</th></tr></thead>
-          <tbody>@for (d of a.deposits; track d.usd) {<tr><td>{{ usd(d.usd, 0) }}</td><td class="r">{{ d.blocks ?? '–' }}</td><td class="r">{{ span(d.time) }}</td></tr>}</tbody>
-        </table></div>
         <ul class="risks">
           @if (a.majority) {<li><b>A pool already has the majority.</b> {{ a.majority.name }} can reorganise blocks without renting anything: confirmations only protect against outsiders, and the pool's own blocks decide.</li>}
           <li><b>Rentable.</b> eCash's hashrate is {{ econ?.share !== null && econ?.share !== undefined ? pct(econ.share, 2) : '–' }} of the SHA-256 hashrate of the two chains: the same machines mine Bitcoin, and hashrate markets sell more than eCash's whole network.</li>
-          <li><b>Double spends.</b> A deposit worth more than the blocks it waits for is worth attacking: exchanges should wait the confirmations above (more with a rental service's margin).</li>
+          <li><b>Double spends.</b> A deposit worth more than the blocks an attacker must outmine is worth attacking: the cost per block above sets that price.</li>
           @if (a.escrow) {<li><b>Sidechain escrow.</b> Taking a sidechain's escrow ({{ a.escrow.ecx | number:'1.0-4' }} ECX, {{ usd(a.escrow.usd, 0) }}) needs a withdrawal bundle's {{ a.escrow.blocks | number }} acks: holding the majority that long costs about {{ usd(a.escrow.cost, 0) }}, and everyone sees the bundle coming.</li>}
           <li><b>Cost here is the floor.</b> Power and rental only: no hardware, no rental margin, no price drop from an attack seen.</li>
         </ul>
@@ -357,12 +354,14 @@
           </table>
         </div>
         <div>
-          <h4>Top holders <span class="dim">Thunder</span></h4>
+          <h4>Sidechain liveness <span class="dim">how often each is carried</span></h4>
           <table class="tbl small">
-            <thead><tr><th>Address</th><th class="r">Balance</th><th class="r">Share</th></tr></thead>
-            <tbody>@for (h of holders; track h.address) {<tr><td><a class="mono" [href]="'/thunder/address/' + h.address">{{ short(h.address) }}</a></td>
-              <td class="r">{{ ecx(h.balance) }}</td><td class="r">{{ pct(h.share, 1) }}</td></tr>}
-              @empty {<tr><td colspan="3" class="dim">–</td></tr>}</tbody>
+            <thead><tr><th>Sidechain</th><th class="r" title="the eCash blocks that carried one of its blocks">Coverage</th><th class="r" title="the most eCash blocks in a row without one of its blocks">Longest gap</th><th class="r">Last BMM</th><th class="r" title="eCash blocks where several bids for it competed">Contested</th></tr></thead>
+            <tbody>@for (l of liveness; track l.name) {<tr><td><i class="sw" [style.background]="l.color"></i>{{ l.name }}</td>
+              <td class="r">{{ pct(l.coverage, l.coverage < 0.1 ? 1 : 0) }}</td><td class="r">{{ l.longestGap !== null ? (l.longestGap | number) + ' blk' : '–' }}</td>
+              <td class="r">{{ l.lastHeight !== null && tip !== null ? (tip - l.lastHeight === 0 ? 'now' : (tip - l.lastHeight | number) + ' blk ago') : '–' }}</td>
+              <td class="r">{{ l.contested }}</td></tr>}
+              @empty {<tr><td colspan="5" class="dim">–</td></tr>}</tbody>
           </table>
         </div>
       </div>

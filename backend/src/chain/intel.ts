@@ -17,6 +17,7 @@ import logger from '../logger';
  *            (chain_intel_sol, chain_intel_sol_events).
  *   bitcoin  Bitcoin's price, hashrate, difficulty and last day's rewards (mempool.space's public API), for the
  *            console's comparison of mining eCash and mining Bitcoin (the same SHA-256 machines).
+ *   bch      Bitcoin Cash's, the third SHA-256 chain in the comparison (Blockchair's public stats: the last 24 h).
  *
  * Every source is a fixed URL (nothing from a request reaches one), read with a timeout and a size bound; one that
  * fails leaves the last good answer in place.
@@ -35,6 +36,7 @@ const MINT_MIN = 0.01; // wECX: a supply change below this is rounding
 const LIQUIDITY_MIN = 500; // USD: a smaller liquidity move between two snapshots is not one
 const SOL_EVENTS_KEEP = 200;
 const BITCOIN_TTL = 10 * 60_000;
+const BLOCKCHAIR_BCH = 'https://api.blockchair.com/bitcoin-cash/stats';
 /**
  * The quote tokens a Solana pool's price counts with, by mint (not by symbol: anyone can mint a token called USDC).
  * A pool counts toward ECX's price only quoted in one of these, with MIN_LIQUIDITY at least, its weight its 24 h
@@ -363,6 +365,47 @@ async function $solanaSnapshot(time: number, ecxUsd: number | null): Promise<voi
     await DB.query('DELETE FROM chain_intel_sol WHERE time < ?', [time - INTEL_KEEP]);
     await DB.query('DELETE FROM chain_intel_sol_events WHERE time < ?', [time - INTEL_KEEP]);
   }
+}
+
+/** Bitcoin Cash's mining over the last 24 h: per block, the reward (new coins and fees) and fees, in BCH */
+export interface BitcoinCashMining {
+  updated: number; priceUsd: number | null; hashrate: number | null; difficulty: number | null;
+  rewardPerBlock: number | null; feesPerBlock: number | null; avgBlockTime: number | null; blocks24h: number | null;
+}
+let bch: BitcoinCashMining | null = null;
+let bchAt = 0;
+let bchLoading: Promise<BitcoinCashMining | null> | null = null;
+
+/** Bitcoin Cash's mining numbers, every BITCOIN_TTL; one fetch at a time, at most one per RETRY_TTL while failing @asyncSafe */
+export async function $getBitcoinCash(): Promise<BitcoinCashMining | null> {
+  if (Date.now() - bchAt < (bch ? BITCOIN_TTL : RETRY_TTL)) {
+    return bch;
+  }
+  bchLoading ??= $loadBitcoinCash().finally(() => { bchLoading = null; });
+  return bchLoading;
+}
+
+/** @asyncSafe */
+async function $loadBitcoinCash(): Promise<BitcoinCashMining | null> {
+  bchAt = Date.now();
+  try {
+    const d = (await $get(BLOCKCHAIR_BCH))?.data;
+    const blocks = num(d?.blocks_24h);
+    const minted = num(d?.inflation_24h); // sats of new coins over the 24 h
+    const txs = num(d?.transactions_24h);
+    const avgFee = num(d?.average_transaction_fee_24h); // sats
+    const fees = txs !== null && avgFee !== null ? txs * avgFee : null;
+    if (blocks && blocks > 0) {
+      bch = {
+        updated: Math.floor(Date.now() / 1000), priceUsd: num(d?.market_price_usd), hashrate: num(d?.hashrate_24h), difficulty: num(d?.difficulty),
+        rewardPerBlock: minted !== null ? (minted + (fees ?? 0)) / blocks / 1e8 : null, feesPerBlock: fees !== null ? fees / blocks / 1e8 : null,
+        avgBlockTime: 86400 / blocks, blocks24h: blocks,
+      };
+    }
+  } catch (e) {
+    logger.debug(`Console: Blockchair did not answer: ${e instanceof Error ? e.message : e}`, 'Intel');
+  }
+  return bch;
 }
 
 /** a feed's text with its HTML entities as characters (&#39; is ') */
