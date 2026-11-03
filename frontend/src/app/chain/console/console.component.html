@@ -127,7 +127,7 @@
             @for (c of e.cards; track c.name) {
               <div class="ecard" [class.best]="c.best" [style.--c]="c.color">
                 <div class="ec-name"><i [style.background]="c.color"></i>{{ c.name }}@if (c.best) {<span class="badge">best per hash</span>}</div>
-                <div class="ec-big">{{ usd(c.hashprice) }}<small>per PH a day</small></div>
+                <div class="ec-big">{{ usd(c.hashprice) }}<small>per PH a day, at the current difficulty</small></div>
                 <div class="ec-bar"><i [style.width.%]="c.width" [style.background]="c.color"></i></div>
                 <div class="ec-row" [title]="'an hour of ' + c.name + '\'s whole hashrate, at Bitcoin\'s hashprice (SHA-256 work\'s market price)'"><span>Rent the hashrate, 1 h</span><b>{{ usd(c.rent, 0) }}</b></div>
                 <div class="ec-row" [title]="'the power to mine one ' + c.unit"><span>Cost to make 1 {{ c.unit }}</span><b>{{ usd(c.coinCost, c.coinCost !== null && c.coinCost > 1000 ? 0 : 2) }}</b></div>
