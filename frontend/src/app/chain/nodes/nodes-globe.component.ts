@@ -114,7 +114,11 @@ export class NodesGlobeComponent implements AfterViewInit, OnChanges, OnDestroy 
       const controls = globe.controls();
       controls.autoRotate = true;
       controls.autoRotateSpeed = 0.45;
-      controls.enableZoom = false; // (the page scrolls over it)
+      // zoom with the wheel or a pinch, from close to a region to the whole globe small
+      controls.enableZoom = true;
+      controls.zoomSpeed = 0.6;
+      controls.minDistance = 130;
+      controls.maxDistance = 520;
       this.globe = globe;
       this.resize = new ResizeObserver(() => globe.width(el.clientWidth).height(el.clientHeight));
       this.resize.observe(el);

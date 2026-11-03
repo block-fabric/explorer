@@ -5,7 +5,9 @@ import { PROFILE } from '@app/chain/profiles';
 import { CxColumn, CxFilter } from '@app/chain/components/chain-table/chain-table.component';
 import { SeoService } from '@app/services/seo.service';
 
-const PALETTE = [PROFILE.color, '#5aa6ff', '#ff8a3d', '#f26b9c', '#a585ff', '#2bc79a', '#f5b83d', '#9aa4b2'];
+const PALETTE = [PROFILE.color, '#5aa6ff', '#ff8a3d', '#f26b9c', '#a585ff', '#f5b83d', '#9aa4b2'];
+/** a Backbone build's colours, its most run version first: green, which no other client gets */
+const BACKBONE = ['#3bd16f', '#8fe3a8', '#1f9e4f', '#c4f1d2'];
 
 const NODE_NETWORK = 1;
 const NODE_NETWORK_LIMITED = 1024;
@@ -140,8 +142,13 @@ export class ChainNodesComponent implements OnInit, OnDestroy {
     for (const r of up) {
       byVersion.set(r.agent.node, (byVersion.get(r.agent.node) ?? 0) + 1);
     }
+    let others = 0;
+    let backbones = 0;
     this.versions = [...byVersion.entries()].sort((a, b) => b[1] - a[1])
-      .map(([label, count], i) => ({ label, count, share: up.length ? count / up.length : 0, color: PALETTE[i % PALETTE.length] }));
+      .map(([label, count]) => ({
+        label, count, share: up.length ? count / up.length : 0,
+        color: /\bBackbone\b/.test(label) ? BACKBONE[backbones++ % BACKBONE.length] : PALETTE[others++ % PALETTE.length],
+      }));
     this.colorMap = Object.fromEntries(this.versions.map(v => [v.label, v.color]));
     this.latest = this.versions[0]?.label ?? ''; // the most run (versions do not order across clients, nor across eCash's own renumbering)
 

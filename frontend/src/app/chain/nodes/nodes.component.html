@@ -97,7 +97,7 @@
         <app-nodes-globe [nodes]="rows" [links]="data.links ?? []" [colors]="colorMap" [accent]="profile.color"></app-nodes-globe>
         <div class="map-foot">
           @for (v of versions; track v.label) {<span class="lg"><i [style.background]="v.color"></i>{{ v.label }}</span>}
-          <span class="attr">Drag to turn it. Locations: <a href="https://db-ip.com" target="_blank" rel="noopener">IP Geolocation by DB-IP</a>, a city at best (a VPN shows where it exits).</span>
+          <span class="attr">Drag to turn it, scroll or pinch to zoom. Locations: <a href="https://db-ip.com" target="_blank" rel="noopener">IP Geolocation by DB-IP</a>, a city at best (a VPN shows where it exits).</span>
         </div>
       </div>
     </section>
