@@ -20,6 +20,8 @@ interface Arc { a: Place; b: Place }
 // Natural Earth's 1:50m countries (world-atlas): Europe's coasts and islands as they are (1:110m mangles them)
 const LAND = '/resources/world/countries-50m.json';
 const MAX_ARCS = 400;
+const DETAILED = 6; // a place with more nodes lists them a line each
+const MAX_LINES = 40;
 
 /** text for an HTML label: a node's user agent and host name are anyone's to write */
 function esc(s: unknown): string {
@@ -73,6 +75,13 @@ export class NodesGlobeComponent implements AfterViewInit, OnChanges, OnDestroy 
   touch = false;
   locked = false;
   private globe: any = null;
+  /** the hover card: on the page (fixed), not in the globe's box, which its pane clips */
+  private tip: HTMLDivElement | null = null;
+  private mouse = { x: 0, y: 0 };
+  private onMove = (e: PointerEvent): void => {
+    this.mouse = { x: e.clientX, y: e.clientY };
+    this.place();
+  };
   private resize: ResizeObserver | null = null;
   private shown = '';
   private destroyed = false;
@@ -100,6 +109,9 @@ export class NodesGlobeComponent implements AfterViewInit, OnChanges, OnDestroy 
   ngOnDestroy(): void {
     this.destroyed = true;
     this.resize?.disconnect();
+    this.tip?.remove();
+    this.tip = null;
+    this.host?.nativeElement.removeEventListener('pointermove', this.onMove);
     try {
       this.globe?._destructor();
     } catch { /* already gone */ }
@@ -127,8 +139,9 @@ export class NodesGlobeComponent implements AfterViewInit, OnChanges, OnDestroy 
         .pointLat('lat').pointLng('lng').pointColor('color')
         .pointAltitude((p: Place) => 0.015 + 0.02 * Math.log2(p.nodes.length + 1))
         .pointRadius((p: Place) => 0.32 + 0.12 * Math.sqrt(p.nodes.length))
-        .pointLabel((p: Place) => this.card(p))
-        .onPointHover((p: Place | null) => { globe.controls().autoRotate = !p; el.style.cursor = p ? 'pointer' : ''; })
+        .pointLabel(() => '') // (globe.gl's own tooltip stays inside the globe's box: the card is this.tip)
+        .onPointHover((p: Place | null) => { globe.controls().autoRotate = !p; el.style.cursor = p ? 'pointer' : ''; this.show(p); })
+        .onPointClick((p: Place, e: MouseEvent) => { this.mouse = { x: e.clientX, y: e.clientY }; this.show(p); })
         .ringLat('lat').ringLng('lng').ringColor((p: Place) => (t: number) => this.alpha(p.color, 1 - t))
         .ringMaxRadius(2.2).ringPropagationSpeed(0.9).ringRepeatPeriod(2400)
         // (functions: an accessor's string names a property of the datum itself, not a path)
@@ -146,6 +159,10 @@ export class NodesGlobeComponent implements AfterViewInit, OnChanges, OnDestroy 
       controls.maxDistance = 520;
       controls.enabled = !this.locked;
       this.globe = globe;
+      this.tip = document.createElement('div');
+      Object.assign(this.tip.style, { position: 'fixed', zIndex: '2000', pointerEvents: 'none', display: 'none', maxWidth: 'min(420px, calc(100vw - 16px))' });
+      document.body.appendChild(this.tip);
+      el.addEventListener('pointermove', this.onMove, { passive: true });
       this.resize = new ResizeObserver(() => globe.width(el.clientWidth).height(el.clientHeight));
       this.resize.observe(el);
       this.shown = '';
@@ -214,9 +231,46 @@ export class NodesGlobeComponent implements AfterViewInit, OnChanges, OnDestroy 
     }
   }
 
-  /** a place's nodes, as the table shows them */
+  /** the card for a place, or none */
+  private show(p: Place | null): void {
+    if (!this.tip) {
+      return;
+    }
+    if (!p) {
+      this.tip.style.display = 'none';
+      return;
+    }
+    this.tip.innerHTML = this.card(p);
+    this.tip.style.display = 'block';
+    this.place();
+  }
+
+  /** the card beside the pointer, inside the window: on the pointer's other side near an edge */
+  private place(): void {
+    const t = this.tip;
+    if (!t || t.style.display === 'none') {
+      return;
+    }
+    const w = t.offsetWidth;
+    const h = t.offsetHeight;
+    let x = this.mouse.x + 16;
+    let y = this.mouse.y + 16;
+    if (x + w > window.innerWidth - 8) {
+      x = Math.max(8, this.mouse.x - w - 16);
+    }
+    if (y + h > window.innerHeight - 8) {
+      y = Math.max(8, window.innerHeight - h - 8);
+    }
+    t.style.left = x + 'px';
+    t.style.top = y + 'px';
+  }
+
+  /** a place's nodes, as the table shows them: in full for a few, a line each for many */
   private card(p: Place): string {
-    const rows = p.nodes.slice(0, 6).map(n => `
+    if (p.nodes.length > DETAILED) {
+      return this.lines(p);
+    }
+    const rows = p.nodes.map(n => `
       <div style="padding:6px 0;border-top:1px solid #ffffff1a">
         <div style="font-family:var(--cx-mono, monospace);font-size:12px;color:#fff">${esc(n.short)}</div>
         ${n.rdns ? `<div style="font-size:10.5px;color:#ffffff80;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(n.rdns)}</div>` : ''}
@@ -229,9 +283,25 @@ export class NodesGlobeComponent implements AfterViewInit, OnChanges, OnDestroy 
           · ${n.latency !== null ? n.latency + ' ms' : '–'} · up ${Math.round(n.uptime * 100)}% · ${ago(n.lastSeen)}
         </div>
       </div>`).join('');
-    const more = p.nodes.length > 6 ? `<div style="font-size:11px;color:#ffffff80;padding-top:4px">+${p.nodes.length - 6} more here</div>` : '';
-    return `<div style="background:rgba(17,19,31,0.96);border:1px solid #ffffff26;border-radius:8px;padding:8px 12px;min-width:220px;max-width:300px;box-shadow:0 6px 24px #0008">
-      <div style="font-size:12px;font-weight:600;color:#fff;padding-bottom:6px">${esc(p.name)} <span style="font-weight:400;color:#ffffff80">· ${p.nodes.length} node${p.nodes.length === 1 ? '' : 's'}</span></div>${rows}${more}</div>`;
+    return this.frame(p, rows, 300);
+  }
+
+  /** many nodes: a line each (address, client, height, latency), sorted by client */
+  private lines(p: Place): string {
+    const sorted = [...p.nodes].sort((a, b) => (a.group ?? '').localeCompare(b.group ?? '') || a.agent.node.localeCompare(b.agent.node));
+    const rows = sorted.slice(0, MAX_LINES).map(n => `
+      <div style="display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;align-items:baseline;padding:2px 0;border-top:1px solid #ffffff0f;font-size:11px">
+        <span style="font-family:var(--cx-mono, monospace);color:#fff">${esc(n.short)}</span>
+        <span style="color:#ffffffbb;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="color:${esc(this.colors[n.group ?? n.agent.node] ?? this.accent)}">●</span> ${n.group ? esc(n.group) + ' · ' : ''}${esc(n.agent.node)}${n.asn ? ' · ' + esc(hostName(n.asn)) : ''}</span>
+        <span style="color:#ffffff88;font-family:var(--cx-mono, monospace);white-space:nowrap">${n.height !== null ? n.height.toLocaleString() : '–'}${n.behind ? ` <span style="color:#ff9b6b">−${n.behind}</span>` : ''} · ${n.latency !== null ? n.latency + 'ms' : '–'}</span>
+      </div>`).join('');
+    const more = p.nodes.length > MAX_LINES ? `<div style="font-size:11px;color:#ffffff80;padding-top:4px">+${p.nodes.length - MAX_LINES} more here</div>` : '';
+    return this.frame(p, rows + more, 420);
+  }
+
+  private frame(p: Place, body: string, width: number): string {
+    return `<div style="background:rgba(17,19,31,0.97);border:1px solid #ffffff26;border-radius:8px;padding:8px 12px;min-width:220px;max-width:${width}px;box-shadow:0 8px 28px #000a">
+      <div style="font-size:12px;font-weight:600;color:#fff;padding-bottom:6px">${esc(p.name)} <span style="font-weight:400;color:#ffffff80">· ${p.nodes.length} node${p.nodes.length === 1 ? '' : 's'}</span></div>${body}</div>`;
   }
 
   /** #rrggbb with an alpha */
