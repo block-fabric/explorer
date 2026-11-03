@@ -162,3 +162,4 @@ h4.pad { margin-top: 10px; }
 .stack-bar { display: flex; height: 10px; margin: 4px 12px 8px; border-radius: 5px; overflow: hidden; background: #ffffff0d;
   i { display: block; height: 100%; min-width: 2px; } .sub { background: #5aa6ff; } .fee { background: #f5a623; } .bid { background: #3bd16f; } }
 @media (max-width: 767px) { .metrics.three { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.sub-usd { display: block; font-size: 0.64rem; color: var(--dim); }

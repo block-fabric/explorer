@@ -97,7 +97,8 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
   activityChart: any = null;
   /** miners' revenue over the window, by source: the subsidy, the transactions' fees, the sidechains' BMM bids (sats) */
   revenue: { subsidy: number; fees: number; bids: number; total: number } | null = null;
-  feePools: { name: string; fees: number; blocks: number; perBlock: number }[] = [];
+  /** each pool over the window: its blocks, fees, and revenue (subsidy, fees and the BMM bids it took, sats) */
+  feePools: { name: string; fees: number; blocks: number; perBlock: number; revenue: number }[] = [];
   feed: FeedItem[] = [];
 
   private feedData: any = null;
@@ -194,8 +195,9 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
       if (cockpit) {
         this.cockpit = cockpit;
         this.feePools = (cockpit.miners ?? []).filter((m: any) => m.blocks > 0)
-          .map((m: any) => ({ name: m.name ?? m.tag, fees: m.fees ?? 0, blocks: m.blocks, perBlock: (m.fees ?? 0) / m.blocks }))
-          .sort((a: any, b: any) => b.fees - a.fees).slice(0, 6);
+          .map((m: any) => ({ name: m.name ?? m.tag, fees: m.fees ?? 0, blocks: m.blocks, perBlock: (m.fees ?? 0) / m.blocks,
+            revenue: (m.subsidy ?? 0) + (m.fees ?? 0) + (m.bids ?? 0) }))
+          .sort((a: any, b: any) => b.revenue - a.revenue).slice(0, 8);
         this.bmmMiners = (cockpit.miners ?? []).filter((m: any) => m.accepts > 0 || m.bids > 0)
           .map((m: any) => ({ name: m.name ?? m.tag, blocks: m.blocks, accepts: m.accepts, bids: m.bids, perBlock: m.acceptsPerBlock ?? 0 }))
           .sort((a: any, b: any) => b.bids - a.bids).slice(0, 8);

@@ -160,10 +160,13 @@
         </div>
       }
       @if (feePools.length) {
-        <h4 class="pad">Fees by pool <span class="dim">the last 1,008 blocks</span></h4>
+        <h4 class="pad">Fees and revenue by pool <span class="dim">the last 1,008 blocks</span></h4>
         <div class="hscroll"><table class="tbl small pad-tbl">
-          <thead><tr><th>Pool</th><th class="r">Blocks</th><th class="r">Fees</th><th class="r">A block</th></tr></thead>
-          <tbody>@for (p of feePools; track p.name) {<tr><td>{{ p.name }}</td><td class="r">{{ p.blocks }}</td><td class="r">{{ ecx(p.fees) }}</td><td class="r">{{ (p.perBlock | number:'1.0-0') }} sats</td></tr>}</tbody>
+          <thead><tr><th>Pool</th><th class="r">Blocks</th><th class="r">Fees</th><th class="r sm-hide">Fees a block</th>
+            <th class="r" title="the block subsidy, the transactions' fees and the sidechains' BMM bids the pool took">Revenue</th></tr></thead>
+          <tbody>@for (p of feePools; track p.name) {<tr><td>{{ p.name }}</td><td class="r">{{ p.blocks }}</td><td class="r">{{ ecx(p.fees) }}</td>
+            <td class="r sm-hide">{{ (p.perBlock | number:'1.0-0') }} sats</td>
+            <td class="r">{{ ecx(p.revenue) }}@if (markets?.ecx?.priceUsd) {<small class="sub-usd">{{ usd(p.revenue / 1e8 * markets.ecx.priceUsd, 0) }}</small>}</td></tr>}</tbody>
         </table></div>
       }
     </section>
