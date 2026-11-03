@@ -60,7 +60,15 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
   power = 0.05; // $/kWh
   bitcoin: any = null;
   bch: any = null;
-  econ: { rows: { label: string; ecash: string; btc: string; bch: string; note?: string; good?: boolean | null }[]; share: number | null; shareBch: number | null } | null = null;
+  econ: {
+    rows: { label: string; ecash: string; btc: string; bch: string; note?: string; good?: boolean | null }[]; share: number | null; shareBch: number | null;
+    /** the overview: a card per chain, the best paying first-class */
+    cards: { name: string; color: string; hashprice: number | null; rent: number | null; coinCost: number | null;
+      price: number | null; unit: string; best: boolean; width: number }[];
+    verdict: string | null;
+  } | null = null;
+  /** the economics pane's tab */
+  econTab: 'overview' | 'details' = 'overview';
   hashprice: { ecash: number | null; btc: number | null; bch: number | null; ratio: number | null; ratioBch: number | null; ecxPerPh: number | null; btcPerPh: number | null } | null = null;
   hashpriceChart: any = null;
   attack: {
@@ -78,7 +86,6 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
   users: { chain: string; color: string; address: string; count: number; amount: number }[] = [];
   // big moves
   whales: any = null;
-  volumeChart: any = null;
   // nodes
   globeNodes: GlobeNode[] = [];
   links: [string, string][] = [];
@@ -240,7 +247,6 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
     this.get<any>('/api/v1/chain/intel/whales?limit=15').subscribe((w) => {
       if (w) {
         this.whales = w;
-        this.volumeChart = this.buildVolumeChart(w.daily ?? []);
         this.activityChart = this.buildActivityChart(w.daily ?? []);
         this.buildFeed();
         this.cd.markForCheck();
@@ -480,7 +486,17 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
         bch: bch.hashrate && t.hashprice !== null ? this.usd((bch.hashrate / PH) * t.hashprice / 24, 0) : '–', note: 'at Bitcoin\'s hashprice: a 51% attack\'s floor' },
     ];
     const total = (ecash.hashrate ?? 0) + (btc.hashrate ?? 0) + (bch.hashrate ?? 0);
-    return { rows, share: ecash.hashrate && total ? ecash.hashrate / total : null, shareBch: bch.hashrate && total ? bch.hashrate / total : null };
+    const top = Math.max(1e-9, ...[e.hashprice, t.hashprice, h.hashprice].map(v => v ?? 0));
+    // (rental: the chain's whole hashrate for an hour, at Bitcoin's hashprice: SHA-256 work's market price)
+    const card = (name: string, color: string, x: Chain, d: ReturnType<typeof derive>, unit: string) => ({
+      name, color, hashprice: d.hashprice, rent: x.hashrate && t.hashprice !== null ? (x.hashrate / PH) * t.hashprice / 24 : null,
+      coinCost: d.coinCost, price: x.price, unit, best: d.hashprice !== null && d.hashprice >= best, width: d.hashprice !== null ? d.hashprice / top * 100 : 0,
+    });
+    const cards = [card('eCash', NETS[0].color, ecash, e, 'ECX'), card('Bitcoin', '#f7931a', btc, t, 'BTC'), card('Bitcoin Cash', '#0ac18e', bch, h, 'BCH')];
+    const verdict = ratio === null ? null : ratio >= 1
+      ? `eCash pays ${this.pctMore(ratio)} more per hash than Bitcoin${ratioBch !== null ? ` and ${this.pctMore(ratioBch)} more than Bitcoin Cash` : ''}.`
+      : `eCash pays ${this.pctMore(1 / ratio)} less per hash than Bitcoin${ratioBch !== null ? `, ${ratioBch >= 1 ? this.pctMore(ratioBch) + ' more' : this.pctMore(1 / ratioBch) + ' less'} than Bitcoin Cash` : ''}.`;
+    return { rows, cards, verdict, share: ecash.hashrate && total ? ecash.hashrate / total : null, shareBch: bch.hashrate && total ? bch.hashrate / total : null };
   }
 
   /**
@@ -663,25 +679,25 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
     };
   }
 
-  /** eCash's transactions and fees a day */
+  /** eCash's ECX moved and transactions a day */
   private buildActivityChart(daily: any[]): any {
     if (daily.length < 2) {
       return null;
     }
     return {
-      animation: false, grid: { left: 44, right: 50, top: 24, bottom: 22 },
+      animation: false, grid: { left: 48, right: 50, top: 24, bottom: 22 },
       legend: { top: 0, right: 0, textStyle: { color: '#ffffffaa', fontSize: 10 }, itemWidth: 10, itemHeight: 6 },
       tooltip: { trigger: 'axis', ...TOOLTIP },
       xAxis: { type: 'time', ...AXIS, splitLine: { show: false } },
       yAxis: [
         { type: 'value', ...AXIS, axisLabel: { ...AXIS.axisLabel, formatter: (v: number) => this.big(v) } },
-        { type: 'value', ...AXIS, splitLine: { show: false }, axisLabel: { ...AXIS.axisLabel, formatter: (v: number) => v.toFixed(2) } },
+        { type: 'value', ...AXIS, splitLine: { show: false }, axisLabel: { ...AXIS.axisLabel, formatter: (v: number) => this.big(v) } },
       ],
       series: [
-        { name: 'Transactions', type: 'bar', data: daily.map(d => [d.day * 1000 + 43_200_000, d.txs]), itemStyle: { color: '#5aa6ffcc', borderRadius: [3, 3, 0, 0] }, barMaxWidth: 26,
+        { name: 'ECX moved', type: 'bar', data: daily.map(d => [d.day * 1000 + 43_200_000, d.volume]), itemStyle: { color: '#f5a623cc', borderRadius: [3, 3, 0, 0] }, barMaxWidth: 26,
+          tooltip: { valueFormatter: (v: number) => Math.round(v).toLocaleString() + ' ECX' } },
+        { name: 'Transactions', type: 'line', yAxisIndex: 1, data: daily.map(d => [d.day * 1000 + 43_200_000, d.txs]), lineStyle: { width: 2, color: '#5aa6ff' }, itemStyle: { color: '#5aa6ff' },
           tooltip: { valueFormatter: (v: number) => Math.round(v).toLocaleString() } },
-        { name: 'Fees (ECX)', type: 'line', yAxisIndex: 1, data: daily.map(d => [d.day * 1000 + 43_200_000, d.fees]), lineStyle: { width: 2, color: '#f5a623' }, itemStyle: { color: '#f5a623' },
-          tooltip: { valueFormatter: (v: number) => v.toFixed(4) + ' ECX' } },
       ],
     };
   }
@@ -698,20 +714,6 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
       yAxis: { type: 'value', scale: true, ...AXIS, axisLabel: { ...AXIS.axisLabel, formatter: (v: number) => this.big(v) } },
       series: [{ name: 'Supply', type: 'line', step: 'end', showSymbol: false, data: h.map(x => [x.time * 1000, x.supply]), lineStyle: { width: 1.5, color: '#3bd1c4' },
         itemStyle: { color: '#3bd1c4' }, areaStyle: { color: '#3bd1c414' } }],
-    };
-  }
-
-  /** eCash's on-chain volume a day (its blocks' non-coinbase outputs) */
-  private buildVolumeChart(daily: any[]): any {
-    if (daily.length < 2) {
-      return null;
-    }
-    return {
-      animation: false, grid: { left: 48, right: 8, top: 10, bottom: 22 },
-      tooltip: { trigger: 'axis', ...TOOLTIP, valueFormatter: (v: number) => Math.round(v).toLocaleString() + ' ECX' },
-      xAxis: { type: 'time', ...AXIS, splitLine: { show: false } },
-      yAxis: { type: 'value', ...AXIS, axisLabel: { ...AXIS.axisLabel, formatter: (v: number) => this.big(v) } },
-      series: [{ name: 'Volume', type: 'bar', data: daily.map(d => [d.day * 1000 + 43_200_000, d.volume]), itemStyle: { color: '#f5a623cc', borderRadius: [3, 3, 0, 0] }, barMaxWidth: 26 }],
     };
   }
 
@@ -812,6 +814,11 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
 
   ecxPairs(): any[] {
     return (this.markets?.pairs ?? []).filter((p: any) => p.asset === 'ECX').sort((a: any, b: any) => (b.volume24hUsd ?? 0) - (a.volume24hUsd ?? 0));
+  }
+
+  /** a ratio above 1 as "26%" */
+  pctMore(r: number): string {
+    return Math.round((r - 1) * 100) + '%';
   }
 
   share(part: number, total: number): string {
