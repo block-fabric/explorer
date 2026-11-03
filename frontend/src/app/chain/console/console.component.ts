@@ -1,7 +1,8 @@
-import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, Inject, OnDestroy, OnInit, PLATFORM_ID, ViewChild } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Inject, OnDestroy, OnInit, PLATFORM_ID } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Observable, Subscription, catchError, forkJoin, map, of, switchMap, timer } from 'rxjs';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { SeoService } from '@app/services/seo.service';
 import { parseAgent, chainKind, shortAddress } from '@app/chain/nodes/nodes.component';
 import { GlobeNode } from '@app/chain/nodes/nodes-globe.component';
@@ -42,7 +43,7 @@ function hostOf(rdns: string | null): string {
 /**
  * The console (/console, eCash mainnet's explorer): one screen over eCash and its sidechains, their markets and
  * mining. Every number is one of this site's explorers' (their /api, same origin) or the eCash backend's outside data
- * (chain/intel: markets on Solana and neoxa.exchange, ecash.com's news); X's timelines through X's own widget.
+ * (chain/intel: markets on Solana and neoxa.exchange, ecash.com's news); X's timelines as X's pages in sandboxed frames.
  */
 @Component({
   selector: 'app-chain-console',
@@ -51,11 +52,9 @@ function hostOf(rdns: string | null): string {
   styleUrls: ['./console.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class ChainConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
-  @ViewChild('xfeed') xfeed: ElementRef<HTMLDivElement>;
+export class ChainConsoleComponent implements OnInit, OnDestroy {
 
   nets = NETS;
-  xAccounts = X_ACCOUNTS;
   now = Date.now() / 1000;
 
   // eCash
@@ -89,11 +88,17 @@ export class ChainConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
   feed: FeedItem[] = [];
   chartInit = { renderer: 'svg' };
 
+  /** X's embedded timeline of each account, as a frame of X's origin (what X's widget script would put in the page) */
+  xFrames: { account: string; url: SafeResourceUrl }[];
   private subs: Subscription[] = [];
   private browser: boolean;
 
-  constructor(private http: HttpClient, private cd: ChangeDetectorRef, private seo: SeoService, @Inject(PLATFORM_ID) platformId: object) {
+  constructor(private http: HttpClient, private cd: ChangeDetectorRef, private seo: SeoService, sanitizer: DomSanitizer, @Inject(PLATFORM_ID) platformId: object) {
     this.browser = isPlatformBrowser(platformId);
+    // fixed accounts only (X_ACCOUNTS): nothing from the page or a request reaches these URLs
+    this.xFrames = X_ACCOUNTS.map(account => ({
+      account, url: sanitizer.bypassSecurityTrustResourceUrl(`https://syndication.twitter.com/srv/timeline-profile/screen-name/${account}?dnt=true&theme=dark`),
+    }));
   }
 
   ngOnInit(): void {
@@ -103,23 +108,6 @@ export class ChainConsoleComponent implements OnInit, AfterViewInit, OnDestroy {
     this.subs.push(timer(0, 60_000).subscribe(() => this.loadMarkets()));
     this.subs.push(timer(0, 120_000).subscribe(() => this.loadNodes()));
     this.subs.push(timer(0, 15 * 60_000).subscribe(() => this.loadSlow()));
-  }
-
-  ngAfterViewInit(): void {
-    if (!this.browser) {
-      return;
-    }
-    // X's widget turns the timeline links into timelines (and loads X's script: on this page only)
-    const w = window as any;
-    if (w.twttr?.widgets) {
-      w.twttr.widgets.load(this.xfeed?.nativeElement);
-    } else if (!document.getElementById('x-widgets')) {
-      const s = document.createElement('script');
-      s.id = 'x-widgets';
-      s.async = true;
-      s.src = 'https://platform.twitter.com/widgets.js';
-      document.body.appendChild(s);
-    }
   }
 
   ngOnDestroy(): void {

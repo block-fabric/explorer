@@ -39,7 +39,7 @@
         <thead><tr><th>Venue</th><th>Pair</th><th class="r">Price</th><th class="r">24h vol</th><th class="r">Liquidity</th><th class="r">24h</th></tr></thead>
         <tbody>
           @for (p of ecxPairs(); track p.url + p.pair) {
-            <tr>
+            <tr [class.uncounted]="!p.counted" [title]="p.counted ? 'counted in the weighted price' : 'not counted: an unverified quote token, under $10k of liquidity, or over 25% off the other venues'">
               <td><a [href]="p.url" target="_blank" rel="noopener">{{ p.venue }}</a> <span class="dim">{{ p.chain === 'solana' ? 'Solana' : '' }}</span></td>
               <td>{{ p.pair }}</td>
               <td class="r">{{ usd(p.priceUsd) }}</td>
@@ -148,11 +148,12 @@
         @for (n of news.slice(0, 6); track n.link) {
           <div class="ev"><span class="t">{{ n.time * 1000 | date:'MMM d' }}</span><a [href]="n.link" target="_blank" rel="noopener">{{ n.title }}</a></div>
         } @empty {<div class="dim">–</div>}
-        <div #xfeed class="x">
-          @for (a of xAccounts; track a) {
-            <h4>&#64;{{ a }} <a class="dim" [href]="'https://x.com/' + a" target="_blank" rel="noopener">on X →</a></h4>
-            <a class="twitter-timeline" data-theme="dark" data-chrome="noheader nofooter transparent noborders" data-tweet-limit="3" data-dnt="true"
-              [href]="'https://twitter.com/' + a">Posts by &#64;{{ a }}</a>
+        <div class="x">
+          @for (f of xFrames; track f.account) {
+            <h4>&#64;{{ f.account }} <a class="dim" [href]="'https://x.com/' + f.account" target="_blank" rel="noopener">on X →</a></h4>
+            <!-- X's page, in its own origin: it can run its scripts and open links, nothing of this site's -->
+            <iframe class="xtl" [src]="f.url" [title]="'Posts by @' + f.account" loading="lazy" referrerpolicy="no-referrer"
+              sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"></iframe>
           }
         </div>
       </div>

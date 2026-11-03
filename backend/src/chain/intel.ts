@@ -22,6 +22,22 @@ const DEXSCREENER = 'https://api.dexscreener.com/token-pairs/v1/solana/';
 const NEOXA = 'https://neoxa.exchange';
 const NEOXA_PAIRS = ['ECX_USDC', 'ECX_USDT', 'ECX_BTC'];
 const ECASH_BLOG = 'https://ecash.com/blog/rss.xml';
+/**
+ * The quote tokens a Solana pool's price counts with, by mint (not by symbol: anyone can mint a token called USDC).
+ * A pool counts toward ECX's price only quoted in one of these, with MIN_LIQUIDITY at least, its weight its 24 h
+ * volume capped at its liquidity (wash trading in a thin pool weighs little); then any venue OUTLIER off the median
+ * is left out.
+ */
+const QUOTES: Record<string, string> = {
+  EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v: 'USDC',
+  Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB: 'USDT',
+  So11111111111111111111111111111111111111112: 'SOL',
+  [WECX]: 'wECX',
+};
+const COUNTED_QUOTES = ['USDC', 'USDT', 'SOL'];
+const MIN_LIQUIDITY = 10_000;
+const OUTLIER = 0.25;
+const RETRY_TTL = 2 * 60_000; // after a failure, at most one try per source this often
 
 const MARKETS_TTL = 60_000;
 const NEWS_TTL = 30 * 60_000;
@@ -36,6 +52,7 @@ export interface MarketPair {
   chain: string; // "solana", "neoxa"
   pair: string; // "wECX/USDC"
   asset: 'ECX' | 'waECX'; // what is priced: wECX and neoxa's ECX are ECX; waECX is another asset
+  counted: boolean; // in ECX's weighted price (QUOTES, MIN_LIQUIDITY, OUTLIER)
   priceUsd: number | null;
   priceQuote: number | null; // in the quote currency
   quote: string;
@@ -56,8 +73,11 @@ export interface Markets {
 let markets: Markets | null = null;
 const priceHistory: Markets['history'] = []; // ECX's snapshots, oldest first
 let marketsAt = 0;
-let news: { updated: number; items: { title: string; link: string; time: number; source: string }[] } | null = null;
+let marketsLoading: Promise<Markets | null> | null = null;
+interface News { updated: number; items: { title: string; link: string; time: number; source: string }[] }
+let news: News | null = null;
 let newsAt = 0;
+let newsLoading: Promise<News | null> | null = null;
 const candles = new Map<string, { at: number; value: any[] }>();
 let started = false;
 
@@ -83,14 +103,18 @@ async function $solanaPairs(mint: string, asset: MarketPair['asset']): Promise<M
     // the pools where this mint is the base, with any trading or liquidity
     .filter(p => p?.baseToken?.address === mint && ((num(p?.volume?.h24) ?? 0) > 0 || (num(p?.liquidity?.usd) ?? 0) > 0))
     .slice(0, 20)
-    .map(p => ({
-      venue: String(p.dexId ?? '?').slice(0, 24), chain: 'solana',
-      pair: `${String(p.baseToken.symbol).slice(0, 12)}/${String(p.quoteToken?.symbol ?? '?').slice(0, 12)}`,
-      asset, priceUsd: num(p.priceUsd), priceQuote: num(p.priceNative), quote: String(p.quoteToken?.symbol ?? '?').slice(0, 12),
+    .map((p) => {
+      // the quote as its mint says (an unknown mint: its symbol, marked unverified)
+      const quote = QUOTES[p.quoteToken?.address] ?? `${String(p.quoteToken?.symbol ?? '?').replace(/[^\w.-]/g, '').slice(0, 10)}?`;
+      return {
+      venue: String(p.dexId ?? '?').replace(/[^\w.-]/g, '').slice(0, 24), chain: 'solana',
+      pair: `${asset === 'ECX' ? 'wECX' : 'waECX'}/${quote}`,
+      asset, priceUsd: num(p.priceUsd), priceQuote: num(p.priceNative), quote, counted: false,
       volume24hUsd: num(p.volume?.h24), liquidityUsd: num(p.liquidity?.usd), change24h: num(p.priceChange?.h24),
       high24h: null, low24h: null,
       url: /^[A-Za-z0-9]{20,64}$/.test(p.pairAddress) ? `https://dexscreener.com/solana/${p.pairAddress}` : 'https://dexscreener.com',
-    }));
+      };
+    });
 }
 
 /** @asyncUnsafe */
@@ -109,7 +133,7 @@ async function $neoxaPairs(): Promise<MarketPair[]> {
     const last = num(t.last_price);
     const quoteVolume = num(t.target_volume);
     out.push({
-      venue: 'neoxa', chain: 'neoxa', pair: `ECX/${quote}`, asset: 'ECX', quote,
+      venue: 'neoxa', chain: 'neoxa', pair: `ECX/${quote}`, asset: 'ECX', quote, counted: false,
       priceQuote: last, priceUsd: last !== null && toUsd ? last * toUsd : null,
       volume24hUsd: quoteVolume !== null && toUsd ? quoteVolume * toUsd : null, liquidityUsd: null, change24h: null,
       high24h: num(t.high), low24h: num(t.low), url: `${NEOXA}/trade/${id}`,
@@ -118,11 +142,35 @@ async function $neoxaPairs(): Promise<MarketPair[]> {
   return out;
 }
 
-/** the markets, refreshed when older than MARKETS_TTL (a source that fails keeps its last pairs) @asyncSafe */
+/** ECX's price over the pairs that count: weighted by volume (capped at liquidity on a pool), outliers left out */
+function weigh(pairs: MarketPair[]): Markets['ecx'] {
+  const weight = (p: MarketPair): number => Math.min(p.volume24hUsd ?? 0, p.chain === 'solana' ? p.liquidityUsd ?? 0 : Infinity);
+  let cand = pairs.filter(p => p.asset === 'ECX' && p.priceUsd !== null && p.priceUsd > 0 && weight(p) > 0
+    && (p.chain !== 'solana' || (COUNTED_QUOTES.includes(p.quote) && (p.liquidityUsd ?? 0) >= MIN_LIQUIDITY)));
+  if (cand.length >= 2) {
+    const sorted = cand.map(p => p.priceUsd as number).sort((a, b) => a - b);
+    const mid = sorted.length % 2 ? sorted[(sorted.length - 1) / 2] : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2;
+    cand = cand.filter(p => Math.abs((p.priceUsd as number) / mid - 1) <= OUTLIER);
+  }
+  cand.forEach(p => { p.counted = true; });
+  const w = cand.reduce((s, p) => s + weight(p), 0);
+  return {
+    priceUsd: w > 0 ? cand.reduce((s, p) => s + (p.priceUsd as number) * weight(p), 0) / w : null,
+    volume24hUsd: cand.reduce((s, p) => s + (p.volume24hUsd ?? 0), 0), venues: cand.length,
+  };
+}
+
+/** the markets, refreshed when older than MARKETS_TTL; one fetch at a time, at most one per RETRY_TTL while failing @asyncSafe */
 export async function $getMarkets(): Promise<Markets | null> {
-  if (markets && Date.now() - marketsAt < MARKETS_TTL) {
+  if (Date.now() - marketsAt < (markets ? MARKETS_TTL : RETRY_TTL)) {
     return markets;
   }
+  marketsLoading ??= $loadMarkets().finally(() => { marketsLoading = null; });
+  return marketsLoading;
+}
+
+/** (a source that fails keeps its last pairs) @asyncSafe */
+async function $loadMarkets(): Promise<Markets | null> {
   marketsAt = Date.now();
   const old = markets?.pairs ?? [];
   const parts = await Promise.allSettled([$solanaPairs(WECX, 'ECX'), $solanaPairs(WAECX, 'waECX'), $neoxaPairs()]);
@@ -137,11 +185,12 @@ export async function $getMarkets(): Promise<Markets | null> {
   const pairs = [
     ...keep(0, p => p.chain === 'solana' && p.asset === 'ECX'), ...keep(1, p => p.asset === 'waECX'), ...keep(2, p => p.venue === 'neoxa'),
   ];
-  const ecx = pairs.filter(p => p.asset === 'ECX' && p.priceUsd !== null && (p.volume24hUsd ?? 0) > 0);
-  const volume = ecx.reduce((s, p) => s + (p.volume24hUsd ?? 0), 0);
-  const price = volume > 0 ? ecx.reduce((s, p) => s + (p.priceUsd as number) * (p.volume24hUsd as number), 0) / volume : null;
+  pairs.forEach(p => { p.counted = false; });
+  if (!pairs.length) {
+    return markets;
+  }
   markets = {
-    updated: Math.floor(Date.now() / 1000), ecx: { priceUsd: price, volume24hUsd: volume, venues: ecx.length }, pairs,
+    updated: Math.floor(Date.now() / 1000), ecx: weigh(pairs), pairs,
     history: priceHistory,
   };
   return markets;
@@ -153,9 +202,10 @@ export async function $getCandles(pair: string): Promise<any[]> {
     return [];
   }
   const c = candles.get(pair);
-  if (c && Date.now() - c.at < CANDLES_TTL) {
+  if (c && Date.now() - c.at < (c.value.length ? CANDLES_TTL : RETRY_TTL)) {
     return c.value;
   }
+  candles.set(pair, { at: Date.now(), value: c?.value ?? [] }); // (the attempt: a failing source is not asked again at once)
   try {
     const d = await $get(`${NEOXA}/api/exchange/candles/${pair}?interval=1h&limit=168`);
     const value = (Array.isArray(d?.candles) ? d.candles : []).slice(-200)
@@ -178,11 +228,17 @@ function decode(s: string): string {
   });
 }
 
-/** ecash.com's blog, newest first @asyncSafe */
-export async function $getNews(): Promise<typeof news> {
-  if (news && Date.now() - newsAt < NEWS_TTL) {
+/** ecash.com's blog, newest first; one fetch at a time, at most one per RETRY_TTL while failing @asyncSafe */
+export async function $getNews(): Promise<News | null> {
+  if (Date.now() - newsAt < (news ? NEWS_TTL : RETRY_TTL)) {
     return news;
   }
+  newsLoading ??= $loadNews().finally(() => { newsLoading = null; });
+  return newsLoading;
+}
+
+/** @asyncSafe */
+async function $loadNews(): Promise<News | null> {
   newsAt = Date.now();
   try {
     const xml: string = String(await $get(ECASH_BLOG, 'text'));
