@@ -34,11 +34,14 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# IP geolocation for the nodes map (backend/src/chain/nodes-geo.ts): DB-IP's IP to City Lite, CC BY 4.0
+# IP geolocation and networks (AS: who hosts a node) for the nodes map (backend/src/chain/nodes-geo.ts): DB-IP's IP to
+# City Lite and IP to ASN Lite, CC BY 4.0
 # (https://db-ip.com), one month's release
 ARG DBIP_MONTH=2026-10
 RUN curl -fsSL "https://download.db-ip.com/free/dbip-city-lite-${DBIP_MONTH}.mmdb.gz" | gunzip > /usr/local/share/dbip-city-lite.mmdb && \
-    test -s /usr/local/share/dbip-city-lite.mmdb
+    test -s /usr/local/share/dbip-city-lite.mmdb && \
+    curl -fsSL "https://download.db-ip.com/free/dbip-asn-lite-${DBIP_MONTH}.mmdb.gz" | gunzip > /usr/local/share/dbip-asn-lite.mmdb && \
+    test -s /usr/local/share/dbip-asn-lite.mmdb
 
 WORKDIR /backend
 

@@ -68,3 +68,6 @@ h5 small { color: var(--cx-ink-3); font-size: 0.75rem; font-weight: normal; marg
 .map-foot .lg { display: inline-flex; align-items: center; gap: 6px; color: var(--cx-ink-2, #ffffffcc); white-space: nowrap;
   i { width: 8px; height: 8px; border-radius: 50%; } }
 .map-foot .attr { margin-left: auto; color: var(--cx-ink-3); a { color: inherit; text-decoration: underline; } }
+// the network's holder (AS), cut short (the whole on hover), its number under it
+.host { display: block; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.8rem; }
+.asn { display: block; font-family: var(--cx-mono); font-size: 0.66rem; color: var(--cx-ink-3); }

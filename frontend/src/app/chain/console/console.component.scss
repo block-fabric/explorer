@@ -24,19 +24,24 @@ a { color: inherit; text-decoration: none; &:hover { text-decoration: underline;
 .grid { display: grid; gap: 12px; grid-template-columns: repeat(12, minmax(0, 1fr));
   grid-template-areas:
     'globe globe globe globe globe globe globe markets markets markets markets markets'
-    'feed feed feed feed mining mining mining mining chains chains chains chains'
-    'actors actors actors actors actors actors actors actors intel intel intel intel'; }
+    'feed feed feed feed mining mining mining mining decent decent decent decent'
+    'econ econ econ econ econ econ diff diff diff diff diff diff'
+    'moves moves moves moves moves moves dc dc dc dc dc dc'
+    'chains chains chains chains chains actors actors actors actors actors actors actors'; }
 .globe { grid-area: globe; }
 .markets { grid-area: markets; }
 .feed { grid-area: feed; }
 .mining { grid-area: mining; }
+.decent { grid-area: decent; }
+.econ { grid-area: econ; }
+.diff { grid-area: diff; }
+.moves { grid-area: moves; }
+.dc { grid-area: dc; }
 .chains { grid-area: chains; }
 .actors { grid-area: actors; }
-.intel { grid-area: intel; }
 @media (max-width: 1199px) {
-  .grid { grid-template-areas: 'globe globe globe globe globe globe globe globe globe globe globe globe' 'markets markets markets markets markets markets markets markets markets markets markets markets'
-    'feed feed feed feed feed feed mining mining mining mining mining mining' 'chains chains chains chains chains chains chains chains chains chains chains chains'
-    'actors actors actors actors actors actors actors actors actors actors actors actors' 'intel intel intel intel intel intel intel intel intel intel intel intel'; }
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas: 'globe globe' 'markets markets' 'feed mining' 'decent decent' 'econ econ' 'diff diff' 'moves moves' 'dc dc' 'chains chains' 'actors actors'; }
 }
 @media (max-width: 767px) {
   .cs { padding: 10px 8px 20px; }
@@ -76,17 +81,44 @@ a { color: inherit; text-decoration: none; &:hover { text-decoration: underline;
   .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .b { height: 6px; background: #ffffff0d; border-radius: 3px; overflow: hidden; i { display: block; height: 100%; background: #f5a623; border-radius: 3px; } }
   .v, .c { text-align: right; font-family: var(--mono); } }
-.cols { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 18px; padding: 8px 12px 12px;
+.cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 18px; padding: 8px 12px 12px;
   .bar { grid-template-columns: minmax(0, 1fr) 60px 28px; }
   @media (max-width: 991px) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 h4 { font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink); margin: 8px 0 6px; font-weight: 600;
   .dim { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 4px; } }
 .holder { display: grid; grid-template-columns: minmax(0, 1fr) auto 44px; gap: 8px; font-size: 0.74rem; padding: 2px 0; .v { font-family: var(--mono); } .dim { text-align: right; } }
 .mono { font-family: var(--mono); }
-.x { margin-top: 6px; }
 .hscroll { overflow-x: auto; }
 .chart.hash { height: 150px; }
 .note { font-size: 0.68rem; padding: 0 12px 10px; }
 .chains .tbl th, .chains .tbl td { padding: 5px 8px; }
-.xtl { width: 100%; height: 420px; border: 0; border-radius: 6px; background: transparent; color-scheme: dark; }
 .tbl tr.uncounted td { opacity: 0.55; }
+
+.pad { padding: 0 12px; }
+h4.pad { margin-top: 10px; }
+.chart.share { height: 170px; }
+.chart.diff-chart { height: 220px; }
+.chart.hist { height: 130px; }
+.chart.vol { height: 120px; }
+.big small { display: block; font-size: 0.64rem; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+// decentralisation: the verdict, then the measures
+.grade { margin: 12px; padding: 10px 12px; border: 1px solid; border-left-width: 4px; border-radius: 6px; font-size: 0.78rem; background: #ffffff05;
+  b { display: block; font-size: 1.1rem; letter-spacing: 0.04em; } }
+.metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--line); border-top: 1px solid var(--line);
+  > div { background: var(--pane); padding: 9px 12px; min-width: 0; cursor: default; }
+  label { display: block; font-size: 0.62rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); margin: 0; }
+  b { font-family: var(--mono); font-size: 1.2rem; font-weight: 600; }
+  small { display: block; font-size: 0.66rem; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } }
+
+// economics: the two assumptions, the table
+.inputs { display: flex; gap: 10px; flex-wrap: wrap; color: var(--ink);
+  label { margin: 0; font-size: 0.7rem; display: inline-flex; align-items: center; gap: 4px; }
+  input { width: 58px; background: #ffffff0d; border: 1px solid var(--line); border-radius: 4px; color: var(--ink); font-family: var(--mono); font-size: 0.72rem; padding: 1px 4px; } }
+.econ-tbl td:first-child { color: var(--ink); }
+.note-cell { font-family: inherit !important; font-size: 0.68rem; white-space: normal !important; min-width: 140px; }
+
+// drivechain actors: four small tables
+.cols2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 16px; padding: 4px 12px 12px;
+  @media (max-width: 767px) { grid-template-columns: minmax(0, 1fr); } }
+.tbl.small { font-size: 0.72rem; th, td { padding: 4px 6px; } th:first-child, td:first-child { padding-left: 0; } }

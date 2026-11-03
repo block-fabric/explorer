@@ -109,11 +109,14 @@
         @if (data.checked) {<span>Heights: checked <app-time kind="since" [time]="data.checked" [fastRender]="true"></app-time> (every 5 min)</span>}
       </div>
       <div class="box table-box">
-        <app-chain-table [rows]="rows" [columns]="cols" [filters]="filters" [search]="match" searchPlaceholder="Address, host name, client…"
+        <app-chain-table [rows]="rows" [columns]="cols" [filters]="filters" [search]="match" searchPlaceholder="Address, host, client…"
             [trackBy]="trackAddress" [pageSize]="100" empty="No node reached yet.">
           <ng-template cxCell="address" let-r>
             <span class="addr"><i class="st" [class.up]="r.up" [title]="r.up ? 'reachable in the last crawl' : 'not reachable in the last crawl'"></i><span [title]="r.address">{{ r.short }}</span></span>
             @if (r.rdns) {<span class="rdns" [title]="r.rdns">{{ r.rdns }}</span>}
+          </ng-template>
+          <ng-template cxCell="host" let-r>
+            @if (r.asn) {<span class="host" [title]="'AS' + r.asn.number + ' ' + r.asn.org + (r.geo?.country ? ' · ' + r.geo.country : '')">{{ r.host }}</span><span class="asn">AS{{ r.asn.number }}</span>} @else {–}
           </ng-template>
           <ng-template cxCell="node" let-r>
             <span [title]="r.userAgent"><span class="agent">{{ r.agent.node }}</span>@if (r.note) {<span class="cmt">{{ r.note }}</span>}</span>

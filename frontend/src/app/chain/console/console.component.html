@@ -3,10 +3,11 @@
   <div class="strip">
     <div class="brand"><span class="dot live"></span> CONSOLE <span class="dim">eCash · sidechains · markets · mining</span></div>
     <div class="st"><label>eCash</label><b>{{ tip !== null ? (tip | number) : '–' }}</b></div>
-    <div class="st"><label>Hashrate</label><b>{{ hash(hashrate) }}</b></div>
-    <div class="st"><label>Avg block</label><b>{{ avgBlock() }}</b></div>
+    <div class="st"><label>Hashrate</label><b>{{ hash(mining?.totals?.hashrate) }}</b></div>
+    <div class="st"><label>Avg block</label><b>{{ secs(mining?.totals?.avgBlockTime) }}</b></div>
     <div class="st"><label>Mempool</label><b>{{ mempool ? (mempool.count | number) + ' tx' : '–' }}</b></div>
     <div class="st"><label>ECX</label><b>{{ usd(markets?.ecx?.priceUsd) }}</b><small>{{ usd(markets?.ecx?.volume24hUsd, 0) }} 24h</small></div>
+    @if (decent) {<div class="st"><label>Mining health</label><b [style.color]="gradeColor()">{{ decent.grade }}</b></div>}
     @for (s of sidechains; track s.slot) {
       @if (s.tip !== null) {<div class="st"><label [style.color]="s.color">{{ s.name }}</label><b>{{ s.tip | number }}</b></div>}
     }
@@ -21,7 +22,7 @@
         <span class="legend">@for (n of nets; track n.id) {<span><i [style.background]="n.color"></i>{{ n.name }} {{ nodeCounts[n.name] ?? 0 }}</span>}</span>
       </header>
       <app-nodes-globe [nodes]="globeNodes" [links]="links" [colors]="netColors" accent="#f5a623" [height]="470"></app-nodes-globe>
-      <footer class="dim">Arcs: eCash nodes that named each other when asked for addresses. Locations by <a href="https://db-ip.com" target="_blank" rel="noopener">DB-IP</a>.
+      <footer class="dim">Arcs: eCash nodes that named each other when asked for addresses. Locations and networks by <a href="https://db-ip.com" target="_blank" rel="noopener">DB-IP</a>.
         <a routerLink="/nodes">All eCash nodes →</a></footer>
     </section>
 
@@ -48,16 +49,6 @@
               <td class="r" [class.up]="p.change24h > 0" [class.down]="p.change24h < 0">{{ p.change24h !== null ? (p.change24h > 0 ? '+' : '') + p.change24h + '%' : '–' }}</td>
             </tr>
           }
-          @for (p of otherPairs(); track p.url + p.pair) {
-            <tr class="other">
-              <td><a [href]="p.url" target="_blank" rel="noopener">{{ p.venue }}</a> <span class="dim">Solana</span></td>
-              <td>{{ p.pair }} <span class="dim">(Alpha eCash)</span></td>
-              <td class="r">{{ usd(p.priceUsd, 4) }}</td>
-              <td class="r">{{ usd(p.volume24hUsd, 0) }}</td>
-              <td class="r">{{ p.liquidityUsd !== null ? usd(p.liquidityUsd, 0) : '–' }}</td>
-              <td class="r">{{ p.change24h !== null ? p.change24h + '%' : '–' }}</td>
-            </tr>
-          }
         </tbody>
       </table>
     </section>
@@ -80,19 +71,147 @@
 
     <!-- mining -->
     <section class="pane mining">
-      <header><span class="tag">MINING</span> eCash, the last 24 h <a class="right" routerLink="/mining">More →</a></header>
+      <header><span class="tag">MINING</span> eCash's pools, the last 24 h <a class="right" routerLink="/mining">More →</a></header>
       <div class="big">
-        <div><label>Hashrate</label><b>{{ hash(hashrate) }}</b></div>
-        <div><label>Next retarget</label><b [class.up]="difficulty?.difficultyChange > 0" [class.down]="difficulty?.difficultyChange < 0">{{ difficulty ? (difficulty.difficultyChange > 0 ? '+' : '') + difficulty.difficultyChange.toFixed(1) + '%' : '–' }}</b></div>
-        <div><label>Blocks</label><b>{{ poolBlocks || '–' }}</b></div>
+        <div><label>Hashrate, 7 d</label><b>{{ hash(mining?.totals?.hashrate) }}</b></div>
+        <div><label>Blocks, 24 h</label><b>{{ blocks24 || '–' }}</b></div>
+        <div><label>Pools, 7 d</label><b>{{ mining?.totals?.pools ?? '–' }}</b></div>
       </div>
       <div class="bars">
-        @for (p of pools; track p.name) {
+        @for (p of pools24; track p.name) {
           <div class="bar"><span class="n">{{ p.name }}</span><span class="b"><i [style.width.%]="p.share * 100"></i></span><span class="v">{{ pct(p.share) }}</span><span class="c dim">{{ p.blocks }}</span></div>
         }
       </div>
-      @if (hashChart) {<div echarts class="chart hash" [options]="hashChart" [initOpts]="chartInit"></div>}
-      <div class="dim note">Daily hashrate since eCash forked (the index's older days are Bitcoin's).</div>
+      @if (shareChart) {<h4 class="pad">Share of blocks over the week</h4><div echarts class="chart share" [options]="shareChart" [initOpts]="chartInit"></div>}
+    </section>
+
+    <!-- decentralisation -->
+    <section class="pane decent">
+      <header><span class="tag">DECENTRALISATION</span> how spread eCash's hashrate is, the last 1,008 blocks</header>
+      @if (decent; as d) {
+        <div class="grade" [style.borderColor]="gradeColor()">
+          <b [style.color]="gradeColor()">{{ d.grade }}</b>
+          <span>{{ d.why }}.</span>
+        </div>
+        <div class="metrics">
+          <div title="the fewest pools that together mined over half of the work: 1 means one pool alone could reorganise the chain">
+            <label>Nakamoto coefficient</label><b [style.color]="d.nakamoto <= 1 ? '#ff6b6b' : d.nakamoto === 2 ? '#f5b83d' : '#3bd16f'">{{ d.nakamoto }}</b><small>pools for 51%</small></div>
+          <div title="Herfindahl-Hirschman index: the sum of squared shares (×10,000). Under 1,500 competitive, over 2,500 highly concentrated">
+            <label>HHI</label><b [style.color]="d.hhi > 2500 ? '#ff6b6b' : d.hhi > 1500 ? '#f5b83d' : '#3bd16f'">{{ d.hhi | number }}</b><small>{{ d.hhi > 2500 ? 'highly concentrated' : d.hhi > 1500 ? 'moderate' : 'competitive' }}</small></div>
+          <div><label>Largest pool</label><b>{{ pct(d.top?.share ?? 0) }}</b><small>{{ d.top?.name }}</small></div>
+          <div><label>Pools</label><b>{{ d.pools }}</b><small>that found a block</small></div>
+          <div title="blocks from DATUM pools, whose miners build their own block templates: the pool cannot choose the transactions">
+            <label>DATUM blocks</label><b>{{ pct(d.datum) }}</b><small>{{ d.datumMiners }} template builder{{ d.datumMiners === 1 ? '' : 's' }}</small></div>
+          <div title="blocks with only their coinbase: no transaction confirmed">
+            <label>Empty blocks</label><b [style.color]="d.empty > 0.2 ? '#f5b83d' : null">{{ pct(d.empty) }}</b><small>coinbase only</small></div>
+        </div>
+      } @else {<div class="dim pad">Loading…</div>}
+    </section>
+
+    <!-- mining economics -->
+    <section class="pane econ">
+      <header><span class="tag">ECONOMICS</span> mining eCash vs Bitcoin, the same SHA-256 machines
+        <span class="inputs right">
+          <label>Efficiency <input type="number" step="0.5" min="1" [value]="efficiency" (change)="setEfficiency($any($event.target).value)"> J/TH</label>
+          <label>Power <input type="number" step="0.01" min="0" [value]="power" (change)="setPower($any($event.target).value)"> $/kWh</label>
+        </span>
+      </header>
+      @if (econ; as e) {
+        <div class="hscroll"><table class="tbl econ-tbl">
+          <thead><tr><th></th><th class="r">eCash</th><th class="r">Bitcoin</th><th></th></tr></thead>
+          <tbody>
+            @for (r of e.rows; track r.label) {
+              <tr><td>{{ r.label }}</td>
+                <td class="r" [class.up]="r.good === true" [class.down]="r.good === false">{{ r.ecash }}</td>
+                <td class="r">{{ r.btc }}</td>
+                <td class="dim note-cell">{{ r.note ?? '' }}</td></tr>
+            }
+          </tbody>
+        </table></div>
+        <div class="dim note">eCash has {{ e.share !== null ? pct(e.share, 3) : '–' }} of the two chains' SHA-256 hashrate. eCash's numbers over the last 1,008 blocks;
+          Bitcoin's from <a href="https://mempool.space" target="_blank" rel="noopener">mempool.space</a> (the last 144 blocks' rewards). Power only: no hardware, hosting or pool fees.</div>
+      } @else {<div class="dim pad">Loading…</div>}
+    </section>
+
+    <!-- difficulty -->
+    <section class="pane diff">
+      <header><span class="tag">DIFFICULTY</span> eCash's difficulty and hashrate, the last 1,008 blocks</header>
+      @if (mining?.retarget; as r) {
+        <div class="big">
+          <div><label>Difficulty</label><b>{{ big(mining.totals.difficulty) }}</b></div>
+          <div title="the change the next retarget would make at this period's pace"><label>Next retarget</label>
+            <b [class.up]="r.change > 0" [class.down]="r.change < 0">{{ (r.change > 0 ? '+' : '') + (r.change * 100).toFixed(1) }}%</b><small>in {{ r.blocksLeft }} blocks, ~{{ until(r.eta) }}</small></div>
+          <div [title]="'eCash retargets every ' + r.interval + ' blocks (' + r.rule + ')'"><label>Period</label><b>{{ pct(r.progress) }}</b><small>{{ r.interval }} blocks, {{ r.rule }}</small></div>
+          <div><label>This period</label><b>{{ secs(r.avgBlockTime) }}</b><small>a block on average</small></div>
+          @if (mining.halving; as h) {<div><label>Halving</label><b>{{ h.blocksLeft | number }}</b><small>blocks, ~{{ until(h.eta) }}</small></div>}
+        </div>
+      }
+      @if (diffChart) {<div echarts class="chart diff-chart" [options]="diffChart" [initOpts]="chartInit"></div>}
+      @if (histChart) {<h4 class="pad">Time between blocks <span class="dim">median {{ secs(mining?.totals?.medianBlockTime) }}</span></h4><div echarts class="chart hist" [options]="histChart" [initOpts]="chartInit"></div>}
+    </section>
+
+    <!-- big moves -->
+    <section class="pane moves">
+      <header><span class="tag">BIG MOVES</span> eCash's largest transactions, the last {{ whales?.blocks ?? '…' }} blocks</header>
+      @if (volumeChart) {<h4 class="pad">On-chain volume a day <span class="dim">outputs of non-coinbase transactions</span></h4><div echarts class="chart vol" [options]="volumeChart" [initOpts]="chartInit"></div>}
+      <div class="hscroll"><table class="tbl">
+        <thead><tr><th>Transaction</th><th class="r">Moved</th><th class="r">USD</th><th>Largest output to</th><th class="r">In/out</th><th class="r">Block</th></tr></thead>
+        <tbody>
+          @for (w of whales?.moves ?? []; track w.txid) {
+            <tr>
+              <td><a class="mono" [routerLink]="'/tx/' + w.txid">{{ short(w.txid) }}</a> <span class="dim">{{ ago(w.time) }}</span></td>
+              <td class="r">{{ coins(w.value) }} ECX</td>
+              <td class="r">{{ markets?.ecx?.priceUsd ? usd(w.value * markets.ecx.priceUsd, 0) : '–' }}</td>
+              <td>@if (w.to) {<a class="mono" [routerLink]="'/address/' + w.to">{{ short(w.to) }}</a>} @else {–} <span class="dim">{{ coins(w.largest) }}</span></td>
+              <td class="r">{{ w.inputs }}/{{ w.outputs }}</td>
+              <td class="r"><a [routerLink]="'/block/' + w.height">{{ w.height | number }}</a></td>
+            </tr>
+          } @empty {<tr><td colspan="6" class="dim">Reading the last week's blocks…</td></tr>}
+        </tbody>
+      </table></div>
+      <div class="dim note">A transaction's outputs include its change: what left its owner is at most this.</div>
+    </section>
+
+    <!-- the drivechain's actors -->
+    <section class="pane dc">
+      <header><span class="tag">DRIVECHAIN ACTORS</span> BMM and the peg, the last 1,008 blocks</header>
+      <div class="cols2">
+        <div>
+          <h4>Top BMM miners <span class="dim">pools that carried sidechain blocks</span></h4>
+          <table class="tbl small">
+            <thead><tr><th>Pool</th><th class="r">Blocks</th><th class="r">BMM</th><th class="r">Bids earned</th></tr></thead>
+            <tbody>@for (m of bmmMiners; track m.name) {<tr><td>{{ m.name }}</td><td class="r">{{ m.blocks }}</td><td class="r">{{ m.accepts }}</td><td class="r">{{ m.bids | number }} sats</td></tr>}
+              @empty {<tr><td colspan="4" class="dim">–</td></tr>}</tbody>
+          </table>
+        </div>
+        <div>
+          <h4>Top BMM bidders <span class="dim">sidechains paying miners</span></h4>
+          <table class="tbl small">
+            <thead><tr><th>Sidechain</th><th class="r">Bids</th><th class="r">Won</th><th class="r">Paid</th><th class="r">Avg</th></tr></thead>
+            <tbody>@for (b of bidders; track b.name) {<tr><td><i class="sw" [style.background]="b.color"></i>{{ b.name }}</td><td class="r">{{ b.requests }}</td><td class="r">{{ b.accepts }}</td>
+              <td class="r">{{ b.bids | number }}</td><td class="r">{{ b.avg !== null ? (b.avg | number:'1.0-0') : '–' }}</td></tr>}
+              @empty {<tr><td colspan="5" class="dim">–</td></tr>}</tbody>
+          </table>
+        </div>
+        <div>
+          <h4>Top sidechain users <span class="dim">by deposits</span></h4>
+          <table class="tbl small">
+            <thead><tr><th>Address</th><th class="r">Deposits</th><th class="r">Amount</th></tr></thead>
+            <tbody>@for (u of users; track u.chain + u.address) {<tr><td><i class="sw" [style.background]="u.color"></i><span class="mono" [title]="u.chain + ': ' + u.address">{{ short(u.address) }}</span></td>
+              <td class="r">{{ u.count }}</td><td class="r">{{ ecx(u.amount) }}</td></tr>}
+              @empty {<tr><td colspan="3" class="dim">–</td></tr>}</tbody>
+          </table>
+        </div>
+        <div>
+          <h4>Top holders <span class="dim">Thunder</span></h4>
+          <table class="tbl small">
+            <thead><tr><th>Address</th><th class="r">Balance</th><th class="r">Share</th></tr></thead>
+            <tbody>@for (h of holders; track h.address) {<tr><td><a class="mono" [href]="'/thunder/address/' + h.address">{{ short(h.address) }}</a></td>
+              <td class="r">{{ ecx(h.balance) }}</td><td class="r">{{ pct(h.share, 1) }}</td></tr>}
+              @empty {<tr><td colspan="3" class="dim">–</td></tr>}</tbody>
+          </table>
+        </div>
+      </div>
     </section>
 
     <!-- sidechains -->
@@ -115,13 +234,13 @@
       </table></div>
     </section>
 
-    <!-- actors -->
+    <!-- who runs the nodes -->
     <section class="pane actors">
-      <header><span class="tag">ACTORS</span> who runs the network</header>
+      <header><span class="tag">NODE OPERATORS</span> who runs the network</header>
       <div class="cols">
         <div>
-          <h4>Hosting <span class="dim">eCash nodes</span></h4>
-          @for (h of hosts; track h.name) {<div class="bar"><span class="n">{{ h.name }}</span><span class="b"><i [style.width.%]="h.count / maxOf(hosts) * 100"></i></span><span class="v">{{ h.count }}</span></div>}
+          <h4>Hosts <span class="dim">eCash nodes, by network (AS)</span></h4>
+          @for (h of hosts; track h.name) {<div class="bar" [title]="h.title"><span class="n">{{ h.name }}</span><span class="b"><i [style.width.%]="h.count / maxOf(hosts) * 100"></i></span><span class="v">{{ h.count }}</span></div>}
         </div>
         <div>
           <h4>Countries <span class="dim">eCash nodes</span></h4>
@@ -130,31 +249,6 @@
         <div>
           <h4>Clients <span class="dim">all networks</span></h4>
           @for (c of clients; track c.name) {<div class="bar"><span class="n">{{ c.name }}</span><span class="b"><i [style.width.%]="c.count / maxOf(clients) * 100" [style.background]="c.color"></i></span><span class="v">{{ c.count }}</span></div>}
-        </div>
-        <div>
-          <h4>Large holders <span class="dim">Thunder</span></h4>
-          @for (h of holders; track h.address) {
-            <div class="holder"><a [href]="'/thunder/address/' + h.address" class="mono">{{ short(h.address) }}</a><span class="v">{{ ecx(h.balance) }}</span><span class="dim">{{ pct(h.share, 1) }}</span></div>
-          } @empty {<div class="dim">–</div>}
-        </div>
-      </div>
-    </section>
-
-    <!-- news and X -->
-    <section class="pane intel">
-      <header><span class="tag">INTEL</span> ecash.com and X</header>
-      <div class="scroll">
-        <h4>ecash.com</h4>
-        @for (n of news.slice(0, 6); track n.link) {
-          <div class="ev"><span class="t">{{ n.time * 1000 | date:'MMM d' }}</span><a [href]="n.link" target="_blank" rel="noopener">{{ n.title }}</a></div>
-        } @empty {<div class="dim">–</div>}
-        <div class="x">
-          @for (f of xFrames; track f.account) {
-            <h4>&#64;{{ f.account }} <a class="dim" [href]="'https://x.com/' + f.account" target="_blank" rel="noopener">on X →</a></h4>
-            <!-- X's page, in its own origin: it can run its scripts and open links, nothing of this site's -->
-            <iframe class="xtl" [src]="f.url" [title]="'Posts by @' + f.account" loading="lazy" referrerpolicy="no-referrer"
-              sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"></iframe>
-          }
         </div>
       </div>
     </section>

@@ -38,6 +38,22 @@ export function parseAgent(ua: string | null): NodeAgent {
   return { node: `${product} ${m[2]}`, backbone, comments, order: (backbone ? 1e9 : 2e9) - newer };
 }
 
+/** the hosting companies whose AS holder's name says little ("The Constant Company, LLC" is Vultr), by AS number */
+const HOSTERS: Record<number, string> = {
+  20473: 'Vultr', 24940: 'Hetzner', 213230: 'Hetzner', 16509: 'AWS', 14618: 'AWS', 8987: 'AWS', 51167: 'Contabo', 141995: 'Contabo',
+  63949: 'Akamai (Linode)', 12876: 'Scaleway', 16276: 'OVH', 14061: 'DigitalOcean', 15169: 'Google Cloud', 396982: 'Google Cloud',
+  8075: 'Microsoft Azure', 13335: 'Cloudflare', 31898: 'Oracle Cloud', 45102: 'Alibaba Cloud', 132203: 'Tencent Cloud', 197540: 'netcup',
+  60068: 'Datacamp (CDN77)', 9009: 'M247', 62240: 'Clouvider', 212238: 'Datacamp', 53667: 'FranTech (BuyVM)', 36352: 'ColoCrossing',
+};
+
+/** who hosts an address: the company of its AS, by name */
+export function hostName(asn: { number: number; org: string } | null | undefined): string | null {
+  if (!asn) {
+    return null;
+  }
+  return HOSTERS[asn.number] ?? asn.org.replace(/,?\s+(LLC|L\.L\.C\.|Inc\.?|Ltd\.?|Limited|GmbH|S\.?A\.?S?|B\.V\.|AG|Co\.?|Corp\.?|Corporation|SAS)\.?$/i, '').trim();
+}
+
 /** an address to fit the table: an IPv6 one as its first three groups … its last two ("[2a01:e0a:1f3:…:5e1:b43a]:8533") */
 export function shortAddress(ip: string, port: number): string {
   if (!ip.includes(':')) {
@@ -90,6 +106,7 @@ export class ChainNodesComponent implements OnInit, OnDestroy {
   private allCols: CxColumn[] = [
     { key: 'address', label: 'Address', sort: r => r.ip },
     { key: 'node', label: 'Node', sort: r => r.agent.node },
+    { key: 'host', label: 'Host', sort: r => r.host ?? '~', hide: 'md', title: 'who holds the address\'s network (its AS), by DB-IP' },
     { key: 'chain', label: 'Chain', sort: r => ['Full', 'Pruned', 'No blocks'].indexOf(r.chain), title: 'Full: serves every block; Pruned: the last 288 only' },
     { key: 'height', label: 'Height', align: 'right', sort: true },
     { key: 'protocol', label: 'Protocol', align: 'right', sort: true, hide: 'lg' },
@@ -104,7 +121,7 @@ export class ChainNodesComponent implements OnInit, OnDestroy {
   filters: CxFilter[] = [];
   /** a client's colour (Versions card, map) */
   colorMap: Record<string, string> = {};
-  match = (r: any, q: string) => [r.address, r.rdns, r.userAgent].some(x => typeof x === 'string' && x.toLowerCase().includes(q));
+  match = (r: any, q: string) => [r.address, r.rdns, r.userAgent, r.host, r.asn?.org, r.asn ? 'AS' + r.asn.number : null].some(x => typeof x === 'string' && x.toLowerCase().includes(q));
   trackAddress = (r: any) => r.address;
 
   constructor(private api: ChainApiService, private cd: ChangeDetectorRef, private seo: SeoService) {}
@@ -131,6 +148,7 @@ export class ChainNodesComponent implements OnInit, OnDestroy {
       // behind the tip when its height was read (a crawl, or a check between crawls), not the tip now
       behind: n.height !== null && (n.tip ?? tip) ? Math.max(0, (n.tip ?? tip) - n.height) : null,
       short: shortAddress(n.ip, n.port),
+      host: hostName(n.asn),
       note: shortNote(parseAgent(n.userAgent).comments),
       uptime: n.recent ? [...n.recent].filter(c => c === '1').length / n.recent.length : 0,
     })).sort((a: any, b: any) => Number(b.up) - Number(a.up) || b.lastSeen - a.lastSeen || a.ip.localeCompare(b.ip));

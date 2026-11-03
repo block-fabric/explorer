@@ -6,7 +6,7 @@ import bitcoinClient from '../api/bitcoin/bitcoin-client';
 import l2Index from './l2/index';
 import { PROFILE } from './profile';
 import { getCrawls, getLinks, getNodes, isCrawling, lastChecked, p2pParams, rdnsOf, schedule, startCrawler } from './nodes';
-import { $openGeo, geoOf } from './nodes-geo';
+import { $openGeo, asnOf, geoOf } from './nodes-geo';
 
 /**
  * GET /api/v1/chain/nodes: the network's reachable nodes, as the crawler (chain/nodes.ts) last found them, and its
@@ -62,7 +62,7 @@ class NodesRoutes {
             quic: !!p2pParams()?.quic, // LayerTwo's protocol: no services, no protocol number, no addresses from the nodes
             last,
             // the nodes reached in the last crawl, and those reached in the last week that have gone since
-            nodes: getNodes().map(n => ({ ...n, up: !!last && n.lastSeen >= last.time, rdns: rdnsOf(n.ip), geo: geoOf(n.ip) })),
+            nodes: getNodes().map(n => ({ ...n, up: !!last && n.lastSeen >= last.time, rdns: rdnsOf(n.ip), geo: geoOf(n.ip), asn: asnOf(n.ip) })),
             links: getLinks(), // the last crawl's: [a, b] addresses, a named b in its getaddr answer
             history: crawls.map(c => ({ time: c.time, reachable: c.reachable, known: c.known })),
           },

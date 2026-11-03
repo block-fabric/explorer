@@ -6,22 +6,25 @@ import logger from '../logger';
 /**
  * The console's outside data (/console, eCash mainnet's explorer only): ECX's markets and eCash's news.
  *
- *   markets  wECX and waECX on Solana (DexScreener's public API: every pool of the two mints), ECX on neoxa.exchange
+ *   markets  wECX on Solana (DexScreener's public API: every pool of its mint), ECX on neoxa.exchange
  *            (its CoinGecko-format tickers: ECX_USDC, ECX_USDT, ECX_BTC, the BTC pair priced with its BTC_USDC),
  *            and ECX's price over them weighted by their 24 h volume in USD. A snapshot every SNAPSHOT_EVERY is kept
  *            (chain_intel_prices, INTEL_KEEP), for the price over time; neoxa's hourly candles besides.
  *   news     ecash.com's blog (its RSS).
+ *   bitcoin  Bitcoin's price, hashrate, difficulty and last day's rewards (mempool.space's public API), for the
+ *            console's comparison of mining eCash and mining Bitcoin (the same SHA-256 machines).
  *
  * Every source is a fixed URL (nothing from a request reaches one), read with a timeout and a size bound; one that
  * fails leaves the last good answer in place.
  */
 
 const WECX = '6ombVv3YMs9qpx1QkycD9XW8HKSfv7vGrCFX3cxCYMVY'; // wECX, Solana
-const WAECX = 'BZEmayLHNAD4aaQ86Jkf9YTT8QT7xXfPGMmCg6JncmhZ'; // waECX ("Wrapped Alpha eCash"), Solana
 const DEXSCREENER = 'https://api.dexscreener.com/token-pairs/v1/solana/';
 const NEOXA = 'https://neoxa.exchange';
 const NEOXA_PAIRS = ['ECX_USDC', 'ECX_USDT', 'ECX_BTC'];
 const ECASH_BLOG = 'https://ecash.com/blog/rss.xml';
+const MEMPOOL_SPACE = 'https://mempool.space/api';
+const BITCOIN_TTL = 10 * 60_000;
 /**
  * The quote tokens a Solana pool's price counts with, by mint (not by symbol: anyone can mint a token called USDC).
  * A pool counts toward ECX's price only quoted in one of these, with MIN_LIQUIDITY at least, its weight its 24 h
@@ -51,7 +54,7 @@ export interface MarketPair {
   venue: string; // "orca", "raydium", "neoxa"
   chain: string; // "solana", "neoxa"
   pair: string; // "wECX/USDC"
-  asset: 'ECX' | 'waECX'; // what is priced: wECX and neoxa's ECX are ECX; waECX is another asset
+  asset: 'ECX';
   counted: boolean; // in ECX's weighted price (QUOTES, MIN_LIQUIDITY, OUTLIER)
   priceUsd: number | null;
   priceQuote: number | null; // in the quote currency
@@ -108,7 +111,7 @@ async function $solanaPairs(mint: string, asset: MarketPair['asset']): Promise<M
       const quote = QUOTES[p.quoteToken?.address] ?? `${String(p.quoteToken?.symbol ?? '?').replace(/[^\w.-]/g, '').slice(0, 10)}?`;
       return {
       venue: String(p.dexId ?? '?').replace(/[^\w.-]/g, '').slice(0, 24), chain: 'solana',
-      pair: `${asset === 'ECX' ? 'wECX' : 'waECX'}/${quote}`,
+      pair: `wECX/${quote}`,
       asset, priceUsd: num(p.priceUsd), priceQuote: num(p.priceNative), quote, counted: false,
       volume24hUsd: num(p.volume?.h24), liquidityUsd: num(p.liquidity?.usd), change24h: num(p.priceChange?.h24),
       high24h: null, low24h: null,
@@ -173,7 +176,7 @@ export async function $getMarkets(): Promise<Markets | null> {
 async function $loadMarkets(): Promise<Markets | null> {
   marketsAt = Date.now();
   const old = markets?.pairs ?? [];
-  const parts = await Promise.allSettled([$solanaPairs(WECX, 'ECX'), $solanaPairs(WAECX, 'waECX'), $neoxaPairs()]);
+  const parts = await Promise.allSettled([$solanaPairs(WECX, 'ECX'), $neoxaPairs()]);
   const keep = (i: number, pick: (p: MarketPair) => boolean): MarketPair[] => {
     const r = parts[i];
     if (r.status === 'fulfilled') {
@@ -183,7 +186,7 @@ async function $loadMarkets(): Promise<Markets | null> {
     return old.filter(pick);
   };
   const pairs = [
-    ...keep(0, p => p.chain === 'solana' && p.asset === 'ECX'), ...keep(1, p => p.asset === 'waECX'), ...keep(2, p => p.venue === 'neoxa'),
+    ...keep(0, p => p.chain === 'solana'), ...keep(1, p => p.venue === 'neoxa'),
   ];
   pairs.forEach(p => { p.counted = false; });
   if (!pairs.length) {
@@ -217,6 +220,49 @@ export async function $getCandles(pair: string): Promise<any[]> {
     logger.debug(`Console candles ${pair}: ${e instanceof Error ? e.message : e}`, 'Intel');
     return c?.value ?? [];
   }
+}
+
+export interface BitcoinMining {
+  updated: number; priceUsd: number | null; hashrate: number | null; difficulty: number | null;
+  reward144: number | null; fees144: number | null; // sats over the last 144 blocks
+  avgBlockTime: number | null; // seconds, this period's
+}
+let bitcoin: BitcoinMining | null = null;
+let bitcoinAt = 0;
+let bitcoinLoading: Promise<BitcoinMining | null> | null = null;
+
+/** Bitcoin's mining numbers, every BITCOIN_TTL; one fetch at a time, at most one per RETRY_TTL while failing @asyncSafe */
+export async function $getBitcoin(): Promise<BitcoinMining | null> {
+  if (Date.now() - bitcoinAt < (bitcoin ? BITCOIN_TTL : RETRY_TTL)) {
+    return bitcoin;
+  }
+  bitcoinLoading ??= $loadBitcoin().finally(() => { bitcoinLoading = null; });
+  return bitcoinLoading;
+}
+
+/** @asyncSafe */
+async function $loadBitcoin(): Promise<BitcoinMining | null> {
+  bitcoinAt = Date.now();
+  const [price, hash, rewards, adj] = await Promise.allSettled([
+    $get(`${MEMPOOL_SPACE}/v1/prices`), $get(`${MEMPOOL_SPACE}/v1/mining/hashrate/3d`),
+    $get(`${MEMPOOL_SPACE}/v1/mining/reward-stats/144`), $get(`${MEMPOOL_SPACE}/v1/difficulty-adjustment`),
+  ]);
+  const v = <T>(r: PromiseSettledResult<T>): any => r.status === 'fulfilled' ? r.value : null;
+  const next: BitcoinMining = {
+    updated: Math.floor(Date.now() / 1000),
+    priceUsd: num(v(price)?.USD) ?? bitcoin?.priceUsd ?? null,
+    hashrate: num(v(hash)?.currentHashrate) ?? bitcoin?.hashrate ?? null,
+    difficulty: num(v(hash)?.currentDifficulty) ?? bitcoin?.difficulty ?? null,
+    reward144: num(v(rewards)?.totalReward) ?? bitcoin?.reward144 ?? null,
+    fees144: num(v(rewards)?.totalFee) ?? bitcoin?.fees144 ?? null,
+    avgBlockTime: num(v(adj)?.timeAvg) !== null ? (num(v(adj)?.timeAvg) as number) / 1000 : bitcoin?.avgBlockTime ?? null,
+  };
+  if (next.priceUsd !== null || next.hashrate !== null) {
+    bitcoin = next;
+  } else {
+    logger.debug('Console: mempool.space did not answer', 'Intel');
+  }
+  return bitcoin;
 }
 
 /** a feed's text with its HTML entities as characters (&#39; is ') */

@@ -1,5 +1,6 @@
 import { AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, Input, NgZone, OnChanges, OnDestroy, ViewChild, Inject, PLATFORM_ID } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
+import { hostName } from './nodes.component';
 
 /** a node of the table (nodes.component.ts build()), with its location (the backend's DB-IP lookup) */
 export interface GlobeNode {
@@ -7,6 +8,8 @@ export interface GlobeNode {
   agent: { node: string }; chain: string; height: number | null; behind: number | null; latency: number | null;
   uptime: number; lastSeen: number;
   geo: { lat: number; lon: number; city: string | null; country: string | null } | null;
+  /** who holds its address's network */
+  asn?: { number: number; org: string } | null;
   /** what its colour stands for, if not its client (the console: its chain) */
   group?: string;
 }
@@ -190,6 +193,7 @@ export class NodesGlobeComponent implements AfterViewInit, OnChanges, OnDestroy 
       <div style="padding:6px 0;border-top:1px solid #ffffff1a">
         <div style="font-family:var(--cx-mono, monospace);font-size:12px;color:#fff">${esc(n.short)}</div>
         ${n.rdns ? `<div style="font-size:10.5px;color:#ffffff80;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(n.rdns)}</div>` : ''}
+        ${n.asn ? `<div style="font-size:10.5px;color:#ffffff99">${esc(hostName(n.asn))} <span style="color:#ffffff60">AS${esc(n.asn.number)}</span></div>` : ''}
         <div style="font-size:11.5px;color:#ffffffcc;margin-top:2px">
           <span style="color:${esc(this.colors[n.group ?? n.agent.node] ?? this.accent)}">●</span> ${n.group ? esc(n.group) + ' · ' : ''}${esc(n.agent.node)}${n.chain && n.chain !== 'No blocks' ? ' · ' + esc(n.chain) : ''}
         </div>
