@@ -147,6 +147,11 @@
           <div class="svg-wrapper"><app-svg-images name="nav-enterprise" width="21.59" height="100%"></app-svg-images></div>
         </a>
       </li>
+      <li class="nav-item" routerLinkActive="active" id="btn-console" *ngIf="consoleEnabled">
+        <a class="nav-link" [routerLink]="['/console']" (click)="collapse()" title="Console: eCash, its sidechains, markets and mining on one screen" aria-label="Console">
+          <div class="svg-wrapper"><app-svg-images name="nav-console" width="21.59" height="100%"></app-svg-images></div>
+        </a>
+      </li>
       <li class="nav-item" routerLinkActive="active" id="btn-about">
         <a class="nav-link" [routerLink]="['/about']" (click)="collapse()">
           <div class="svg-wrapper"><app-svg-images name="nav-info-circle" width="21.59" height="100%"></app-svg-images></div>

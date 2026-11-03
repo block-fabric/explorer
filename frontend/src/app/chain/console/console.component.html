@@ -1,0 +1,161 @@
+<div class="cs">
+  <!-- the strip: the numbers that move -->
+  <div class="strip">
+    <div class="brand"><span class="dot live"></span> CONSOLE <span class="dim">eCash · sidechains · markets · mining</span></div>
+    <div class="st"><label>eCash</label><b>{{ tip !== null ? (tip | number) : '–' }}</b></div>
+    <div class="st"><label>Hashrate</label><b>{{ hash(hashrate) }}</b></div>
+    <div class="st"><label>Avg block</label><b>{{ avgBlock() }}</b></div>
+    <div class="st"><label>Mempool</label><b>{{ mempool ? (mempool.count | number) + ' tx' : '–' }}</b></div>
+    <div class="st"><label>ECX</label><b>{{ usd(markets?.ecx?.priceUsd) }}</b><small>{{ usd(markets?.ecx?.volume24hUsd, 0) }} 24h</small></div>
+    @for (s of sidechains; track s.slot) {
+      @if (s.tip !== null) {<div class="st"><label [style.color]="s.color">{{ s.name }}</label><b>{{ s.tip | number }}</b></div>}
+    }
+    <div class="st"><label>Nodes</label><b>{{ totalNodes() || '–' }}</b></div>
+    <div class="st clock"><b>{{ clock() }}</b></div>
+  </div>
+
+  <div class="grid">
+    <!-- the networks' nodes -->
+    <section class="pane globe">
+      <header><span class="tag">NODES</span> every reachable node of eCash and its sidechains, by where its address is
+        <span class="legend">@for (n of nets; track n.id) {<span><i [style.background]="n.color"></i>{{ n.name }} {{ nodeCounts[n.name] ?? 0 }}</span>}</span>
+      </header>
+      <app-nodes-globe [nodes]="globeNodes" [links]="links" [colors]="netColors" accent="#f5a623" [height]="470"></app-nodes-globe>
+      <footer class="dim">Arcs: eCash nodes that named each other when asked for addresses. Locations by <a href="https://db-ip.com" target="_blank" rel="noopener">DB-IP</a>.
+        <a routerLink="/nodes">All eCash nodes →</a></footer>
+    </section>
+
+    <!-- markets -->
+    <section class="pane markets">
+      <header><span class="tag">MARKETS</span> ECX on Solana and neoxa.exchange
+        @if (markets?.updated) {<span class="dim right">updated {{ ago(markets.updated) }} ago</span>}</header>
+      <div class="big">
+        <div><label>ECX, volume-weighted</label><b>{{ usd(markets?.ecx?.priceUsd) }}</b></div>
+        <div><label>24 h volume</label><b>{{ usd(markets?.ecx?.volume24hUsd, 0) }}</b></div>
+        <div><label>Venues</label><b>{{ markets?.ecx?.venues ?? '–' }}</b></div>
+      </div>
+      @if (priceChart) {<div echarts class="chart" [options]="priceChart" [initOpts]="chartInit"></div>}
+      <table class="tbl">
+        <thead><tr><th>Venue</th><th>Pair</th><th class="r">Price</th><th class="r">24h vol</th><th class="r">Liquidity</th><th class="r">24h</th></tr></thead>
+        <tbody>
+          @for (p of ecxPairs(); track p.url + p.pair) {
+            <tr>
+              <td><a [href]="p.url" target="_blank" rel="noopener">{{ p.venue }}</a> <span class="dim">{{ p.chain === 'solana' ? 'Solana' : '' }}</span></td>
+              <td>{{ p.pair }}</td>
+              <td class="r">{{ usd(p.priceUsd) }}</td>
+              <td class="r">{{ usd(p.volume24hUsd, 0) }}</td>
+              <td class="r">{{ p.liquidityUsd !== null ? usd(p.liquidityUsd, 0) : '–' }}</td>
+              <td class="r" [class.up]="p.change24h > 0" [class.down]="p.change24h < 0">{{ p.change24h !== null ? (p.change24h > 0 ? '+' : '') + p.change24h + '%' : '–' }}</td>
+            </tr>
+          }
+          @for (p of otherPairs(); track p.url + p.pair) {
+            <tr class="other">
+              <td><a [href]="p.url" target="_blank" rel="noopener">{{ p.venue }}</a> <span class="dim">Solana</span></td>
+              <td>{{ p.pair }} <span class="dim">(Alpha eCash)</span></td>
+              <td class="r">{{ usd(p.priceUsd, 4) }}</td>
+              <td class="r">{{ usd(p.volume24hUsd, 0) }}</td>
+              <td class="r">{{ p.liquidityUsd !== null ? usd(p.liquidityUsd, 0) : '–' }}</td>
+              <td class="r">{{ p.change24h !== null ? p.change24h + '%' : '–' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+
+    <!-- events -->
+    <section class="pane feed">
+      <header><span class="tag">EVENTS</span> blocks, the peg, sidechain blocks, news</header>
+      <div class="scroll">
+        @for (e of feed; track e.time + e.text) {
+          <div class="ev">
+            <span class="t">{{ ago(e.time) }}</span>
+            <span class="k" [style.color]="e.color">{{ e.net }}</span>
+            @if (e.link) {
+              @if (e.ext) {<a [href]="e.link" target="_blank" rel="noopener">{{ e.text }}</a>} @else {<a [routerLink]="e.link">{{ e.text }}</a>}
+            } @else {<span>{{ e.text }}</span>}
+          </div>
+        } @empty {<div class="dim">Loading…</div>}
+      </div>
+    </section>
+
+    <!-- mining -->
+    <section class="pane mining">
+      <header><span class="tag">MINING</span> eCash, the last 24 h <a class="right" routerLink="/mining">More →</a></header>
+      <div class="big">
+        <div><label>Hashrate</label><b>{{ hash(hashrate) }}</b></div>
+        <div><label>Next retarget</label><b [class.up]="difficulty?.difficultyChange > 0" [class.down]="difficulty?.difficultyChange < 0">{{ difficulty ? (difficulty.difficultyChange > 0 ? '+' : '') + difficulty.difficultyChange.toFixed(1) + '%' : '–' }}</b></div>
+        <div><label>Blocks</label><b>{{ poolBlocks || '–' }}</b></div>
+      </div>
+      <div class="bars">
+        @for (p of pools; track p.name) {
+          <div class="bar"><span class="n">{{ p.name }}</span><span class="b"><i [style.width.%]="p.share * 100"></i></span><span class="v">{{ pct(p.share) }}</span><span class="c dim">{{ p.blocks }}</span></div>
+        }
+      </div>
+      @if (hashChart) {<div echarts class="chart hash" [options]="hashChart" [initOpts]="chartInit"></div>}
+      <div class="dim note">Daily hashrate since eCash forked (the index's older days are Bitcoin's).</div>
+    </section>
+
+    <!-- sidechains -->
+    <section class="pane chains">
+      <header><span class="tag">SIDECHAINS</span> the peg and BMM on eCash</header>
+      <div class="hscroll"><table class="tbl">
+        <thead><tr><th>Chain</th><th class="r">Tip</th><th class="r">Escrow</th><th class="r">Deposits</th><th class="r">BMM blocks</th><th class="r">Bundles</th></tr></thead>
+        <tbody>
+          @for (s of sidechains; track s.slot) {
+            <tr>
+              <td><i class="sw" [style.background]="s.color"></i>@if (s.link) {<a [href]="s.link">{{ s.name }}</a>} @else {{{ s.name }}} <span class="dim">#{{ s.slot }}</span></td>
+              <td class="r">{{ s.tip !== null ? (s.tip | number) : '–' }}</td>
+              <td class="r">{{ ecx(s.escrow) }}</td>
+              <td class="r">{{ s.deposits }}</td>
+              <td class="r">{{ s.bmmBlocks | number }}</td>
+              <td class="r">{{ s.pending }}</td>
+            </tr>
+          }
+        </tbody>
+      </table></div>
+    </section>
+
+    <!-- actors -->
+    <section class="pane actors">
+      <header><span class="tag">ACTORS</span> who runs the network</header>
+      <div class="cols">
+        <div>
+          <h4>Hosting <span class="dim">eCash nodes</span></h4>
+          @for (h of hosts; track h.name) {<div class="bar"><span class="n">{{ h.name }}</span><span class="b"><i [style.width.%]="h.count / maxOf(hosts) * 100"></i></span><span class="v">{{ h.count }}</span></div>}
+        </div>
+        <div>
+          <h4>Countries <span class="dim">eCash nodes</span></h4>
+          @for (c of countries; track c.name) {<div class="bar"><span class="n">{{ c.name }}</span><span class="b"><i [style.width.%]="c.count / maxOf(countries) * 100"></i></span><span class="v">{{ c.count }}</span></div>}
+        </div>
+        <div>
+          <h4>Clients <span class="dim">all networks</span></h4>
+          @for (c of clients; track c.name) {<div class="bar"><span class="n">{{ c.name }}</span><span class="b"><i [style.width.%]="c.count / maxOf(clients) * 100" [style.background]="c.color"></i></span><span class="v">{{ c.count }}</span></div>}
+        </div>
+        <div>
+          <h4>Large holders <span class="dim">Thunder</span></h4>
+          @for (h of holders; track h.address) {
+            <div class="holder"><a [href]="'/thunder/address/' + h.address" class="mono">{{ short(h.address) }}</a><span class="v">{{ ecx(h.balance) }}</span><span class="dim">{{ pct(h.share, 1) }}</span></div>
+          } @empty {<div class="dim">–</div>}
+        </div>
+      </div>
+    </section>
+
+    <!-- news and X -->
+    <section class="pane intel">
+      <header><span class="tag">INTEL</span> ecash.com and X</header>
+      <div class="scroll">
+        <h4>ecash.com</h4>
+        @for (n of news.slice(0, 6); track n.link) {
+          <div class="ev"><span class="t">{{ n.time * 1000 | date:'MMM d' }}</span><a [href]="n.link" target="_blank" rel="noopener">{{ n.title }}</a></div>
+        } @empty {<div class="dim">–</div>}
+        <div #xfeed class="x">
+          @for (a of xAccounts; track a) {
+            <h4>&#64;{{ a }} <a class="dim" [href]="'https://x.com/' + a" target="_blank" rel="noopener">on X →</a></h4>
+            <a class="twitter-timeline" data-theme="dark" data-chrome="noheader nofooter transparent noborders" data-tweet-limit="3" data-dnt="true"
+              [href]="'https://twitter.com/' + a">Posts by &#64;{{ a }}</a>
+          }
+        </div>
+      </div>
+    </section>
+  </div>
+</div>

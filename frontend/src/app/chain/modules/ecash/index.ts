@@ -21,6 +21,8 @@ const ecash: ChainFrontendModule = {
   routes: [
     { path: 'mining', loadChildren: () => import('./mining/mining.module').then(m => m.ChainMiningModule) },
     { path: 'nodes', loadChildren: () => import('@app/chain/nodes/nodes.module').then(m => m.ChainNodesModule) },
+    // the console: eCash, its sidechains, markets and mining on one screen (the header's screen icon, mainnet)
+    { path: 'console', loadChildren: () => import('@app/chain/console/console.module').then(m => m.ChainConsoleModule) },
   ],
 };
 

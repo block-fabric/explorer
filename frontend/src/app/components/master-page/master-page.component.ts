@@ -50,6 +50,8 @@ export class MasterPageComponent implements OnInit, OnDestroy {
   footerVisible = true;
   user: any = undefined;
   servicesEnabled = false;
+  /** the console (/console): eCash mainnet's explorer only */
+  consoleEnabled = PROFILE.id === 'ecash' && CHAIN_NETWORK === 'ecash';
   menuOpen = false;
   isDropdownVisible: boolean;
 

@@ -58,6 +58,7 @@ import l2Routes from './chain/l2/routes';
 import flushRoutes from './chain/modules/flush/routes';
 import freebankRoutes from './chain/modules/freebank/routes';
 import chainNodesRoutes from './chain/nodes.routes';
+import intelRoutes from './chain/intel.routes';
 import freebankActivity from './chain/modules/freebank/activity';
 import l2Index from './chain/l2/index';
 import { CoreFacade } from './chain/l2/facade';
@@ -493,6 +494,7 @@ class Server {
     if (l2Role() !== 'full') {
       chainNodesRoutes.initRoutes(this.app); // the chain's reachable nodes, where it has a P2P network to crawl (chain/nodes.ts)
     }
+    intelRoutes.initRoutes(this.app); // the console's markets and news (eCash mainnet's explorer only)
   }
 
   healthCheck(): void {

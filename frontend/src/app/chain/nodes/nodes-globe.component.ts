@@ -7,6 +7,8 @@ export interface GlobeNode {
   agent: { node: string }; chain: string; height: number | null; behind: number | null; latency: number | null;
   uptime: number; lastSeen: number;
   geo: { lat: number; lon: number; city: string | null; country: string | null } | null;
+  /** what its colour stands for, if not its client (the console: its chain) */
+  group?: string;
 }
 
 interface Place { key: string; lat: number; lng: number; name: string; nodes: GlobeNode[]; color: string }
@@ -35,7 +37,7 @@ function ago(t: number): string {
 @Component({
   selector: 'app-nodes-globe',
   standalone: true,
-  template: `<div #host class="globe-host"></div>@if (failed) {<div class="globe-failed">The map needs WebGL, which this browser does not offer.</div>}`,
+  template: `<div #host class="globe-host" [style.height.px]="height"></div>@if (failed) {<div class="globe-failed">The map needs WebGL, which this browser does not offer.</div>}`,
   styles: [`
     :host { display: block; position: relative; }
     .globe-host { width: 100%; height: 460px; cursor: grab; }
@@ -51,6 +53,8 @@ export class NodesGlobeComponent implements AfterViewInit, OnChanges, OnDestroy 
   /** a client's colour (the Versions card's), by its name and version */
   @Input() colors: Record<string, string> = {};
   @Input() accent = '#5aa6ff';
+  /** the globe's height in px (the nodes page: 460) */
+  @Input() height = 460;
   @ViewChild('host', { static: true }) host: ElementRef<HTMLDivElement>;
 
   failed = false;
@@ -151,7 +155,7 @@ export class NodesGlobeComponent implements AfterViewInit, OnChanges, OnDestroy 
     const placeOf = new Map<string, Place>();
     for (const p of byPlace.values()) {
       const count = new Map<string, number>();
-      p.nodes.forEach(n => count.set(n.agent.node, (count.get(n.agent.node) ?? 0) + 1));
+      p.nodes.forEach(n => count.set(n.group ?? n.agent.node, (count.get(n.group ?? n.agent.node) ?? 0) + 1));
       const top = [...count.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '';
       p.color = this.colors[top] ?? this.accent;
       p.nodes.forEach(n => placeOf.set(n.address, p));
@@ -187,7 +191,7 @@ export class NodesGlobeComponent implements AfterViewInit, OnChanges, OnDestroy 
         <div style="font-family:var(--cx-mono, monospace);font-size:12px;color:#fff">${esc(n.short)}</div>
         ${n.rdns ? `<div style="font-size:10.5px;color:#ffffff80;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(n.rdns)}</div>` : ''}
         <div style="font-size:11.5px;color:#ffffffcc;margin-top:2px">
-          <span style="color:${esc(this.colors[n.agent.node] ?? this.accent)}">●</span> ${esc(n.agent.node)}${n.chain && n.chain !== 'No blocks' ? ' · ' + esc(n.chain) : ''}
+          <span style="color:${esc(this.colors[n.group ?? n.agent.node] ?? this.accent)}">●</span> ${n.group ? esc(n.group) + ' · ' : ''}${esc(n.agent.node)}${n.chain && n.chain !== 'No blocks' ? ' · ' + esc(n.chain) : ''}
         </div>
         <div style="font-size:11px;color:#ffffff99;margin-top:1px">
           height ${n.height !== null ? n.height.toLocaleString() : '–'}${n.behind ? ` <span style="color:#ff9b6b">−${n.behind}</span>` : ''}
