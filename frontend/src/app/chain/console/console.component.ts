@@ -428,7 +428,7 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
     const costPerPhDay = this.efficiency * 24 * this.power; // E J/TH: 1 PH = E kW; a day = 24 E kWh
     type Chain = { hashrate: number | null; difficulty: number | null; price: number | null; blockTime: number | null; reward: number | null; fees: number | null };
     const ecash: Chain = {
-      hashrate: m.hashrate ?? null, difficulty: m.difficulty ?? null, price: ecxUsd, blockTime: m.avgBlockTime ?? null,
+      hashrate: m.hashrate ?? null, difficulty: this.mining?.node?.difficulty ?? m.difficulty ?? null, price: ecxUsd, blockTime: m.avgBlockTime ?? null,
       reward: n ? (m.reward ?? 0) / n / 1e8 : null, fees: n ? (m.fees ?? 0) / n / 1e8 : null,
     };
     const btc: Chain = {
@@ -439,13 +439,19 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
       hashrate: c?.hashrate ?? null, difficulty: c?.difficulty ?? null, price: c?.priceUsd ?? null, blockTime: c?.avgBlockTime ?? null,
       reward: c?.rewardPerBlock ?? null, fees: c?.feesPerBlock ?? null,
     };
+    // A miner's hashprice is what its hashes earn at the current difficulty: a block takes difficulty x 2^32 hashes
+    // on average, so a petahash for a day (8.64e19 hashes) finds 8.64e19 / (difficulty x 2^32) blocks. (Not the
+    // window's rewards over its hashrate: eCash's difficulty lags its hashrate since the fork, its blocks came faster
+    // than 10 minutes, and that is not what a miner joining now earns.) A coin's power cost likewise: the hashes a
+    // coin takes at this difficulty, at the efficiency and power price set.
     const derive = (x: Chain) => {
       const perDay = x.blockTime ? 86400 / x.blockTime : null;
       const revenue = x.reward !== null && x.price !== null && perDay !== null ? x.reward * x.price * perDay : null;
-      const hashprice = revenue !== null && x.hashrate ? revenue / (x.hashrate / PH) : null;
+      const hashesPerBlock = x.difficulty ? x.difficulty * 2 ** 32 : null;
+      const hashprice = hashesPerBlock && x.reward !== null && x.price !== null ? x.reward * x.price * (PH * 86400) / hashesPerBlock : null;
       const cost = x.hashrate ? (x.hashrate / PH) * costPerPhDay : null;
-      const coins = x.reward !== null && perDay !== null ? x.reward * perDay : null;
-      return { perDay, revenue, hashprice, cost, coinCost: cost !== null && coins ? cost / coins : null,
+      const kwhPerCoin = hashesPerBlock && x.reward ? hashesPerBlock / x.reward * (this.efficiency / 1e12) / 3.6e6 : null;
+      return { perDay, revenue, hashprice, cost, coinCost: kwhPerCoin !== null ? kwhPerCoin * this.power : null,
         breakeven: hashprice !== null ? hashprice / (this.efficiency * 24) : null };
     };
     const e = derive(ecash);
@@ -456,8 +462,8 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
     const ratioBch = e.hashprice !== null && h.hashprice !== null && h.hashprice > 0 ? e.hashprice / h.hashprice : null;
     this.hashprice = {
       ecash: e.hashprice, btc: t.hashprice, bch: h.hashprice, ratio, ratioBch,
-      ecxPerPh: ecash.reward !== null && e.perDay !== null && ecash.hashrate ? ecash.reward * e.perDay / (ecash.hashrate / PH) : null,
-      btcPerPh: btc.reward !== null && t.perDay !== null && btc.hashrate ? btc.reward * t.perDay / (btc.hashrate / PH) : null,
+      ecxPerPh: ecash.reward !== null && ecash.difficulty ? ecash.reward * (PH * 86400) / (ecash.difficulty * 2 ** 32) : null,
+      btcPerPh: btc.reward !== null && btc.difficulty ? btc.reward * (PH * 86400) / (btc.difficulty * 2 ** 32) : null,
     };
     this.attack = this.attackCost(rent, ecash.blockTime, ecxUsd);
     const coin = (x: Chain, unit: string) => x.reward !== null ? x.reward.toFixed(3) + ' ' + unit : '–';
@@ -566,8 +572,8 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * eCash's hashprice bucket by bucket over the window: each bucket's rewards (subsidy and fees) at ECX's price then
-   * (neoxa's hourly close nearest it; none before its candles), over its hashrate and its duration; Bitcoin's now beside
+   * eCash's hashprice bucket by bucket over the window: a block's reward (subsidy and the bucket's fees) at ECX's price
+   * then (neoxa's hourly close nearest it; none before its candles), at the bucket's difficulty; Bitcoin's now beside
    */
   private buildHashpriceChart(): any {
     const m = this.mining;
@@ -585,14 +591,14 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
       }
       return best && Math.abs(best[0] - t) <= 2 * 3600 ? best[1] : null;
     };
+    // (at each bucket's difficulty: what a petahash earned then, as the economics count it now)
     const data = m.series.map((b: any) => {
       const price = priceAt(b.time);
-      const days = b.blocks * (b.blockTime ?? 0) / 86400;
-      if (price === null || !days || !b.hashrate) {
+      if (price === null || !b.difficulty || !b.blocks) {
         return null;
       }
-      const reward = b.blocks * subsidy + (b.fees ?? 0) / 1e8;
-      return [b.time * 1000, reward * price / days / (b.hashrate / 1e15)];
+      const reward = subsidy + (b.fees ?? 0) / 1e8 / b.blocks;
+      return [b.time * 1000, reward * price * (1e15 * 86400) / (b.difficulty * 2 ** 32)];
     }).filter((x: any) => x !== null);
     if (data.length < 2) {
       return null;

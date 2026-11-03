@@ -135,7 +135,7 @@
               </div>
             }
           </div>
-          <div class="dim note">Hashprice: what a petahash earns a day. Rent: the whole hashrate for an hour at Bitcoin's hashprice. Cost to make a coin: power only, at {{ efficiency }} J/TH and {{ '$' + power }}/kWh (green: the price is above it). Details: the whole comparison.</div>
+          <div class="dim note">Hashprice: what a petahash earns a day at the current difficulty. Rent: the whole hashrate for an hour at Bitcoin's hashprice. Cost to make a coin: power only, at {{ efficiency }} J/TH and {{ '$' + power }}/kWh (green: the price is above it). Details: the whole comparison.</div>
         } @else {
         <div class="hscroll"><table class="tbl econ-tbl">
           <thead><tr><th></th><th class="r">eCash</th><th class="r">Bitcoin</th><th class="r">Bitcoin Cash</th><th class="sm-hide"></th></tr></thead>
@@ -188,7 +188,7 @@
         <div title="the power price under which mining pays, at the efficiency set in Economics"><label>Break-even</label><b>{{ hashprice?.ecash ? '$' + (hashprice.ecash / (efficiency * 24)).toFixed(3) : '–' }}</b><small>$/kWh at {{ efficiency }} J/TH</small></div>
       </div>
       @if (hashpriceChart) {<h4 class="pad">eCash's hashprice over the week <span class="dim">at ECX's price then (neoxa, hourly)</span></h4><div echarts class="chart hp" [options]="hashpriceChart" [initOpts]="chartInit"></div>}
-      <div class="dim note">Rewards (subsidy and fees) at the coin's price, over the hashrate. A miner moves its machines to the chain that pays more per hash.</div>
+      <div class="dim note">A block's reward (subsidy and fees) at the coin's price, for the hashes a block takes at the current difficulty. A miner moves its machines to the chain that pays more per hash.</div>
     </section>
 
     <!-- 51% attack -->
