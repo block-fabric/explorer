@@ -50,7 +50,8 @@ EXPLORERS = [
     {
         'id': 'mainnet', 'path': '', 'kind': 'l1', 'profile': 'ecash', 'network': 'ecash', 'api_port': 18959,
         'rpc_port': 8532, 'enforcer': 'http://127.0.0.1:8133', 'weight': 4000000,
-        'mem': '1g', 'heap_mb': 768,
+        # (a flood of ~7,000-transaction blocks and a 48,000-transaction mempool, 2026-11-04, outgrew 1g / 768 MB)
+        'mem': '3g', 'heap_mb': 2304,
         # the drivechain index (mining pages) also reads the 4032 blocks before the fork, Bitcoin's (read once)
         'history_blocks': 4032,
         # address lookups: romanz electrs next to the node (see ELECTRS); 'serve' points the backend at it (MEMPOOL.BACKEND
