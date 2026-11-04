@@ -250,10 +250,10 @@
         <tbody>
           @for (w of whales?.moves ?? []; track w.txid) {
             <tr>
-              <td><a class="mono" [routerLink]="'/tx/' + w.txid">{{ short(w.txid) }}</a> <span class="dim">{{ ago(w.time) }}</span></td>
+              <td><a class="mono" [routerLink]="'/tx/' + w.txid">{{ short(w.txid, 14, 8) }}</a><span class="dim gap">{{ ago(w.time) }}</span></td>
               <td class="r">{{ coins(w.value) }} ECX</td>
               <td class="r">{{ markets?.ecx?.priceUsd ? usd(w.value * markets.ecx.priceUsd, 0) : '–' }}</td>
-              <td class="sm-hide">@if (w.to) {<a class="mono" [routerLink]="'/address/' + w.to">{{ short(w.to) }}</a>} @else {–} <span class="dim">{{ coins(w.largest) }}</span></td>
+              <td class="sm-hide">@if (w.to) {<a class="mono" [routerLink]="'/address/' + w.to">{{ short(w.to.replace('ecash:', ''), 14, 8) }}</a>} @else {–}<span class="dim gap">{{ coins(w.largest) }}</span></td>
               <td class="r sm-hide">{{ w.inputs }}/{{ w.outputs }}</td>
               <td class="r sm-hide"><a [routerLink]="'/block/' + w.height">{{ w.height | number }}</a></td>
             </tr>

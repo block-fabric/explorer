@@ -820,8 +820,9 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
     return new Date(this.now * 1000).toISOString().slice(11, 19) + ' UTC';
   }
 
-  short(a: string | null): string {
-    return !a ? '–' : a.length > 18 ? a.slice(0, 9) + '…' + a.slice(-6) : a;
+  /** a txid or address, its head and tail kept */
+  short(a: string | null, head = 9, tail = 6): string {
+    return !a ? '–' : a.length > head + tail + 3 ? a.slice(0, head) + '…' + a.slice(-tail) : a;
   }
 
   pct(x: number, d = 0): string {

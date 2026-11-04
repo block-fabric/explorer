@@ -181,3 +181,4 @@ h4.pad { margin-top: 10px; }
 .ec-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 0.74rem; padding: 3px 0; border-top: 1px solid #ffffff0a;
   span { color: var(--dim); } b { font-family: var(--mono); font-weight: 600; white-space: nowrap; } small { font-weight: 400; } }
 .tbl td.venue .dim { margin-left: 6px; }
+.tbl .gap { margin-left: 10px; white-space: nowrap; }
