@@ -37,7 +37,7 @@ const POOLS: Record<NetworkId, PoolMeta[]> = {
   ecash: [
     { id: 100002, tag: '/ecpool.tech/', name: 'eCPool.tech', logo: 'ecpool.png' },
     // (upstream matches a tag anywhere, ignoring case: a bare 'ePool' named "/simplepool/" and "/molepool.com/" blocks ePool's)
-    { id: 100003, tag: 'ePool', name: 'ePool', logo: 'epool.png', regex: '(?<![a-z])epool(?![a-z.])' },
+    { id: 100003, tag: 'ePool', name: 'ePool', logo: 'epool.png', regex: '(?<![a-z0-9])epool(?![a-z0-9.])' },
     { id: 100004, tag: 'Buy hashrate @ pow.re', name: 'Pow.re', logo: null },
     { id: 100006, tag: '/ecxfreebank.com/', name: 'FreeBank', logo: 'freebank.svg' },
     { id: 100007, tag: '/ec-pool/', name: 'ec-pool', logo: null },

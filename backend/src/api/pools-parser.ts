@@ -46,6 +46,8 @@ class PoolsParser {
 
     let reindexUnknown = false;
     let clearCache = false;
+    // (a changed pool's blocks are matched again once every pool is in: a pool new in this list takes them)
+    const reindexPools: number[] = [];
 
 
     for (const pool of this.miningPools) {
@@ -105,9 +107,13 @@ class PoolsParser {
           await PoolsRepository.$updateMiningPoolTags(poolDB.id, pool.addresses, pool.regexes, connection);
           reindexUnknown = true;
           clearCache = true;
-          await this.$reindexBlocksForPool(poolDB.id, connection);
+          reindexPools.push(poolDB.id);
         }
       }
+    }
+
+    for (const id of reindexPools) {
+      await this.$reindexBlocksForPool(id, connection);
     }
 
     if (reindexUnknown) {
