@@ -20,6 +20,7 @@ export interface PoolMeta {
   tag: string;                 // as the pool writes it, slashes included
   name: string;                // the display name
   logo: string | null;         // file under /resources/pool-logos/, null: no logo in the list
+  regex?: string;              // the coinbase pattern of upstream's attribution, when the escaped tag is not enough
 }
 
 const POOLS: Record<NetworkId, PoolMeta[]> = {
@@ -35,13 +36,16 @@ const POOLS: Record<NetworkId, PoolMeta[]> = {
   // tags read (the banner's names) until the list has them. '/ec-pool/' also matches the tags with a prefix ('./ec-pool/')
   ecash: [
     { id: 100002, tag: '/ecpool.tech/', name: 'eCPool.tech', logo: 'ecpool.png' },
-    { id: 100003, tag: 'ePool', name: 'ePool', logo: 'epool.png' },
+    // (upstream matches a tag anywhere, ignoring case: a bare 'ePool' named "/simplepool/" and "/molepool.com/" blocks ePool's)
+    { id: 100003, tag: 'ePool', name: 'ePool', logo: 'epool.png', regex: '(?<![a-z])epool(?![a-z.])' },
     { id: 100004, tag: 'Buy hashrate @ pow.re', name: 'Pow.re', logo: null },
     { id: 100006, tag: '/ecxfreebank.com/', name: 'FreeBank', logo: 'freebank.svg' },
     { id: 100007, tag: '/ec-pool/', name: 'ec-pool', logo: null },
     { id: 100008, tag: '/solo-ecash/', name: 'solo-ecash', logo: null },
     { id: 100009, tag: '/Talking to you from the future/', name: 'Talking to you from the future', logo: null },
     { id: 100010, tag: '/laPimpa/', name: 'laPimpa', logo: null },
+    { id: 100011, tag: '/simplepool/', name: 'SimplePool', logo: null },
+    { id: 100012, tag: '/molepool.com/', name: 'molepool.com', logo: null },
   ],
   ecashtest: [],
 };
@@ -130,7 +134,7 @@ export function bitcoinPoolFor(coinbaseText: string, payouts: string[]): Bitcoin
  */
 export function poolsJson(): { id: number; name: string; link: string; addresses: string[]; tags: string[] }[] {
   return [...chainPools().map(p => ({
-    id: p.id, name: p.name, link: '', addresses: [], tags: [p.tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')],
+    id: p.id, name: p.name, link: '', addresses: [], tags: [p.regex ?? p.tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')],
   })), ...bitcoinPools().map(p => ({ id: p.id, name: p.name, link: p.link, addresses: p.addresses, tags: p.tags }))];
 }
 
