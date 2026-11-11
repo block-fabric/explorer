@@ -70,7 +70,7 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
     rows: { label: string; ecash: string; btc: string; bch: string; note?: string; good?: boolean | null }[]; share: number | null; shareBch: number | null;
     /** the overview: a card per chain, the best paying first-class */
     cards: { name: string; color: string; hashprice: number | null; rent: number | null; coinCost: number | null;
-      price: number | null; unit: string; best: boolean; width: number; vsBtc: number | null }[];
+      price: number | null; unit: string; best: boolean; width: number; vsBtc: number | null; parity: number | null }[];
     verdict: string | null;
   } | null = null;
   /** the economics pane's tab */
@@ -510,6 +510,9 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
     const e = derive(ecash);
     const t = derive(btc);
     const h = derive(bch);
+    // the coin's price at which a petahash earns what it does on Bitcoin (at the current difficulties)
+    const parity = (x: Chain, d: ReturnType<typeof derive>) => x.price !== null && d.hashprice && t.hashprice !== null ? x.price * t.hashprice / d.hashprice : null;
+    const usdP = (v: number | null) => this.usd(v, v !== null && v > 1000 ? 0 : 2);
     const rent = ecash.hashrate && t.hashprice !== null ? (ecash.hashrate / PH) * t.hashprice / 24 : null;
     const ratio = e.hashprice !== null && t.hashprice !== null && t.hashprice > 0 ? e.hashprice / t.hashprice : null;
     const ratioBch = e.hashprice !== null && h.hashprice !== null && h.hashprice > 0 ? e.hashprice / h.hashprice : null;
@@ -542,6 +545,9 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
       { label: 'Break-even power price', ecash: kwh(e.breakeven), btc: kwh(t.breakeven), bch: kwh(h.breakeven) },
       { label: 'Power cost of a coin', ecash: this.usd(e.coinCost), btc: this.usd(t.coinCost, 0), bch: this.usd(h.coinCost),
         note: e.coinCost !== null && ecash.price ? `${(e.coinCost / ecash.price * 100).toFixed(0)}% of ECX's price` : undefined },
+      { label: 'Price to match Bitcoin', ecash: usdP(parity(ecash, e)), btc: '–', bch: usdP(parity(bch, h)),
+        good: parity(ecash, e) !== null && ecash.price !== null ? ecash.price >= (parity(ecash, e) as number) : null,
+        note: 'the price at which a PH earns what it does on Bitcoin' },
       { label: 'Network power cost a day', ecash: this.usd(e.cost, 0), btc: this.usd(t.cost, 0), bch: this.usd(h.cost, 0) },
       { label: 'Rent entire net hash, 1 h', ecash: this.usd(rent, 0), btc: '–',
         bch: bch.hashrate && t.hashprice !== null ? this.usd((bch.hashrate / PH) * t.hashprice / 24, 0) : '–', note: 'at Bitcoin\'s hashprice: a 51% attack\'s floor' },
@@ -553,6 +559,7 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
       name, color, hashprice: d.hashprice, rent: x.hashrate && t.hashprice !== null ? (x.hashrate / PH) * t.hashprice / 24 : null,
       coinCost: d.coinCost, price: x.price, unit, best: d.hashprice !== null && d.hashprice >= best, width: d.hashprice !== null ? d.hashprice / top * 100 : 0,
       vsBtc: d.hashprice !== null && t.hashprice ? d.hashprice / t.hashprice : null, // (its hashprice, Bitcoin's at 100%)
+      parity: x === btc ? null : parity(x, d),
     });
     const cards = [card('eCash', NETS[0].color, ecash, e, 'ECX'), card('Bitcoin Cash', '#0ac18e', bch, h, 'BCH'), card('Bitcoin', '#f7931a', btc, t, 'BTC')];
     const verdict = ratio === null ? null : ratio >= 1

@@ -134,10 +134,12 @@
                 <div class="ec-row" [title]="'an hour of ' + c.name + '\'s whole hashrate, at Bitcoin\'s hashprice (SHA-256 work\'s market price)'"><span>Rent entire net hash, 1 h</span><b>{{ usd(c.rent, 0) }}</b></div>
                 <div class="ec-row" [title]="'the power to mine one ' + c.unit"><span>Cost to make 1 {{ c.unit }}</span><b>{{ usd(c.coinCost, c.coinCost !== null && c.coinCost > 1000 ? 0 : 2) }}</b></div>
                 <div class="ec-row"><span>{{ c.unit }} price</span><b [class.up]="c.coinCost !== null && c.price !== null && c.price > c.coinCost" [class.down]="c.coinCost !== null && c.price !== null && c.price < c.coinCost">{{ usd(c.price, c.price !== null && c.price > 1000 ? 0 : 2) }}</b></div>
+                <div class="ec-row" [title]="c.unit + '\'s price at which a petahash earns what it does on Bitcoin, at the current difficulties'"><span>Price to match BTC</span>
+                  @if (c.parity !== null) {<b [class.up]="c.price !== null && c.price >= c.parity" [class.down]="c.price !== null && c.price < c.parity">{{ usd(c.parity, c.parity > 1000 ? 0 : 2) }}@if (c.price) {<small class="dim"> {{ c.price >= c.parity ? '+' : '' }}{{ ((c.price / c.parity - 1) * 100).toFixed(1) }}%</small>}</b>} @else {<b class="dim">the reference</b>}</div>
               </div>
             }
           </div>
-          <div class="dim note">Hashprice: what a petahash earns a day at the current difficulty; the percentage, against Bitcoin's (100%). Rent: the whole hashrate for an hour at Bitcoin's hashprice. Cost to make a coin: power only, at {{ efficiency }} J/TH and {{ '$' + power }}/kWh (green: the price is above it). Details: the whole comparison.</div>
+          <div class="dim note">Hashprice: what a petahash earns a day at the current difficulty; the percentage, against Bitcoin's (100%). Rent: the whole hashrate for an hour at Bitcoin's hashprice. Cost to make a coin: power only, at {{ efficiency }} J/TH and {{ '$' + power }}/kWh (green: the price is above it). Price to match Bitcoin: the coin's price at which mining it pays what Bitcoin does (the percentage: how far the price is from it). Details: the whole comparison.</div>
         } @else {
         <div class="hscroll"><table class="tbl econ-tbl">
           <thead><tr><th></th><th class="r">eCash</th><th class="r">Bitcoin Cash</th><th class="r">Bitcoin</th><th class="sm-hide"></th></tr></thead>
