@@ -82,6 +82,7 @@
           <ng-template cxCell="fees" let-p><div class="ln main">{{ p.fees / 1e8 | number:'1.0-8' }}</div></ng-template>
           <ng-template cxCell="empty" let-p><div class="ln main">{{ p.empty | number }}</div></ng-template>
           <ng-template cxCell="bmmPerBlock" let-p><div class="ln main">{{ p.bmmPerBlock | number:'1.1-1' }}</div></ng-template>
+          <ng-template cxCell="firstSeen" let-p><div class="ln main">@if (p.firstSeen) {<a [routerLink]="['/block' | relativeUrl, p.firstSeen.height]" [title]="'block ' + (p.firstSeen.height | number)">{{ p.firstSeen.time * 1000 | date:'yyyy-MM-dd':'UTC' }}</a>} @else {<span class="dim" title="none of its blocks since the fork">–</span>}</div></ng-template>
           <ng-template cxCell="lastHeight" let-p><div class="ln main"><a [routerLink]="['/block' | relativeUrl, p.lastHeight]">{{ p.lastHeight | number }}</a></div></ng-template>
         </app-chain-table>
       </div>

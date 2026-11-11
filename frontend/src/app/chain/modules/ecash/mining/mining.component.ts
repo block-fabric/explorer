@@ -51,6 +51,7 @@ export class ChainMiningComponent implements OnInit, OnDestroy {
     { key: 'fees', label: 'Fees', align: 'right', sort: true, hide: 'sm' },
     { key: 'empty', label: 'Empty', align: 'right', sort: true, hide: 'md' },
     { key: 'bmmPerBlock', label: 'Sidechains / block', align: 'right', sort: true, hide: 'md' },
+    { key: 'firstSeen', label: 'First seen', align: 'right', sort: p => p.firstSeen?.height ?? Infinity, nowrap: true, hide: 'sm' },
     { key: 'lastHeight', label: 'Last block', align: 'right', sort: true },
   ];
   poolFilters: CxFilter[] = [{ options: [{ label: 'DATUM', test: p => !!p.datum }, { label: 'pooled', test: p => !p.datum }] }];

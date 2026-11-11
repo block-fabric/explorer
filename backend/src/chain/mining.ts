@@ -59,6 +59,34 @@ export function retargetState(p: RetargetParams, tip: { height: number; time: nu
   };
 }
 
+/**
+ * Each pool's first block on this chain (from its fork block: before it the blocks are Bitcoin's), by coinbase tag:
+ * read once, then the new blocks; again from the start when the block last read was replaced (a reorganisation)
+ */
+const firstSeen = new Map<string, { height: number; time: number }>();
+let seenTo: { height: number; hash: string } | null = null;
+
+function firstSeenOf(): Map<string, { height: number; time: number }> {
+  const tip = drivechain.tipHeight();
+  const start = Math.max(drivechain.firstHeight(), NETWORK.fork?.height ?? 0);
+  if (seenTo && (seenTo.height > tip || drivechain.range(seenTo.height, seenTo.height)[0]?.hash !== seenTo.hash)) {
+    firstSeen.clear();
+    seenTo = null;
+  }
+  const blocks = drivechain.range(seenTo ? seenTo.height + 1 : start, tip);
+  for (const b of blocks) {
+    const tag = b.miner ? b.miner.tag ?? 'Unknown' : null;
+    if (tag && !firstSeen.has(tag)) {
+      firstSeen.set(tag, { height: b.height, time: b.time });
+    }
+  }
+  const last = blocks[blocks.length - 1];
+  if (last) {
+    seenTo = { height: last.height, hash: last.hash };
+  }
+  return firstSeen;
+}
+
 export function miningStats(window: number, retarget: RetargetParams): any {
   const tip = drivechain.tipHeight();
   const from = window > 0 ? Math.max(drivechain.firstHeight(), tip - window + 1) : drivechain.firstHeight();
@@ -89,11 +117,13 @@ export function miningStats(window: number, retarget: RetargetParams): any {
   }
   const span = n > 1 ? last.time - blocks[0].time : 0;
   const hashrate = span > 0 ? work / span : 0;
+  const seen = firstSeenOf();
   const poolList = [...pools.values()].sort((a, b) => b.blocks - a.blocks).map(p => ({
     tag: p.tag, name: p.name ?? normalizeTag(p.tag) ?? 'Unknown', logo: p.logo,
     datum: p.datum, blocks: p.blocks, share: n ? p.blocks / n : 0, workShare: work ? p.work / work : 0,
     hashrate: work ? hashrate * p.work / work : 0, fees: p.fees, reward: p.reward, empty: p.empty,
     avgWeight: p.blocks ? p.weight / p.blocks : 0, bmmPerBlock: p.blocks ? p.bmm / p.blocks : 0, lastHeight: p.lastHeight,
+    firstSeen: seen.get(p.tag) ?? null, // (its first block on the chain, whatever the window)
     miners: [...p.miners].sort((a, b) => b[1] - a[1]).map(([tag, count]) => ({ tag, name: normalizeTag(tag) ?? tag, blocks: count, share: n ? count / n : 0 })),
   }));
   const topTags = poolList.slice(0, TOP_POOLS).map(p => p.tag);
