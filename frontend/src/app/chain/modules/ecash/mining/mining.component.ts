@@ -30,7 +30,7 @@ const PALETTE = [PROFILE.color, '#5aa6ff', '#ff8a3d', '#f26b9c', '#a585ff', '#2b
 export class ChainMiningComponent implements OnInit, OnDestroy {
   profile = PROFILE;
   windows = WINDOWS;
-  window = 1008;
+  window = 144; // (a day's, unless the address asks for another)
   data: any = null;
   error: string | null = null;
   charts: Record<string, any> = {};

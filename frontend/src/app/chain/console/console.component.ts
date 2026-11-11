@@ -18,12 +18,11 @@ const AMBER = '#f5b83d';
 const POOL_COLORS = ['#f5a623', '#5aa6ff', '#3bd1c4', '#f26b9c', '#a585ff', '#f5b83d', '#9aa4b2', '#8fe3a8'];
 /**
  * The windows of eCash blocks the console's mining, decentralisation, difficulty, fees and drivechain panes can cover
- * (the viewer's choice, 1,008 by default); the big moves cover 1,008 at most (the blocks the backend reads)
+ * (the viewer's choice, a day's, 144, on every visit); the big moves cover 1,008 at most (the blocks the backend reads)
  */
 const WINDOWS = [144, 432, 1008, 2016, 4032];
-const DEFAULT_WINDOW = 1008;
+const DEFAULT_WINDOW = 144;
 const WHALES_WINDOW = 1008;
-const WINDOW_KEY = 'console-window';
 
 interface FeedItem { time: number; kind: string; net: string; color: string; text: string; link?: string; ext?: boolean }
 
@@ -124,16 +123,7 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
   /** the blocks the window panes cover */
   window = DEFAULT_WINDOW;
 
-  constructor(private http: HttpClient, private cd: ChangeDetectorRef, private seo: SeoService) {
-    try {
-      const n = Number(localStorage.getItem(WINDOW_KEY));
-      if (WINDOWS.includes(n)) {
-        this.window = n;
-      }
-    } catch {
-      // (no storage: the default)
-    }
-  }
+  constructor(private http: HttpClient, private cd: ChangeDetectorRef, private seo: SeoService) {}
 
   /** a window chosen: the panes over it read again */
   setWindow(blocks: number): void {
@@ -141,11 +131,6 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
       return;
     }
     this.window = blocks;
-    try {
-      localStorage.setItem(WINDOW_KEY, String(blocks));
-    } catch {
-      // (not kept)
-    }
     this.loadMining();
     this.loadWhales();
     this.cd.markForCheck();
