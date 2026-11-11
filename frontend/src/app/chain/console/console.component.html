@@ -12,6 +12,8 @@
       @if (s.tip !== null) {<div class="st"><label [style.color]="s.color">{{ s.name }}</label><b>{{ s.tip | number }}</b></div>}
     }
     <div class="st"><label>Nodes</label><b>{{ totalNodes() || '–' }}</b></div>
+    <div class="st win"><label>Blocks</label>
+      <span class="wins">@for (w of windows; track w) {<button type="button" [class.on]="w === window" (click)="setWindow(w)" [title]="'the last ' + (w | number) + ' blocks ' + windowSpan(w)">{{ w | number }}</button>}</span></div>
     <div class="st clock"><b>{{ clock() }}</b></div>
   </div>
 
@@ -87,7 +89,7 @@
 
     <!-- decentralisation -->
     <section class="pane decent">
-      <header><span class="tag">DECENTRALISATION</span> how spread eCash's hashrate is, the last 1,008 blocks</header>
+      <header><span class="tag">DECENTRALISATION</span> how spread eCash's hashrate is, the last {{ window | number }} blocks{{ windowSpan(window) ? ' (' + windowSpan(window) + ')' : '' }}</header>
       @if (decent; as d) {
         <div class="grade" [style.borderColor]="gradeColor()">
           <b [style.color]="gradeColor()">{{ d.grade }}</b>
@@ -150,7 +152,7 @@
           </tbody>
         </table></div>
         <div class="dim note">Of the three chains' SHA-256 hashrate, eCash has {{ e.share !== null ? pct(e.share, 3) : '–' }} and Bitcoin Cash {{ e.shareBch !== null ? pct(e.shareBch, 2) : '–' }}.
-          eCash's numbers over the last 1,008 blocks; Bitcoin's from <a href="https://mempool.space" target="_blank" rel="noopener">mempool.space</a> (the last 144 blocks' rewards);
+          eCash's numbers over the last {{ window | number }} blocks; Bitcoin's from <a href="https://mempool.space" target="_blank" rel="noopener">mempool.space</a> (the last 144 blocks' rewards);
           Bitcoin Cash's from <a href="https://blockchair.com/bitcoin-cash" target="_blank" rel="noopener">Blockchair</a> (the last 24 h). Power only: no hardware, hosting or pool fees.</div>
         }
       } @else {<div class="dim pad">Loading…</div>}
@@ -158,7 +160,7 @@
 
     <!-- difficulty -->
     <section class="pane diff">
-      <header><span class="tag">DIFFICULTY</span> eCash's difficulty and hashrate, the last 1,008 blocks</header>
+      <header><span class="tag">DIFFICULTY</span> eCash's difficulty and hashrate, the last {{ window | number }} blocks</header>
       @if (mining?.retarget; as r) {
         <div class="big">
           <div><label>Difficulty</label><b>{{ big(mining.totals.difficulty) }}</b></div>
@@ -224,7 +226,7 @@
     <!-- activity -->
     <section class="pane activity">
       <header><span class="tag">ACTIVITY</span> eCash's transactions, the ECX they moved, the big moves
-        @if (whales) {<span class="dim right">{{ whales.blocks | number }} blocks read</span>}</header>
+        @if (whales) {<span class="dim right">{{ (whales.read ?? whales.blocks) | number }} blocks read</span>}</header>
       @if (whales?.today; as t) {
         <div class="big">
           <div><label>Transactions, today</label><b>{{ t.txs | number }}</b><small>{{ t.blocks }} blocks since 00:00 UTC</small></div>
@@ -243,8 +245,8 @@
         </div>
       }
       @if (activityChart) {<h4 class="pad">A day at a time <span class="dim">UTC days</span></h4><div echarts class="chart act" [options]="activityChart" [initOpts]="chartInit"></div>}
-      @if (!whales?.blocks) {<div class="dim pad note">Reading the last week's blocks…</div>}
-      <h4 class="pad">Big moves <span class="dim">the largest transactions, the last {{ whales?.blocks ?? '…' }} blocks</span></h4>
+      @if (!whales?.blocks) {<div class="dim pad note">Reading the last blocks…</div>}
+      <h4 class="pad">Big moves <span class="dim">the largest transactions, the last {{ whales?.blocks ?? '…' }} blocks@if (window > whalesWindow) { (1,008 at most)}</span></h4>
       <div class="hscroll"><table class="tbl">
         <thead><tr><th>Transaction</th><th class="r">Moved</th><th class="r">USD</th><th class="sm-hide">Largest output to</th><th class="r sm-hide">In/out</th><th class="r sm-hide">Block</th></tr></thead>
         <tbody>
@@ -257,7 +259,7 @@
               <td class="r sm-hide">{{ w.inputs }}/{{ w.outputs }}</td>
               <td class="r sm-hide"><a [routerLink]="'/block/' + w.height">{{ w.height | number }}</a></td>
             </tr>
-          } @empty {<tr><td colspan="6" class="dim">Reading the last week's blocks…</td></tr>}
+          } @empty {<tr><td colspan="6" class="dim">Reading the last blocks…</td></tr>}
         </tbody>
       </table></div>
       <div class="dim note">A transaction's outputs include its change: what left its owner is at most this.</div>
@@ -267,7 +269,7 @@
     <section class="pane fees">
       <header><span class="tag">FEES</span> what miners earn, and what transactions pay</header>
       @if (revenue; as r) {
-        <h4 class="pad">Miners' revenue <span class="dim">the last 1,008 blocks</span></h4>
+        <h4 class="pad">Miners' revenue <span class="dim">the last {{ window | number }} blocks</span></h4>
         <div class="stack-bar">
           <i [style.width]="share(r.subsidy, r.total)" class="sub" [title]="'Subsidy: ' + ecx(r.subsidy)"></i>
           <i [style.width]="share(r.fees, r.total)" class="fee" [title]="'Transaction fees: ' + ecx(r.fees)"></i>
@@ -290,7 +292,7 @@
         </div>
       }
       @if (feePools.length) {
-        <h4 class="pad">Fees and revenue by pool <span class="dim">the last 1,008 blocks</span></h4>
+        <h4 class="pad">Fees and revenue by pool <span class="dim">the last {{ window | number }} blocks</span></h4>
         <div class="hscroll"><table class="tbl small pad-tbl">
           <thead><tr><th>Pool</th><th class="r">Blocks</th><th class="r">Fees</th><th class="r sm-hide">Fees a block</th>
             <th class="r" title="the block subsidy, the transactions' fees and the sidechains' BMM bids the pool took">Revenue</th></tr></thead>
@@ -335,7 +337,7 @@
 
     <!-- the drivechain's actors -->
     <section class="pane dc">
-      <header><span class="tag">DRIVECHAIN ACTORS</span> BMM and the peg, the last 1,008 blocks</header>
+      <header><span class="tag">DRIVECHAIN ACTORS</span> BMM and the peg, the last {{ window | number }} blocks</header>
       <div class="cols2">
         <div>
           <h4>Top BMM miners <span class="dim">pools that carried sidechain blocks</span></h4>

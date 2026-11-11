@@ -16,8 +16,14 @@ const GREEN = '#3bd16f';
 const RED = '#ff6b6b';
 const AMBER = '#f5b83d';
 const POOL_COLORS = ['#f5a623', '#5aa6ff', '#3bd1c4', '#f26b9c', '#a585ff', '#f5b83d', '#9aa4b2', '#8fe3a8'];
-/** the mining window the console's mining, decentralisation and difficulty panes cover: a week of eCash's blocks */
-const WINDOW = 1008;
+/**
+ * The windows of eCash blocks the console's mining, decentralisation, difficulty, fees and drivechain panes can cover
+ * (the viewer's choice, 1,008 by default); the big moves cover 1,008 at most (the blocks the backend reads)
+ */
+const WINDOWS = [144, 432, 1008, 2016, 4032];
+const DEFAULT_WINDOW = 1008;
+const WHALES_WINDOW = 1008;
+const WINDOW_KEY = 'console-window';
 
 interface FeedItem { time: number; kind: string; net: string; color: string; text: string; link?: string; ext?: boolean }
 
@@ -114,7 +120,47 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
   private feedData: any = null;
   private subs: Subscription[] = [];
 
-  constructor(private http: HttpClient, private cd: ChangeDetectorRef, private seo: SeoService) {}
+  windows = WINDOWS;
+  /** the blocks the window panes cover */
+  window = DEFAULT_WINDOW;
+
+  constructor(private http: HttpClient, private cd: ChangeDetectorRef, private seo: SeoService) {
+    try {
+      const n = Number(localStorage.getItem(WINDOW_KEY));
+      if (WINDOWS.includes(n)) {
+        this.window = n;
+      }
+    } catch {
+      // (no storage: the default)
+    }
+  }
+
+  /** a window chosen: the panes over it read again */
+  setWindow(blocks: number): void {
+    if (blocks === this.window) {
+      return;
+    }
+    this.window = blocks;
+    try {
+      localStorage.setItem(WINDOW_KEY, String(blocks));
+    } catch {
+      // (not kept)
+    }
+    this.loadMining();
+    this.loadWhales();
+    this.cd.markForCheck();
+  }
+
+  /** how long a window's blocks took, at the window's average block time */
+  windowSpan(blocks: number): string {
+    const t = this.mining?.totals?.avgBlockTime;
+    return t ? `about ${this.span(blocks * t)}` : '';
+  }
+
+  /** the big moves' window: the console's, 1,008 blocks at most */
+  get whalesWindow(): number {
+    return Math.min(this.window, WHALES_WINDOW);
+  }
 
   ngOnInit(): void {
     this.seo.setTitle('Console');
@@ -183,10 +229,14 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
   }
 
   private loadMining(): void {
+    const window = this.window;
     forkJoin({
-      mining: this.get<any>(`/api/v1/drivechain/mining?window=${WINDOW}`),
-      cockpit: this.get<any>(`/api/v1/drivechain/cockpit?window=${WINDOW}`),
+      mining: this.get<any>(`/api/v1/drivechain/mining?window=${this.window}`),
+      cockpit: this.get<any>(`/api/v1/drivechain/cockpit?window=${this.window}`),
     }).subscribe(({ mining, cockpit }) => {
+      if (window !== this.window) {
+        return; // (an answer for a window since changed)
+      }
       if (mining) {
         this.mining = mining;
         this.decent = this.decentralisation(mining);
@@ -246,8 +296,9 @@ export class ChainConsoleComponent implements OnInit, OnDestroy {
   }
 
   private loadWhales(): void {
-    this.get<any>('/api/v1/chain/intel/whales?limit=15').subscribe((w) => {
-      if (w) {
+    const window = this.whalesWindow;
+    this.get<any>(`/api/v1/chain/intel/whales?limit=15&window=${window}`).subscribe((w) => {
+      if (w && window === this.whalesWindow) {
         this.whales = w;
         this.activityChart = this.buildActivityChart(w.daily ?? []);
         this.buildFeed();

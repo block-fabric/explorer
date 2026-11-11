@@ -150,27 +150,36 @@ function activity(blocks: BlockScan[]): { blocks: number; txs: number; volume: n
  */
 type Whales = {
   blocks: number; from: number | null; to: number | null; moves: BigTx[];
+  read: number; // the blocks read (WINDOW once caught up): the days', today's and the last 24 hours'
+  window: ReturnType<typeof activity>; // the newest `window` blocks' activity (the moves are theirs too)
   last24h: ReturnType<typeof activity>; today: ReturnType<typeof activity>;
   daily: { day: number; volume: number; txs: number; fees: number }[]; flows: LabelledFlow[]; labels: number;
 };
-const answers = new Map<number, { at: number; value: Whales }>();
+const answers = new Map<string, { at: number; value: Whales }>();
 
-/** (the answer per limit, for 30 s: the fee percentiles sort every transaction of the week) */
-export function getWhales(limit = 50): Whales {
+/**
+ * The moves of the newest `window` blocks (at most WINDOW: the blocks read) (the answer per limit and window, for 30 s:
+ * the fee percentiles sort every transaction of the week)
+ */
+export function getWhales(limit = 50, window = WINDOW): Whales {
   const n = Math.max(1, Math.min(200, Math.floor(limit)));
-  const c = answers.get(n);
+  const w = Math.max(1, Math.min(WINDOW, Math.floor(window) || WINDOW));
+  const key = `${n}:${w}`;
+  const c = answers.get(key);
   if (c && Date.now() - c.at < 30_000) {
     return c.value;
   }
-  const value = computeWhales(n);
-  answers.set(n, { at: Date.now(), value });
+  const value = computeWhales(n, w);
+  answers.set(key, { at: Date.now(), value });
   return value;
 }
 
-function computeWhales(limit: number): Whales {
-  const blocks = [...scanned.values()];
+function computeWhales(limit: number, window: number): Whales {
+  const all = [...scanned.values()];
+  const newest = all.reduce((m, b) => Math.max(m, b.height), -1);
+  const blocks = all.filter(b => b.height > newest - window);
   const days = new Map<number, { volume: number; txs: number; fees: number }>();
-  for (const b of blocks) {
+  for (const b of all) {
     const day = Math.floor(b.time / 86400) * 86400;
     const d = days.get(day) ?? { volume: 0, txs: 0, fees: 0 };
     d.volume += b.volume;
@@ -179,13 +188,15 @@ function computeWhales(limit: number): Whales {
     days.set(day, d);
   }
   const heights = blocks.map(b => b.height);
+  // (the days, today and the last 24 hours: every block read, whatever the window)
   const now = Math.floor(Date.now() / 1000);
   const midnight = Math.floor(now / 86400) * 86400;
   return {
-    blocks: blocks.length, from: heights.length ? Math.min(...heights) : null, to: heights.length ? Math.max(...heights) : null,
+    blocks: blocks.length, read: all.length, from: heights.length ? Math.min(...heights) : null, to: heights.length ? Math.max(...heights) : null,
     moves: blocks.flatMap(b => b.top).sort((x, y) => y.value - x.value).slice(0, Math.max(1, Math.min(200, limit))),
-    last24h: activity(blocks.filter(b => b.time >= now - 86400)), today: activity(blocks.filter(b => b.time >= midnight)),
+    window: activity(blocks),
+    last24h: activity(all.filter(b => b.time >= now - 86400)), today: activity(all.filter(b => b.time >= midnight)),
     daily: [...days.entries()].sort((a, b) => a[0] - b[0]).map(([day, d]) => ({ day, ...d })),
-    flows: blocks.flatMap(b => b.flows).sort((x, y) => y.time - x.time).slice(0, 100), labels: Object.keys(LABELS).length,
+    flows: all.flatMap(b => b.flows).sort((x, y) => y.time - x.time).slice(0, 100), labels: Object.keys(LABELS).length,
   };
 }

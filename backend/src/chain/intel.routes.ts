@@ -14,7 +14,8 @@ import { getWhales, startWhales } from './whales';
  *   GET chain/intel/solana             wECX on Solana: supply, holders, traders, its pool's reserves, mints, burns, liquidity moves
  *   GET chain/intel/bch                Bitcoin Cash's price, hashrate, difficulty, reward and fees a block, the last 24 h (Blockchair)
  *   GET chain/intel/bitcoin            Bitcoin's price, hashrate, difficulty and last day's rewards (mempool.space)
- *   GET chain/intel/whales?limit=      eCash's largest transactions over the last week's blocks, the volume per day
+ *   GET chain/intel/whales?limit=&window=  eCash's largest transactions over the newest window blocks (a week's at most),
+ *                                      the volume per day
  */
 class IntelRoutes {
   public initRoutes(app: Application): void {
@@ -78,7 +79,7 @@ class IntelRoutes {
 
   private whales = (req: Request, res: Response): void => {
     const limit = Math.max(1, Math.min(200, Number(req.query.limit) || 50));
-    res.json(getWhales(limit));
+    res.json(getWhales(limit, Number(req.query.window) || undefined));
   };
 
   /** @asyncSafe */
