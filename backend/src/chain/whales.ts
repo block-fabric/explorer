@@ -156,6 +156,8 @@ type Whales = {
   daily: { day: number; volume: number; txs: number; fees: number }[]; flows: LabelledFlow[]; labels: number;
 };
 const answers = new Map<string, { at: number; value: Whales }>();
+/** the windows asked for (the console's): any other is WINDOW, so the answers kept stay few */
+const WINDOWS = [144, 432, 1008];
 
 /**
  * The moves of the newest `window` blocks (at most WINDOW: the blocks read) (the answer per limit and window, for 30 s:
@@ -163,13 +165,18 @@ const answers = new Map<string, { at: number; value: Whales }>();
  */
 export function getWhales(limit = 50, window = WINDOW): Whales {
   const n = Math.max(1, Math.min(200, Math.floor(limit)));
-  const w = Math.max(1, Math.min(WINDOW, Math.floor(window) || WINDOW));
+  const w = WINDOWS.includes(window) ? window : WINDOW;
   const key = `${n}:${w}`;
   const c = answers.get(key);
   if (c && Date.now() - c.at < 30_000) {
     return c.value;
   }
   const value = computeWhales(n, w);
+  for (const [k, a] of answers) {
+    if (Date.now() - a.at >= 30_000) {
+      answers.delete(k); // (an answer past its time is not asked again)
+    }
+  }
   answers.set(key, { at: Date.now(), value });
   return value;
 }
