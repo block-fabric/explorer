@@ -24,6 +24,8 @@ export const SIDECHAIN_MARKS: Record<string, Pick<ChainProfile, 'mark' | 'markRe
     'M7 10.5l3-3h16l-3 3z', 'M6 17.5l3-3h16l-3 3z', 'M9 24.5l3-3h16l-3 3z',
   ] },
   thunder: { mark: ['M18.5 3.5 9 18h6.5L13.5 28.5 23 14h-6.5z'] },
+  // Sidepot: a pot, coins rising out of it
+  sidepot: { mark: ['M5 14h22', 'M7 14v5a9 8 0 0 0 18 0v-5', 'M13 10a2 2 0 1 0 0-.01', 'M19 7a2 2 0 1 0 0-.01', 'M11 27h10'] },
   truthcoin: { mark: [
     'M28 16a12 12 0 1 1-24 0 12 12 0 1 1 24 0', 'M10.5 16.5l3.5 3.5 7-7.5',
   ] },

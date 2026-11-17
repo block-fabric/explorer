@@ -53,6 +53,8 @@ export interface IndexView {
   forEachTx(fn: (t: IndexTx) => void): void;
   forEachUtxo(fn: (u: IndexUtxo) => void): void;
   forEachAddress(fn: (a: IndexAddress) => void): void;
+  /** deposits credited to the chain's own ledger (Sidepot's game accounts) */
+  forEachGameDeposit(fn: (d: { txid: string; vout: number; amount: number; account: string; mainHeight: number; height: number; time: number | null }) => void): void;
   ammPools(): [string, string][];
 }
 

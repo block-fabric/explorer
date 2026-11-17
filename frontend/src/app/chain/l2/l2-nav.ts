@@ -40,6 +40,8 @@ export const L2_FEATURE_PAGES: L2FeaturePage[] = [
     about: 'zSide\'s Orchard pool: what went in and out of it, from the index' },
   { path: 'richlist', title: 'Top addresses', feature: 'richlist', api: 'richlist', item: 'Address', detail: false,
     about: 'The addresses holding the most sats, and the payments over the chain\'s blocks, from the index' },
+  { path: 'game', title: 'Game', feature: 'game', api: 'game', item: 'Account', detail: false,
+    about: 'Sidepot\'s key game: the pot, the key price, the round and its deadline, game accounts and the moves posted on eCash' },
   { path: 'swaps', title: 'Swaps', feature: 'swaps', api: 'swaps', item: 'Swap', detail: true,
     about: 'Coinshift\'s swaps between a parent chain (L1) and Coinshift: the L1 recipient and amount, the L2 amount, state, confirmations and expiry',
     note: 'A swap\'s state is partly node-local in Coinshift\'s design: until it is claimed on the sidechain, what this node knows of '

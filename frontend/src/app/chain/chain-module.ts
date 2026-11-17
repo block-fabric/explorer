@@ -98,4 +98,4 @@ export type DashboardSlot = 'chain' | 'treasury' | 'bmm' | 'bundles' | 'peg' | '
 /** A chain's address formats when they are not Bitcoin's: bech32 prefix, base58 versions and their first characters */
 export interface ChainAddressParams { bech32: string; p2pkh: number; p2sh: number; base58: { pubkey: string[]; script: string[] } }
 
-export type L2Feature = 'names' | 'assets' | 'markets' | 'shielded' | 'swaps' | 'richlist';
+export type L2Feature = 'names' | 'assets' | 'markets' | 'shielded' | 'swaps' | 'richlist' | 'game';

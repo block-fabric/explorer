@@ -9,7 +9,7 @@ import { NETWORK } from '../networks';
 import rpc from './rpc';
 import {
   BURN_ADDRESS, addressOfKey, coinbaseTxid, depositAddress, liftData, outPoint, outPointJson, reverseHex, txidOfCanonical,
-  valueOf, zsideTxid,
+  unhex, utf8, valueOf, zsideTxid,
 } from './codec';
 import {
   BlockSummary, Content, Input, L2Chain, MainBlockRef, MarketTerms, MarketView, OutPoint, Output, PayoutKind, Shielded, Spent,
@@ -91,8 +91,19 @@ export interface StoredBlock {
   coinbase: { txid: string; outputs: RawOutput[] };
   txs: StoredTx[];
   deposits: { outpoint: any; output: RawOutput }[];
+  /** deposits to the chain's own ledger (L2Chain.gameDeposit): no coin */
+  gameDeposits?: GameDeposit[];
   bundleSpends: { outpoint: any; m6id: string }[];
   events: BundleEventRef[];
+}
+
+/** A deposit credited to an account of the chain's own ledger (Sidepot's game accounts) */
+export interface GameDeposit {
+  txid: string;
+  vout: number;
+  amount: number;
+  account: string;
+  mainHeight: number;
 }
 
 /** An output, with what happened to it since */
@@ -496,12 +507,19 @@ export class L2Index {
     }
 
     let deposits: StoredBlock['deposits'];
+    const gameDeposits: GameDeposit[] = [];
     let bundleSpends: StoredBlock['bundleSpends'];
     if (this.chain.blockIndex) {
       deposits = (index?.deposits ?? []).map(d => ({ outpoint: d.outpoint, output: { address: d.output.address, content: d.output.content, memo: d.output.memo ?? null } }));
       bundleSpends = (index?.bundle_spends ?? []).map(s => ({ outpoint: s.outpoint, m6id: s.m6id }));
     } else {
-      deposits = pegBlocks.flatMap(p => p.deposits.map(d => ({
+      deposits = pegBlocks.flatMap(p => p.deposits.filter(d => {
+        const account = this.chain.gameDeposit?.(utf8(unhex(d.address)) ?? '') ?? null;
+        if (account) {
+          gameDeposits.push({ txid: d.txid, vout: d.vout, amount: d.amount, account, mainHeight: p.header.height });
+        }
+        return !account;
+      }).map(d => ({
         outpoint: { Deposit: `${d.txid}:${d.vout}` },
         output: { address: depositAddress(d.address, this.chain.depositRule, PROFILE.slot as number), content: { Value: d.amount }, memo: null },
       })));
@@ -523,7 +541,7 @@ export class L2Index {
       main: main ? { hash: main.hash, height: main.height, time: main.time } : null,
       // the coinbase is {memo, outputs}, or Coinshift's bare list of outputs
       coinbase: { txid: cbid, outputs: ((Array.isArray(body.coinbase) ? body.coinbase : body.coinbase?.outputs) ?? []).map(o => ({ address: o.address, content: o.content, memo: o.memo ?? null })) },
-      txs, deposits, bundleSpends, events,
+      txs, deposits, ...(gameDeposits.length ? { gameDeposits } : {}), bundleSpends, events,
     };
   }
 
@@ -1193,6 +1211,15 @@ export class L2Index {
       const time = b.stored.main?.time ?? null;
       for (const t of b.txs) {
         fn({ ...this.txView(t), height: t.height, time });
+      }
+    }
+  }
+
+  /** Every deposit to the chain's own ledger (L2Chain.gameDeposit), oldest first, with its sidechain block */
+  forEachGameDeposit(fn: (d: GameDeposit & { height: number; time: number | null }) => void): void {
+    for (const b of this.stored) {
+      for (const d of b.gameDeposits ?? []) {
+        fn({ ...d, height: b.height, time: b.main?.time ?? null });
       }
     }
   }

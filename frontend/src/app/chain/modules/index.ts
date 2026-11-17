@@ -3,6 +3,7 @@ import ecash from './ecash';
 import bitnames from './bitnames';
 import bitassets from './bitassets';
 import thunder from './thunder';
+import sidepot from './sidepot';
 import truthcoin from './truthcoin';
 import zside from './zside';
 import coinshift from './coinshift';
@@ -19,6 +20,7 @@ export const MODULES: ChainFrontendModule[] = [
   bitnames,
   bitassets,
   thunder,
+  sidepot,
   truthcoin,
   zside,
   coinshift,

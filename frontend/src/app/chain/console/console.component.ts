@@ -11,6 +11,7 @@ const NETS = [
   { id: 'flush', name: 'Flush', base: '/flush', color: '#3bd1c4' },
   { id: 'thunder', name: 'Thunder', base: '/thunder', color: '#a585ff' },
   { id: 'freebank', name: 'FreeBank', base: '/freebank', color: '#5aa6ff' },
+  { id: 'sidepot', name: 'Sidepot', base: '/sidepot', color: '#e8b04b' },
 ];
 const GREEN = '#3bd16f';
 const RED = '#ff6b6b';

@@ -5,6 +5,7 @@ import { PROFILE } from './profile';
 import { NETWORK } from './networks';
 import { $getBitcoin, $getBitcoinCash, $getCandles, $getMarkets, $getNews, $getSolana, $startIntel } from './intel';
 import { getWhales, startWhales } from './whales';
+import { getSidepotMoves, startSidepotMoves } from './sidepot-moves';
 
 /**
  * The console's outside data (chain/intel.ts), on eCash mainnet's explorer only:
@@ -14,6 +15,7 @@ import { getWhales, startWhales } from './whales';
  *   GET chain/intel/solana             wECX on Solana: supply, holders, traders, its pool's reserves, mints, burns, liquidity moves
  *   GET chain/intel/bch                Bitcoin Cash's price, hashrate, difficulty, reward and fees a block, the last 24 h (Blockchair)
  *   GET chain/intel/bitcoin            Bitcoin's price, hashrate, difficulty and last day's rewards (mempool.space)
+ *   GET chain/sidepot/moves?limit=&before=&player=  Sidepot's moves posted on eCash (chain/sidepot-moves.ts), newest first
  *   GET chain/intel/whales?limit=&window=  eCash's largest transactions over the newest window blocks (a week's at most),
  *                                      the volume per day
  */
@@ -25,7 +27,9 @@ class IntelRoutes {
     const prefix = config.MEMPOOL.API_URL_PREFIX + 'chain/intel/';
     app.get(prefix + 'markets', this.$markets).get(prefix + 'candles/:pair', this.$candles).get(prefix + 'news', this.$news)
       .get(prefix + 'bitcoin', this.$bitcoin).get(prefix + 'bch', this.$bch).get(prefix + 'solana', this.$solana).get(prefix + 'whales', this.whales);
+    app.get(config.MEMPOOL.API_URL_PREFIX + 'chain/sidepot/moves', this.sidepotMoves);
     startWhales();
+    startSidepotMoves();
     $startIntel().catch(() => undefined); // (it catches its own errors)
   }
 
@@ -75,6 +79,13 @@ class IntelRoutes {
     } catch {
       handleError(req, res, 500, 'Could not read wECX\'s numbers');
     }
+  };
+
+  private sidepotMoves = (req: Request, res: Response): void => {
+    const limit = Math.max(1, Math.min(200, Number(req.query.limit) || 50));
+    const before = /^\d+$/.test(String(req.query.before ?? '')) ? Number(req.query.before) : null;
+    const player = /^[0-9a-f]{64}$/i.test(String(req.query.player ?? '')) ? String(req.query.player).toLowerCase() : null;
+    res.json(getSidepotMoves(limit, before, player));
   };
 
   private whales = (req: Request, res: Response): void => {

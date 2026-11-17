@@ -110,6 +110,11 @@ export interface L2Chain {
    * explorer takes no txs for this chain
    */
   submit?: { hex?: string; json?: string };
+  /**
+   * a deposit that credits the chain's own ledger instead of making a coin (Sidepot's `spot:<game account>`): from its
+   * OP_RETURN text, the account it credits, else null (an ordinary deposit)
+   */
+  gameDeposit?(text: string): string | null;
   /** how a deposit's OP_RETURN text names the sidechain address (codec.ts depositAddress) */
   depositRule: 'bare' | 'prefix' | 'checksum';
   /** get_block_hash and the rest take the sidechain hash; Coinshift spends coinbase outputs by merkle root */

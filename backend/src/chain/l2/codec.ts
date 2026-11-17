@@ -65,7 +65,7 @@ export function addressOfKey(key: string | null | undefined): string | null {
 }
 
 /** UTF-8 text, or null when the bytes are not valid UTF-8 (the nodes' utf8_valid) */
-function utf8(b: Uint8Array): string | null {
+export function utf8(b: Uint8Array): string | null {
   try {
     return new TextDecoder('utf-8', { fatal: true }).decode(b);
   } catch (e) {

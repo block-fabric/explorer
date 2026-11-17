@@ -50,8 +50,8 @@ EXPLORERS = [
     {
         'id': 'mainnet', 'path': '', 'kind': 'l1', 'profile': 'ecash', 'network': 'ecash', 'api_port': 18959,
         'rpc_port': 8532, 'enforcer': 'http://127.0.0.1:8133', 'weight': 4000000,
-        # (a flood of ~7,000-transaction blocks and a 48,000-transaction mempool, 2026-11-04, outgrew 1g / 768 MB)
-        'mem': '3g', 'heap_mb': 2304,
+        # the busiest explorer: at 2.3 GB of heap it ran at 80% and died of it every few hours (2026-11-06)
+        'mem': '5g', 'heap_mb': 4096, 'cpus': 4.0,
         # the drivechain index (mining pages) also reads the 4032 blocks before the fork, Bitcoin's (read once)
         'history_blocks': 4032,
         # address lookups: romanz electrs next to the node (see ELECTRS); 'serve' points the backend at it (MEMPOOL.BACKEND
@@ -82,6 +82,16 @@ EXPLORERS = [
         'id': 'mainnet-thunder', 'path': 'thunder', 'kind': 'l2', 'profile': 'thunder', 'network': 'ecash',
         'enabled': True, 'api_port': 18967, 'l2_rpc_port': 19967, 'full_port': 18968,
         'sidechain_rpc': f'http://{SIDECHAIN_HOST}:17009', 'sidechain_secret': 'mainnet-thunder',
+        'enforcer': 'http://127.0.0.1:8133',
+        'weight': 4000000, 'mem': '384m', 'heap_mb': 256, 'full_mem': '512m', 'full_heap_mb': 384,
+    },
+    # Sidepot on mainnet (slot 88, a Thunder fork with a key game): sidepot-mainnet on the sidechain server, through
+    # its read-only RPC front (17088, firewalled to this server; the read and game methods only), HTTP Basic auth:
+    # "user:password" in secrets/mainnet-sidepot.rpc (the front's /opt/sidepot-rpc/public-rpc.auth there)
+    {
+        'id': 'mainnet-sidepot', 'path': 'sidepot', 'kind': 'l2', 'profile': 'sidepot', 'network': 'ecash',
+        'enabled': True, 'api_port': 18970, 'l2_rpc_port': 19970, 'full_port': 18971,
+        'sidechain_rpc': f'http://{SIDECHAIN_HOST}:17088', 'sidechain_secret': 'mainnet-sidepot',
         'enforcer': 'http://127.0.0.1:8133',
         'weight': 4000000, 'mem': '384m', 'heap_mb': 256, 'full_mem': '512m', 'full_heap_mb': 384,
     },
@@ -164,7 +174,7 @@ FLUSH_RATE, FLUSH_BURST = '5r/s', 20
 # with tens of thousands of transactions (31,087: 99 s) held the server, which answers one request at a time, and every
 # other lookup timed out behind it; patched, it is refused from its index entries alone, before any is fetched
 ELECTRS_IMAGE = 'ecash-explorer/electrs:0.12.0-limit'
-ELECTRS_MEM, ELECTRS_CPUS, ELECTRS_THREADS = '3g', 4.0, 4
+ELECTRS_MEM, ELECTRS_CPUS, ELECTRS_THREADS = '4g', 6.0, 6
 
 # The server has no swap: if memory runs out, the kernel must kill an explorer container before the pool's node or its
 # enforcer (which would stop mining). Positive scores make the explorer the OOM killer's first choice, the full sidechain
@@ -411,9 +421,9 @@ def main():
     L = ['# Written by gen.py (eCash explorers on the pool server); edit that and run it again.',
          'name: ecash-explorer', 'services:',
          '  db:', '    image: mariadb:10.5.21', '    container_name: ecash-explorer-db', '    restart: unless-stopped',
-         '    network_mode: host', '    mem_limit: 512m', '    cpus: 1.0', f'    oom_score_adj: {OOM_SCORE}',
+         '    network_mode: host', '    mem_limit: 1536m', '    cpus: 2.0', f'    oom_score_adj: {OOM_SCORE}',
          '    environment:', '      MYSQL_USER: mempool', '      MYSQL_PASSWORD: mempool', '      MYSQL_ROOT_PASSWORD: admin',
-         f'    command: ["--bind-address=127.0.0.1", "--port={DB_PORT}", "--innodb-buffer-pool-size=256M", "--performance-schema=OFF",'
+         f'    command: ["--bind-address=127.0.0.1", "--port={DB_PORT}", "--innodb-buffer-pool-size=1G", "--performance-schema=OFF",'
          ' "--max-connections=120", "--skip-name-resolve", "--innodb-log-buffer-size=8M", "--key-buffer-size=8M"]',
          '    volumes:', '      - ./mysql:/var/lib/mysql', '      - ./initdb:/docker-entrypoint-initdb.d:ro',
          '    healthcheck:', f'      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-P", "{DB_PORT}", "-umempool", "-pmempool"]',
@@ -438,7 +448,7 @@ def main():
     for e in EXPLORERS:
         p = e['id']
         if e['kind'] == 'l1':
-            L += api(p, e, e['mem'], 1.0, e['heap_mb'], p, p, [('db-setup', 'service_completed_successfully')])
+            L += api(p, e, e['mem'], e.get('cpus', 1.0), e['heap_mb'], p, p, [('db-setup', 'service_completed_successfully')])
         elif e['kind'] in ('flush', 'freebank'):
             L += api(p, e, e['mem'], 0.5, e['heap_mb'], p, p, [('db-setup', 'service_completed_successfully')])
         else:

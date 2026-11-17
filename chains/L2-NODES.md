@@ -88,6 +88,22 @@ or `216.128.183.114:<port>`.
   both on the public RPC; no minimum fee (block.cpp validate_filled, node.cpp submit_transaction). The other chains'
   public RPC has `submit_transaction(Authorized JSON)` (Thunder, BitNames, BitAssets, zSide); Coinshift's none.
 
+## Sidepot (slot 88)
+
+Coinelius/sidepot-node (a fork of thunder-rust, Thunder base 0.18.6; release sidepot-v0.1.2 on the sidechain server,
+RPC 6088 behind a read-only front on 17088, P2P 4088 QUIC, network magic `SPOT`). Blocks, txs and coins as Thunder's;
+besides:
+- the header adds `producer` (the block producer's game account) and `game_hash` (the game state after the block);
+  the index takes block hashes from the node;
+- a deposit addressed `spot:<64 hex x-only key>` credits that game account and makes no coin (the index keeps it as
+  a game deposit, module `gameDeposit`);
+- a block's coinbase pays exactly the cashouts of the eCash blocks it processes;
+- `game_state` and `game_account(key)` give the game: pot, key price, round, deadline and clock (ticks: eCash blocks
+  with txs), bonus pool, streak, accounts, and a preview to the eCash tip. The moves are signed entries in eCash
+  OP_RETURN outputs (Coinelius/sidepot sidepot-core entry.rs), which the eCash explorer reads from block 984,960 on
+  (`GET /api/v1/chain/sidepot/moves`, backend chain/sidepot-moves.ts) and checks against the domain: the hash of
+  block 982,723 (the slot's proposal) and slot 88.
+
 ## zSide (thunder-orchard, slot 98)
 - txid = blake3(borsh(inputs) ‖ borsh(outputs) ‖ Option<bundle_without_auth>), not blake3(canonical_bytes):
   canonical_bytes = inputs ‖ Option<full bundle> ‖ outputs. bundle_without_auth (no action count) is
