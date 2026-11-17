@@ -15,6 +15,8 @@ export interface NavItem {
   title: string;
   /** app-svg-images name; 'chain-mark' draws the chain's own mark */
   icon: string;
+  /** with 'chain-mark': another chain's mark (a profile id) */
+  mark?: string;
 }
 
 export interface ChainProfile {

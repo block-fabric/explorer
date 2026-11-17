@@ -32,7 +32,7 @@ import { CxFilter } from '@app/chain/components/chain-table/chain-table.componen
     .sub .id { font-family: monospace; font-size: 0.9rem; word-break: break-all; color: var(--fg); }
   `],
   template: `
-    <h1><app-svg-images name="chain-mark" [fill]="profile.id" width="28" height="28" class="cmark"></app-svg-images> {{ title || page.title }}</h1>
+    <h1><app-svg-images name="chain-mark" [fill]="page.mark ?? profile.id" width="28" height="28" class="cmark"></app-svg-images> {{ title || page.title }}</h1>
     @if (id) {
       <div class="sub"><span class="id">{{ id }}</span><app-clipboard class="ms-1" [text]="id"></app-clipboard> · <a [routerLink]="['/' + page.path]">all {{ page.title.toLowerCase() }}</a></div>
     } @else {

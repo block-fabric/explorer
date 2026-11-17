@@ -19,6 +19,8 @@ export interface L2FeaturePage {
   about: string;
   /** a note under it */
   note?: string;
+  /** its nav item's mark, when not this chain's (a profile id) */
+  mark?: string;
 }
 
 export const L2_FEATURE_PAGES: L2FeaturePage[] = [
@@ -38,7 +40,8 @@ export const L2_FEATURE_PAGES: L2FeaturePage[] = [
     about: 'The oracle\'s current voting period, the Votecoin holders (voters) and the decision slot pricing' },
   { path: 'shielded', title: 'Shielded pool', feature: 'shielded', api: 'shielded', item: 'Total', detail: false,
     about: 'zSide\'s Orchard pool: what went in and out of it, from the index' },
-  { path: 'richlist', title: 'Top addresses', feature: 'richlist', api: 'richlist', item: 'Address', detail: false,
+  // (Thunder's page, which its forks share: Thunder's bolt)
+  { path: 'richlist', title: 'Top addresses', feature: 'richlist', api: 'richlist', item: 'Address', detail: false, mark: 'thunder',
     about: 'The addresses holding the most sats, and the payments over the chain\'s blocks, from the index' },
   { path: 'game', title: 'Game', feature: 'game', api: 'game', item: 'Account', detail: false,
     about: 'Sidepot\'s key game: the pot, the key price, the round and its deadline, game accounts and the moves posted on eCash' },
@@ -58,7 +61,7 @@ export function l2FeatureNav(features: string[], firstOnly = false): NavItem[] {
   return L2_FEATURE_PAGES
     .filter(p => features.includes(p.feature))
     .filter(p => !firstOnly || (!seen.has(p.feature) && !!seen.add(p.feature)))
-    .map(p => ({ path: '/' + p.path, title: p.title, icon: 'chain-mark' }));
+    .map(p => ({ path: '/' + p.path, title: p.title, icon: 'chain-mark', mark: p.mark }));
 }
 
 /** The core pages of a sidechain explorer */

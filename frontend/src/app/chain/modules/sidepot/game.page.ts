@@ -59,8 +59,9 @@ const KEY = /^[0-9a-f]{64}$/;
       } @else {
         <app-l2-state [state]="v" what="The game" [height]="160"></app-l2-state>
         @if (v.data; as g) {
-          @if (!g.started) {
-            <div class="alert alert-info">The game starts at eCash block {{ (g.start_height ?? start) | number }}: nothing to show before then.</div>
+          @if (!begun(g)) {
+            <div class="alert alert-info">The game starts at eCash block {{ (g.start_height ?? start) | number }}: its first round opens with keys at
+              <app-l2-amount [sats]="g.price_sats ?? 0"></app-l2-amount> and {{ ticksLeft(g) | number }} ticks on the clock.</div>
           } @else {
             <div class="kpis">
               <div class="kpi"><div class="l">Pot</div><div class="v">{{ ecx(g.pot_sats) }}</div><div class="s">round {{ g.round | number }} · {{ g.pot_sats | number }} sats</div></div>
@@ -226,6 +227,11 @@ export class SidepotGamePage implements OnInit, OnDestroy {
   ecx(sats: number | null | undefined): string {
     const v = (sats ?? 0) / 1e8;
     return v.toLocaleString('en-US', { maximumFractionDigits: v >= 100 ? 2 : 4 }) + ' ECX';
+  }
+
+  /** the game has settled an eCash block from its start on (before it, the node reports the opening state) */
+  begun(g: GameView): boolean {
+    return g.started && (g.l1_height ?? 0) >= (g.start_height ?? GAME_START);
   }
 
   ticksLeft(g: GameView): number {
