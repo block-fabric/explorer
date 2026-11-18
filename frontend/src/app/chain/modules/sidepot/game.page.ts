@@ -31,7 +31,8 @@ interface Deposit { txid: string; vout: number; amount: number; account: string;
 interface Deposits { count: number; amount: number; items: Deposit[] }
 
 interface AccountState { balance_sats: number; keys: number; nonce: number }
-interface Account { key: string; account: { confirmed?: AccountState | null; preview?: AccountState | null } | AccountState | null }
+// GET feature/game/account/:key?preview=1: the settled account and the node's preview to the eCash tip, or null
+type Account = (AccountState & { preview: AccountState | null }) | null;
 
 const GAME_START = 984960;
 const KEY = /^[0-9a-f]{64}$/;
@@ -165,7 +166,7 @@ export class SidepotGamePage implements OnInit, OnDestroy {
   shortId = shortId;
   game$: Observable<Loaded<GameView> | 'unavailable'>;
   account$ = new BehaviorSubject<string | null>(null);
-  accountData$: Observable<Account | 'error'>;
+  accountData$: Observable<{ account: Account } | 'error'>;
   moves$: Observable<Moves | 'error'>;
   /** the eCash explorer's URL (its API lists the moves; its pages show the eCash blocks and txs) */
   main$: Observable<string>;
@@ -199,8 +200,9 @@ export class SidepotGamePage implements OnInit, OnDestroy {
     const q = String(this.route.snapshot.queryParamMap.get('account') ?? '').toLowerCase();
     this.account$.next(KEY.test(q) ? q : null);
     this.game$ = featureData$(this.api, 'game', () => timer(0, 30_000).pipe(switchMap(() => this.api.feature$<GameView>('game'))));
-    this.accountData$ = this.account$.pipe(switchMap(key => !key ? of('error' as const) : this.api.feature$<Account>('game/account', key).pipe(
-      catchError(() => of('error' as const)))));
+    // (/api/ paths go to this explorer's API: chain/base-path.ts)
+    this.accountData$ = this.account$.pipe(switchMap(key => !key ? of('error' as const) : this.http.get<Account>(
+      '/api/v1/l2/feature/game/account/' + key, { params: { preview: 1 } }).pipe(map(account => ({ account })), catchError(() => of('error' as const)))));
     this.main$ = this.api.mainchain$.pipe(map(u => u ?? ''));
     this.moves$ = combineLatest([this.account$, this.main$]).pipe(switchMap(([key, main]) => timer(0, 60_000).pipe(switchMap(() =>
       this.http.get<Moves>(main + '/api/v1/chain/sidepot/moves', { params: key ? { limit: 200, player: key } : { limit: 200 } }).pipe(
@@ -238,14 +240,12 @@ export class SidepotGamePage implements OnInit, OnDestroy {
     return Math.max(0, (g.deadline ?? 0) - (g.clock ?? 0));
   }
 
-  /** the account as the game has it (the node answers {confirmed, preview}, or the bare account) */
-  accountState(a: Account): AccountState | null {
-    const x: any = a.account;
-    return x ? (x.confirmed !== undefined ? x.confirmed : x) : null;
+  /** the account as the game has settled it, or null when the game has none */
+  accountState(a: { account: Account }): AccountState | null {
+    return a.account;
   }
 
-  accountPreview(a: Account): AccountState | null {
-    const x: any = a.account;
-    return x?.preview ?? null;
+  accountPreview(a: { account: Account }): AccountState | null {
+    return a.account?.preview ?? null;
   }
 }
