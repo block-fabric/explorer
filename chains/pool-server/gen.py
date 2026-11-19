@@ -185,7 +185,8 @@ BLOCKED = ['134.222.216.0/23']
 # AI and data crawlers kept off the whole site (robots.txt): they walk every block and tx page, each page a few dozen
 # API calls; search engines keep the pages, nobody the API
 NO_CRAWL = ['ExaSearchBot', 'Reflectionbot', 'meta-externalagent', 'GPTBot', 'ClaudeBot', 'CCBot', 'Bytespider', 'PerplexityBot',
-            'Amazonbot', 'Google-Extended', 'Applebot-Extended', 'anthropic-ai', 'cohere-ai', 'Diffbot', 'ImagesiftBot', 'omgili']
+            'Amazonbot', 'Google-Extended', 'Applebot-Extended', 'anthropic-ai', 'cohere-ai', 'Diffbot', 'ImagesiftBot', 'omgili',
+            'ElevenlabsCrawler']
 
 # An explorer's electrs (romanz/electrs v0.12.0, its image built from the release's Dockerfile with
 # electrs-lookup-limit.patch applied, as ecash-explorer/electrs:0.12.0-limit): the address index of upstream's electrum backend. It reads the node's blocks over its
