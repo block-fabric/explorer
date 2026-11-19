@@ -168,6 +168,9 @@ FLUSH_RATE, FLUSH_BURST = '5r/s', 20
 # walking every block held the mainnet backend at its heap limit (2026-11-18)
 API_RATE, API_BURST = '10r/s', 120
 HISTORY_RATE, HISTORY_BURST = '2r/s', 20
+# and per client network (a /24, an IPv6 /64), looser: one block of addresses taking turns counts once, while the
+# people behind one carrier's or office's network keep their own per-address budgets
+NET_RATE, NET_BURST = '40r/s', 400
 # Cloudflare's addresses (https://www.cloudflare.com/ips-v4 and ips-v6, 2026-11-18): the site is behind its proxy, so the
 # visitor is CF-Connecting-IP when the connection comes from one of these (nginx realip, this site only)
 CLOUDFLARE = ['173.245.48.0/20', '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22', '141.101.64.0/18', '108.162.192.0/18',
@@ -561,23 +564,30 @@ map "$request_method:$uri" $explorer_tx_key {{
 limit_req_zone $explorer_tx_key zone=explorer_tx:10m rate={TX_RATE};
 # The Flush and FreeBank explorers' reads of their node and of Flush's public DEX API, per client IP
 limit_req_zone $binary_remote_addr zone=explorer_flush:10m rate={FLUSH_RATE};
-# A client's network: its /24 (IPv4) or /64 (IPv6), so a scraper rotating through one block of addresses counts once
+# A client's network: its /24, or an IPv6 address's first four groups (its /64) when written out; when nginx's text
+# shortens zeros there ('::'), what comes before it (a /64 then has at most two keys, and each stays the same)
 map $remote_addr $explorer_client {{
     "~^(?<net4>[0-9]+\\.[0-9]+\\.[0-9]+)\\.[0-9]+$"                     $net4;
-    "~^(?<net6>[0-9a-fA-F]*:[0-9a-fA-F]*:[0-9a-fA-F]*:[0-9a-fA-F]*):"  $net6;
+    "~^(?<net6>[0-9a-fA-F]+:[0-9a-fA-F]+:[0-9a-fA-F]+:[0-9a-fA-F]+):"  $net6;
+    "~^(?<net6z>[0-9a-fA-F:]*?)::"                                    $net6z::;
     default                                                         $remote_addr;
 }}
-# Every API request, per client network; the history listings again, tighter (API_RATE, HISTORY_RATE)
+# Every API request, per client and per client network; the history listings again, tighter, per client
 map $uri $explorer_api_key {{
+    "~^(/[a-z0-9-]+)?/api/"                               $binary_remote_addr;
+    default                                               "";
+}}
+map $uri $explorer_net_key {{
     "~^(/[a-z0-9-]+)?/api/"                               $explorer_client;
     default                                               "";
 }}
 map $uri $explorer_history_key {{
-    "~^(/[a-z0-9-]+)?/api/(v1/)?(blocks/[0-9]+|blocks-bulk/|drivechain/blocks|l2/blocks)"  $explorer_client;
+    "~^(/[a-z0-9-]+)?/api/(v1/)?(blocks/[0-9]+|blocks-bulk/|drivechain/blocks|l2/blocks)"  $binary_remote_addr;
     default                                               "";
 }}
 limit_req_zone $explorer_api_key zone=explorer_api:20m rate={API_RATE};
 limit_req_zone $explorer_history_key zone=explorer_history:10m rate={HISTORY_RATE};
+limit_req_zone $explorer_net_key zone=explorer_net:10m rate={NET_RATE};
 # the access log with the time each request took (the backend's own count: chain/usage.ts, GET /api/v1/internal/usage)
 log_format explorer '$remote_addr - [$time_local] "$request" $status $body_bytes_sent $request_time '
                     '$upstream_response_time "$http_referer" "$http_user_agent"';
@@ -609,6 +619,7 @@ server {{
     limit_req zone=explorer_tx burst={TX_BURST} nodelay;
     limit_req zone=explorer_api burst={API_BURST} nodelay;
     limit_req zone=explorer_history burst={HISTORY_BURST} nodelay;
+    limit_req zone=explorer_net burst={NET_BURST} nodelay;
     location = /robots.txt {{ default_type text/plain; return 200 "{robots}"; }}
 
     root {ROOT}/www;
