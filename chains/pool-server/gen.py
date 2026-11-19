@@ -517,6 +517,7 @@ def main():
     location ^~ {b}/api/v1/ws {{ proxy_pass http://127.0.0.1:{prt}/; proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "Upgrade"; proxy_set_header X-Real-IP $remote_addr; proxy_read_timeout 1h; }}
     location ^~ {b}/api/v1/services {{ return 404; }}
     location ^~ {b}/api/v1/internal {{ return 404; }}
+    location ^~ {b}/api/internal {{ return 404; }}
 {posts}{idx}    location ^~ {b}/api/v1 {{ proxy_pass http://127.0.0.1:{prt}/api/v1; }}
     location ^~ {b}/api/ {{ proxy_pass http://127.0.0.1:{prt}/api/v1/; }}
     location = {b}/api {{ try_files {b}/index.html =404; }}

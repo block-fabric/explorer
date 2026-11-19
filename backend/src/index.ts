@@ -59,7 +59,7 @@ import flushRoutes from './chain/modules/flush/routes';
 import freebankRoutes from './chain/modules/freebank/routes';
 import chainNodesRoutes from './chain/nodes.routes';
 import intelRoutes from './chain/intel.routes';
-import { usageMiddleware, usageRoutes } from './chain/usage';
+import { internalGuard, usageMiddleware, usageRoutes } from './chain/usage';
 import freebankActivity from './chain/modules/freebank/activity';
 import l2Index from './chain/l2/index';
 import { CoreFacade } from './chain/l2/facade';
@@ -165,6 +165,7 @@ class Server {
 
     this.app
       .use(usageMiddleware) // who uses the API (chain/usage.ts)
+      .use(internalGuard) // internal/ routes on this machine only
       .use((req: Request, res: Response, next: NextFunction) => {
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -317,6 +318,7 @@ class Server {
   startL2Server(worker: boolean): void {
     this.app
       .use(usageMiddleware) // who uses the API (chain/usage.ts)
+      .use(internalGuard) // internal/ routes on this machine only
       .use((req: Request, res: Response, next: NextFunction) => {
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');

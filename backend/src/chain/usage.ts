@@ -7,16 +7,20 @@ import config from '../config';
  * the connection's. Per client: requests, errors (4xx/5xx, 429s apart: refused by nginx's limits never get here),
  * time spent answering, its user agent and its busiest routes (ids and heights folded: /api/v1/block/:hash).
  *
- *   GET /api/v1/internal/usage?hours=24&top=30   the top clients, user agents and routes over the last hours
+ *   GET /api/v1/internal/usage?hours=24&top=30
+ *
+ * internalGuard: every internal/ route (upstream's too) refused to a request nginx passed on, whatever its case or
+ * path (nginx's 404 is for /api/v1/internal only, case-sensitive; /api/internal reaches it through /api/)   the top clients, user agents and routes over the last hours
  *
  * Only on the server itself, not through nginx (it answers 404 for /api/v1/internal from outside, and so does this
  * route for any request nginx passed on): read it there, e.g.
  * curl -s http://127.0.0.1:18959/api/v1/internal/usage | jq
  */
 
-const HOURS = 48;
-const MAX_CLIENTS = 5000;   // clients kept a hour; the rest counted together as "other"
-const MAX_ROUTES = 40;      // routes kept per client
+// (at most HOURS x MAX_CLIENTS x MAX_ROUTES counters, whatever the traffic)
+const HOURS = 24;
+const MAX_CLIENTS = 1000;   // clients kept a hour; the rest counted together as "other"
+const MAX_ROUTES = 15;      // routes kept per client
 
 interface Client { requests: number; errors: number; ms: number; ua: string; routes: Map<string, number> }
 interface Hour { hour: number; clients: Map<string, Client> }
@@ -30,7 +34,7 @@ export function route(path: string): string {
     .replace(/\/[0-9]+(?=\/|$)/g, '/:n')
     .replace(/\/(bc1|tb1|bcrt1)[0-9a-z]{6,}(?=\/|$)/gi, '/:address')
     .replace(/\/[13mn2][1-9A-HJ-NP-Za-km-z]{25,40}(?=\/|$)/g, '/:address')
-    .slice(0, 120);
+    .slice(0, 80);
 }
 
 function bucket(): Hour {
@@ -52,6 +56,9 @@ export function usageMiddleware(req: Request, res: Response, next: NextFunction)
     const h = bucket();
     const real = req.headers['x-real-ip'];
     let ip = (typeof real === 'string' && real) || req.socket.remoteAddress || '?';
+    if (ip.includes(':') && !ip.startsWith('::ffff:')) {
+      ip = ip.split(':').slice(0, 4).join(':') + '::/64'; // (an IPv6 client: its /64, all one host's)
+    }
     if (!h.clients.has(ip) && h.clients.size >= MAX_CLIENTS) {
       ip = 'other';
     }
@@ -66,7 +73,8 @@ export function usageMiddleware(req: Request, res: Response, next: NextFunction)
       c.errors++;
     }
     c.ua = String(req.headers['user-agent'] ?? '').slice(0, 160);
-    const r = route(req.originalUrl || req.url);
+    // (a request no route answered: one key, so made-up paths add nothing)
+    const r = res.statusCode === 404 ? '(not found)' : route(req.originalUrl || req.url);
     if (c.routes.has(r) || c.routes.size < MAX_ROUTES) {
       c.routes.set(r, (c.routes.get(r) ?? 0) + 1);
     }
@@ -114,15 +122,20 @@ export function usageReport(span: number, top: number): any {
   };
 }
 
-export function usageRoutes(app: Application): void {
-  app.get(config.MEMPOOL.API_URL_PREFIX + 'internal/usage', (req: Request, res: Response) => {
-    // only on the server itself: nginx's 404 for internal/ is case-sensitive and express's routes are not, so a request
-    // through nginx (it always sets X-Real-IP) or from elsewhere is refused here too
+/** internal/ routes refused to anything nginx passed on (it always sets X-Real-IP) or that is not on this machine */
+export function internalGuard(req: Request, res: Response, next: NextFunction): void {
+  if (/\/internal(\/|$)/i.test(req.path)) {
     const local = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '');
     if (!local || req.headers['x-real-ip'] !== undefined) {
       res.status(404).end();
       return;
     }
+  }
+  next();
+}
+
+export function usageRoutes(app: Application): void {
+  app.get(config.MEMPOOL.API_URL_PREFIX + 'internal/usage', (req: Request, res: Response) => {
     const span = Math.max(1, Math.min(HOURS, Number(req.query.hours) || 24));
     const top = Math.max(1, Math.min(200, Number(req.query.top) || 30));
     res.json(usageReport(span, top));
