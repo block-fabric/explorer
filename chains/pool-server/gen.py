@@ -171,6 +171,7 @@ HISTORY_RATE, HISTORY_BURST = '2r/s', 20
 # and per client network (a /24, an IPv6 /64), looser: one block of addresses taking turns counts once, while the
 # people behind one carrier's or office's network keep their own per-address budgets
 NET_RATE, NET_BURST = '40r/s', 400
+NET_HISTORY_RATE, NET_HISTORY_BURST = '6r/s', 40
 # Cloudflare's addresses (https://www.cloudflare.com/ips-v4 and ips-v6, 2026-11-18): the site is behind its proxy, so the
 # visitor is CF-Connecting-IP when the connection comes from one of these (nginx realip, this site only)
 CLOUDFLARE = ['173.245.48.0/20', '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22', '141.101.64.0/18', '108.162.192.0/18',
@@ -572,7 +573,7 @@ map $remote_addr $explorer_client {{
     "~^(?<net6z>[0-9a-fA-F:]*?)::"                                    $net6z::;
     default                                                         $remote_addr;
 }}
-# Every API request, per client and per client network; the history listings again, tighter, per client
+# Every API request, per client and per client network; the history listings again, tighter, per client and network
 map $uri $explorer_api_key {{
     "~^(/[a-z0-9-]+)?/api/"                               $binary_remote_addr;
     default                                               "";
@@ -585,9 +586,14 @@ map $uri $explorer_history_key {{
     "~^(/[a-z0-9-]+)?/api/(v1/)?(blocks/[0-9]+|blocks-bulk/|drivechain/blocks|l2/blocks)"  $binary_remote_addr;
     default                                               "";
 }}
+map $uri $explorer_net_history_key {{
+    "~^(/[a-z0-9-]+)?/api/(v1/)?(blocks/[0-9]+|blocks-bulk/|drivechain/blocks|l2/blocks)"  $explorer_client;
+    default                                               "";
+}}
 limit_req_zone $explorer_api_key zone=explorer_api:20m rate={API_RATE};
 limit_req_zone $explorer_history_key zone=explorer_history:10m rate={HISTORY_RATE};
 limit_req_zone $explorer_net_key zone=explorer_net:10m rate={NET_RATE};
+limit_req_zone $explorer_net_history_key zone=explorer_net_history:10m rate={NET_HISTORY_RATE};
 # the access log with the time each request took (the backend's own count: chain/usage.ts, GET /api/v1/internal/usage)
 log_format explorer '$remote_addr - [$time_local] "$request" $status $body_bytes_sent $request_time '
                     '$upstream_response_time "$http_referer" "$http_user_agent"';
@@ -620,6 +626,7 @@ server {{
     limit_req zone=explorer_api burst={API_BURST} nodelay;
     limit_req zone=explorer_history burst={HISTORY_BURST} nodelay;
     limit_req zone=explorer_net burst={NET_BURST} nodelay;
+    limit_req zone=explorer_net_history burst={NET_HISTORY_BURST} nodelay;
     location = /robots.txt {{ default_type text/plain; return 200 "{robots}"; }}
 
     root {ROOT}/www;
