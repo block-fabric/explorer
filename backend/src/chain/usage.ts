@@ -9,7 +9,8 @@ import config from '../config';
  *
  *   GET /api/v1/internal/usage?hours=24&top=30   the top clients, user agents and routes over the last hours
  *
- * nginx answers 404 for /api/v1/internal from outside (gen.py): read it on the server, e.g.
+ * Only on the server itself, not through nginx (it answers 404 for /api/v1/internal from outside, and so does this
+ * route for any request nginx passed on): read it there, e.g.
  * curl -s http://127.0.0.1:18959/api/v1/internal/usage | jq
  */
 
@@ -115,6 +116,13 @@ export function usageReport(span: number, top: number): any {
 
 export function usageRoutes(app: Application): void {
   app.get(config.MEMPOOL.API_URL_PREFIX + 'internal/usage', (req: Request, res: Response) => {
+    // only on the server itself: nginx's 404 for internal/ is case-sensitive and express's routes are not, so a request
+    // through nginx (it always sets X-Real-IP) or from elsewhere is refused here too
+    const local = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '');
+    if (!local || req.headers['x-real-ip'] !== undefined) {
+      res.status(404).end();
+      return;
+    }
     const span = Math.max(1, Math.min(HOURS, Number(req.query.hours) || 24));
     const top = Math.max(1, Math.min(200, Number(req.query.top) || 30));
     res.json(usageReport(span, top));
