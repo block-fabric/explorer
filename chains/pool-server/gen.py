@@ -162,6 +162,22 @@ TX_BODY['flush'] = TX_BODY['freebank'] = TX_BODY['l1']
 # the public API counts this whole server as one client (-publicapirate, -publicapiburst): the backend's cache and
 # this keep us under its budget
 FLUSH_RATE, FLUSH_BURST = '5r/s', 20
+# Every GET of an explorer's API, per client (the visitor behind Cloudflare: CLOUDFLARE): API_RATE, API_BURST more at
+# once (a page fires a few dozen at load). The listings that walk the chain's history (blocks by height, the drivechain
+# index's blocks, blocks-bulk), which make the backend rebuild blocks it does not keep, at most HISTORY_RATE: a scraper
+# walking every block held the mainnet backend at its heap limit (2026-11-18)
+API_RATE, API_BURST = '10r/s', 120
+HISTORY_RATE, HISTORY_BURST = '2r/s', 20
+# Cloudflare's addresses (https://www.cloudflare.com/ips-v4 and ips-v6, 2026-11-18): the site is behind its proxy, so the
+# visitor is CF-Connecting-IP when the connection comes from one of these (nginx realip, this site only)
+CLOUDFLARE = ['173.245.48.0/20', '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22', '141.101.64.0/18', '108.162.192.0/18',
+              '190.93.240.0/20', '188.114.96.0/20', '197.234.240.0/22', '198.41.128.0/17', '162.158.0.0/15', '104.16.0.0/13',
+              '104.24.0.0/14', '172.64.0.0/13', '131.0.72.0/22', '2400:cb00::/32', '2606:4700::/32', '2803:f800::/32',
+              '2405:b500::/32', '2405:8100::/32', '2a06:98c0::/29', '2c0f:f248::/32']
+# AI and data crawlers kept off the whole site (robots.txt): they walk every block and tx page, each page a few dozen
+# API calls; search engines keep the pages, nobody the API
+NO_CRAWL = ['ExaSearchBot', 'Reflectionbot', 'meta-externalagent', 'GPTBot', 'ClaudeBot', 'CCBot', 'Bytespider', 'PerplexityBot',
+            'Amazonbot', 'Google-Extended', 'Applebot-Extended', 'anthropic-ai', 'cohere-ai', 'Diffbot', 'ImagesiftBot', 'omgili']
 
 # An explorer's electrs (romanz/electrs v0.12.0, its image built from the release's Dockerfile with
 # electrs-lookup-limit.patch applied, as ecash-explorer/electrs:0.12.0-limit): the address index of upstream's electrum backend. It reads the node's blocks over its
@@ -498,7 +514,7 @@ def main():
         pages = f'location ^~ {b}/' if p else 'location /'
         loc.append(f'''    # {p or '/'}: {e['profile']} on {e['network']}
 {sub}    location = {b}/resources/config.js {{ alias {ROOT}/www-config/{e['id']}.js; expires 5m; }}
-    location ^~ {b}/api/v1/ws {{ proxy_pass http://127.0.0.1:{prt}/; proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "Upgrade"; proxy_read_timeout 1h; }}
+    location ^~ {b}/api/v1/ws {{ proxy_pass http://127.0.0.1:{prt}/; proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "Upgrade"; proxy_set_header X-Real-IP $remote_addr; proxy_read_timeout 1h; }}
     location ^~ {b}/api/v1/services {{ return 404; }}
     location ^~ {b}/api/v1/internal {{ return 404; }}
 {posts}{idx}    location ^~ {b}/api/v1 {{ proxy_pass http://127.0.0.1:{prt}/api/v1; }}
@@ -520,6 +536,9 @@ def main():
     root_explorer = any(not e['path'] for e in EXPLORERS)
     home = '' if root_explorer else f'    location = / {{ return 302 /{HOME}/; }}\n'
     notfound = '' if root_explorer else '    location / {{ return 404; }}\n'
+    realip = ''.join(f'    set_real_ip_from {r};\n' for r in CLOUDFLARE)
+    # (nginx turns \n in the quoted text into a line break)
+    robots = '\\n'.join([*(f'User-agent: {a}\\nDisallow: /\\n' for a in NO_CRAWL), 'User-agent: *', 'Disallow: /api/', 'Disallow: /*/api/', ''])
     site = f'''# eCash block explorers ({ROOT}): https://{DOMAIN}/<explorer>/ for each explorer.
 # Written by {ROOT}/gen.py. The api containers listen on 127.0.0.1 (host network), one port each.
 # The certificate is its own (certbot certonly --webroot -w /var/www/html -d {DOMAIN}), apart from the other sites'.
@@ -536,6 +555,20 @@ map "$request_method:$uri" $explorer_tx_key {{
 limit_req_zone $explorer_tx_key zone=explorer_tx:10m rate={TX_RATE};
 # The Flush and FreeBank explorers' reads of their node and of Flush's public DEX API, per client IP
 limit_req_zone $binary_remote_addr zone=explorer_flush:10m rate={FLUSH_RATE};
+# Every API request, per client; the history listings again, tighter (API_RATE, HISTORY_RATE)
+map $uri $explorer_api_key {{
+    "~^(/[a-z0-9-]+)?/api/"                               $binary_remote_addr;
+    default                                               "";
+}}
+map $uri $explorer_history_key {{
+    "~^(/[a-z0-9-]+)?/api/(v1/)?(blocks/[0-9]+|blocks-bulk/|drivechain/blocks|l2/blocks)"  $binary_remote_addr;
+    default                                               "";
+}}
+limit_req_zone $explorer_api_key zone=explorer_api:20m rate={API_RATE};
+limit_req_zone $explorer_history_key zone=explorer_history:10m rate={HISTORY_RATE};
+# the access log with the time each request took (the backend's own count: chain/usage.ts, GET /api/v1/internal/usage)
+log_format explorer '$remote_addr - [$time_local] "$request" $status $body_bytes_sent $request_time '
+                    '$upstream_response_time "$http_referer" "$http_user_agent"';
 
 server {{
     listen 80;
@@ -556,10 +589,15 @@ server {{
     include /etc/letsencrypt/options-ssl-nginx.conf;
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
 
-    access_log /var/log/nginx/ecash-explorer.access.log;
+    access_log /var/log/nginx/ecash-explorer.access.log explorer;
     error_log  /var/log/nginx/ecash-explorer.error.log;
+{realip}    real_ip_header CF-Connecting-IP;
+    proxy_set_header X-Real-IP $remote_addr;
     limit_req_status 429;
     limit_req zone=explorer_tx burst={TX_BURST} nodelay;
+    limit_req zone=explorer_api burst={API_BURST} nodelay;
+    limit_req zone=explorer_history burst={HISTORY_BURST} nodelay;
+    location = /robots.txt {{ default_type text/plain; return 200 "{robots}"; }}
 
     root {ROOT}/www;
     index index.html;

@@ -59,6 +59,7 @@ import flushRoutes from './chain/modules/flush/routes';
 import freebankRoutes from './chain/modules/freebank/routes';
 import chainNodesRoutes from './chain/nodes.routes';
 import intelRoutes from './chain/intel.routes';
+import { usageMiddleware, usageRoutes } from './chain/usage';
 import freebankActivity from './chain/modules/freebank/activity';
 import l2Index from './chain/l2/index';
 import { CoreFacade } from './chain/l2/facade';
@@ -163,6 +164,7 @@ class Server {
     }
 
     this.app
+      .use(usageMiddleware) // who uses the API (chain/usage.ts)
       .use((req: Request, res: Response, next: NextFunction) => {
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -314,6 +316,7 @@ class Server {
   /** Chains Explorer: the server of a sidechain explorer, chains/L2-API.md */
   startL2Server(worker: boolean): void {
     this.app
+      .use(usageMiddleware) // who uses the API (chain/usage.ts)
       .use((req: Request, res: Response, next: NextFunction) => {
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -324,6 +327,7 @@ class Server {
       .use(express.text({ type: ['text/plain'], limit: MAX_SUBMIT_BYTES + 1024 }))
       .use(express.json({ limit: MAX_SUBMIT_BYTES + 1024 }));
     l2Routes.initRoutes(this.app);
+    usageRoutes(this.app);
     chainNodesRoutes.initRoutes(this.app); // the chain's reachable nodes, where it has a P2P network to crawl (Thunder's)
     // a body too large or not JSON: a JSON error, not express's page
     this.app.use((err: any, req: Request, res: Response, next: NextFunction) => {
@@ -495,6 +499,7 @@ class Server {
       chainNodesRoutes.initRoutes(this.app); // the chain's reachable nodes, where it has a P2P network to crawl (chain/nodes.ts)
     }
     intelRoutes.initRoutes(this.app); // the console's markets and news (eCash mainnet's explorer only)
+    usageRoutes(this.app); // who uses the API (chain/usage.ts; nginx keeps internal/ from outside)
   }
 
   healthCheck(): void {
