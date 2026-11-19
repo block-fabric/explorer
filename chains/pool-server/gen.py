@@ -174,6 +174,10 @@ CLOUDFLARE = ['173.245.48.0/20', '103.21.244.0/22', '103.22.200.0/22', '103.31.4
               '190.93.240.0/20', '188.114.96.0/20', '197.234.240.0/22', '198.41.128.0/17', '162.158.0.0/15', '104.16.0.0/13',
               '104.24.0.0/14', '172.64.0.0/13', '131.0.72.0/22', '2400:cb00::/32', '2606:4700::/32', '2803:f800::/32',
               '2405:b500::/32', '2405:8100::/32', '2a06:98c0::/29', '2c0f:f248::/32']
+# Networks refused outright (the site's real client address, behind Cloudflare): a proxy pool that walked every block
+# and tx page from dozens of its addresses, as Chrome and as ExaSearchBot, without reading robots.txt (Code200 UAB,
+# AS18779 on GTT, 2026-11-18)
+BLOCKED = ['134.222.216.0/23']
 # AI and data crawlers kept off the whole site (robots.txt): they walk every block and tx page, each page a few dozen
 # API calls; search engines keep the pages, nobody the API
 NO_CRAWL = ['ExaSearchBot', 'Reflectionbot', 'meta-externalagent', 'GPTBot', 'ClaudeBot', 'CCBot', 'Bytespider', 'PerplexityBot',
@@ -538,6 +542,7 @@ def main():
     home = '' if root_explorer else f'    location = / {{ return 302 /{HOME}/; }}\n'
     notfound = '' if root_explorer else '    location / {{ return 404; }}\n'
     realip = ''.join(f'    set_real_ip_from {r};\n' for r in CLOUDFLARE)
+    blocked = ''.join(f'    deny {r};\n' for r in BLOCKED)
     # (nginx turns \n in the quoted text into a line break)
     robots = '\\n'.join([*(f'User-agent: {a}\\nDisallow: /\\n' for a in NO_CRAWL), 'User-agent: *', 'Disallow: /api/', 'Disallow: /*/api/', ''])
     site = f'''# eCash block explorers ({ROOT}): https://{DOMAIN}/<explorer>/ for each explorer.
@@ -556,13 +561,19 @@ map "$request_method:$uri" $explorer_tx_key {{
 limit_req_zone $explorer_tx_key zone=explorer_tx:10m rate={TX_RATE};
 # The Flush and FreeBank explorers' reads of their node and of Flush's public DEX API, per client IP
 limit_req_zone $binary_remote_addr zone=explorer_flush:10m rate={FLUSH_RATE};
-# Every API request, per client; the history listings again, tighter (API_RATE, HISTORY_RATE)
+# A client's network: its /24 (IPv4) or /64 (IPv6), so a scraper rotating through one block of addresses counts once
+map $remote_addr $explorer_client {{
+    "~^(?<net4>[0-9]+\\.[0-9]+\\.[0-9]+)\\.[0-9]+$"                     $net4;
+    "~^(?<net6>[0-9a-fA-F]*:[0-9a-fA-F]*:[0-9a-fA-F]*:[0-9a-fA-F]*):"  $net6;
+    default                                                         $remote_addr;
+}}
+# Every API request, per client network; the history listings again, tighter (API_RATE, HISTORY_RATE)
 map $uri $explorer_api_key {{
-    "~^(/[a-z0-9-]+)?/api/"                               $binary_remote_addr;
+    "~^(/[a-z0-9-]+)?/api/"                               $explorer_client;
     default                                               "";
 }}
 map $uri $explorer_history_key {{
-    "~^(/[a-z0-9-]+)?/api/(v1/)?(blocks/[0-9]+|blocks-bulk/|drivechain/blocks|l2/blocks)"  $binary_remote_addr;
+    "~^(/[a-z0-9-]+)?/api/(v1/)?(blocks/[0-9]+|blocks-bulk/|drivechain/blocks|l2/blocks)"  $explorer_client;
     default                                               "";
 }}
 limit_req_zone $explorer_api_key zone=explorer_api:20m rate={API_RATE};
@@ -593,7 +604,7 @@ server {{
     access_log /var/log/nginx/ecash-explorer.access.log explorer;
     error_log  /var/log/nginx/ecash-explorer.error.log;
 {realip}    real_ip_header CF-Connecting-IP;
-    proxy_set_header X-Real-IP $remote_addr;
+{blocked}    proxy_set_header X-Real-IP $remote_addr;
     limit_req_status 429;
     limit_req zone=explorer_tx burst={TX_BURST} nodelay;
     limit_req zone=explorer_api burst={API_BURST} nodelay;
