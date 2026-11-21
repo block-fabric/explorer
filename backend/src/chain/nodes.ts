@@ -61,11 +61,12 @@ const P2P: Record<string, Partial<Record<NetworkId, P2PNetwork>>> = {
     },
   },
   // Sidepot (slot 88), a Thunder fork (Coinelius/sidepot-node lib/net/peer/message.rs magic_bytes "SPOT", net address
-  // 4000 + slot, Thunder base 0.18.6): the same heartbeat. No public peer: ours on 216, and the eCash crawl's addresses
+  // 4000 + slot, Thunder base 0.18.6): the same heartbeat. Its built-in seed (0.2.0), ours on 216, and the eCash
+  // crawl's addresses
   sidepot: {
     ecash: {
       magic: '53504f54', port: 4088, seeds: ['seed.ecash.drivecha.in', 'seed.ecash.eu.com', 'seed.ecash.ninja'],
-      peers: ['216.128.183.114:4088'],
+      peers: ['91.99.227.134:4088', '216.128.183.114:4088'],
       quic: { client: 'Sidepot', version: [0, 18, 6] },
     },
   },

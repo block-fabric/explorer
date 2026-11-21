@@ -150,6 +150,7 @@ export function valueOf(c: Content): number {
     case 'value':
     case 'marketFunds':
     case 'swapPending':
+    case 'gameDeposit':
       return c.value ?? 0;
     case 'withdrawal':
       return (c.value ?? 0) + (c.mainFee ?? 0);

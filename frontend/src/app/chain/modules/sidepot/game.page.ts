@@ -18,6 +18,9 @@ export interface GameView extends Partial<GameSnapshot> {
   started: boolean; at: number; stale: boolean;
   start_height?: number | null; to_settle?: number | null; peg_waiting?: number | null; mempool_txs?: number | null;
   preview?: GameSnapshot | null;
+  // sidepot-node 0.2.0: blocks left on the clock, the next buy's price step and the price after it, the new rules'
+  // first eCash block, the sats in the game
+  left?: number; next_step_ppm?: number; next_price_after_sats?: number; fork_height?: number | null; total_sats?: number;
 }
 
 // GET /api/v1/chain/sidepot/moves on the eCash explorer (backend chain/sidepot-moves.ts)
@@ -27,7 +30,8 @@ interface Move {
 }
 interface Moves { start: number; scannedTo: number | null; counts: { buys: number; cashouts: number; unsigned: number; players: number }; moves: Move[] }
 
-interface Deposit { txid: string; vout: number; amount: number; account: string; mainHeight: number; height: number; time: number | null }
+// source: 'peg', an eCash output addressed spot:<account>; 'tx', a Sidepot tx's GameDeposit output (0.2.0's rules)
+interface Deposit { txid: string; vout: number; amount: number; account: string; mainHeight: number; height: number; time: number | null; source?: 'peg' | 'tx' }
 interface Deposits { count: number; amount: number; items: Deposit[] }
 
 interface AccountState { balance_sats: number; keys: number; nonce: number }
@@ -66,8 +70,8 @@ const KEY = /^[0-9a-f]{64}$/;
           } @else {
             <div class="kpis">
               <div class="kpi"><div class="l">Pot</div><div class="v">{{ ecx(g.pot_sats) }}</div><div class="s">round {{ g.round | number }} · {{ g.pot_sats | number }} sats</div></div>
-              <div class="kpi"><div class="l">Key price</div><div class="v"><app-l2-amount [sats]="g.price_sats ?? 0"></app-l2-amount></div><div class="s">rises with each eCash block holding a buy</div></div>
-              <div class="kpi"><div class="l">Time left</div><div class="v">{{ ticksLeft(g) | number }}</div><div class="s">ticks (eCash blocks with transactions) · deadline {{ g.deadline | number }}</div></div>
+              <div class="kpi"><div class="l">Key price</div><div class="v"><app-l2-amount [sats]="g.price_sats ?? 0"></app-l2-amount></div><div class="s">@if (g.next_step_ppm) {next buy +{{ g.next_step_ppm / 10000 | number:'1.0-2' }}% → <app-l2-amount [sats]="g.next_price_after_sats ?? 0"></app-l2-amount>} @else {rises with each eCash block holding a buy}</div></div>
+              <div class="kpi"><div class="l">Time left</div><div class="v">{{ (g.left ?? ticksLeft(g)) | number }}</div><div class="s">ticks (eCash blocks with transactions) · deadline {{ g.deadline | number }}</div></div>
               <div class="kpi"><div class="l">Bonus pool</div><div class="v">{{ ecx(g.bonus_pool_sats) }}</div>
                 <div class="s">@if (g.streak; as s) {streak: <span class="key" [title]="s.producer">{{ shortId(s.producer) }}</span>, {{ s.blocks }} blocks} @else {no streak}</div></div>
               <div class="kpi"><div class="l">Game accounts</div><div class="v">{{ g.accounts | number }}</div><div class="s">settled to eCash block {{ g.l1_height | number }}</div></div>
@@ -78,6 +82,10 @@ const KEY = /^[0-9a-f]{64}$/;
                   key price <app-l2-amount [sats]="p.price_sats"></app-l2-amount>, round {{ p.round | number }}, {{ p.deadline - p.clock | number }} ticks left.
                   @if (g.to_settle) { {{ g.to_settle | number }} eCash blocks with moves or deposits wait for a Sidepot block.}</p>
               }
+            }
+            @if (g.fork_height && (g.l1_height ?? 0) < g.fork_height) {
+              <p class="preview">New rules from eCash block {{ g.fork_height | number }}: a buy raises the key price by 1% with the full clock left,
+                rising to about 3% with 7 blocks left and 10% with 6 or fewer; and a Sidepot transaction can move a coin into a game account.</p>
             }
             @if (g.stale) {<p class="preview">The node is slow to answer: this is its answer of <app-time kind="since" [time]="g.at"></app-time>.</p>}
           }
@@ -147,14 +155,16 @@ const KEY = /^[0-9a-f]{64}$/;
       @if (d === 'error') {
         <div class="alert alert-warning">The index did not answer.</div>
       } @else {
-        <p class="preview">{{ d.count | number }} deposits, <app-l2-amount [sats]="d.amount"></app-l2-amount> in all: BIP300 deposits addressed spot:&lt;account&gt;, credited to the account instead of making a coin.</p>
+        <p class="preview">{{ d.count | number }} deposits, <app-l2-amount [sats]="d.amount"></app-l2-amount> in all: BIP300 deposits addressed spot:&lt;account&gt;, and Sidepot transactions' game deposit outputs, credited to the account instead of making a coin.</p>
         <div class="box">
           <app-chain-table [rows]="d.items" [columns]="depositCols" sort="height" empty="No deposits to game accounts yet.">
             <ng-template cxCell="height" let-x><a [routerLink]="['/block', x.height]">{{ x.height | number }}</a></ng-template>
             <ng-template cxCell="mainHeight" let-x><a [href]="(main$ | async) + '/block/' + x.mainHeight">{{ x.mainHeight | number }}</a></ng-template>
             <ng-template cxCell="account" let-x><a href="javascript:void(0)" class="key" [title]="x.account" (click)="lookup(x.account)">{{ shortId(x.account) }}</a></ng-template>
             <ng-template cxCell="amount" let-x><app-l2-amount [sats]="x.amount"></app-l2-amount></ng-template>
-            <ng-template cxCell="txid" let-x><a [href]="(main$ | async) + '/tx/' + x.txid" class="mono" [title]="x.txid">{{ shortId(x.txid) }}:{{ x.vout }}</a></ng-template>
+            <ng-template cxCell="source" let-x>{{ x.source === 'tx' ? 'Sidepot tx' : 'eCash deposit' }}</ng-template>
+            <ng-template cxCell="txid" let-x>@if (x.source === 'tx') {<a [routerLink]="['/tx', x.txid]" class="mono" [title]="x.txid">{{ shortId(x.txid) }}:{{ x.vout }}</a>}
+              @else {<a [href]="(main$ | async) + '/tx/' + x.txid" class="mono" [title]="x.txid">{{ shortId(x.txid) }}:{{ x.vout }}</a>}</ng-template>
           </app-chain-table>
         </div>
       }
@@ -190,7 +200,8 @@ export class SidepotGamePage implements OnInit, OnDestroy {
     { key: 'mainHeight', label: 'eCash block', sort: true, hide: 'md' },
     { key: 'account', label: 'Account' },
     { key: 'amount', label: 'Amount', align: 'right', sort: true, nowrap: true },
-    { key: 'txid', label: 'eCash output', hide: 'md' },
+    { key: 'source', label: 'From', sort: true, hide: 'md' },
+    { key: 'txid', label: 'Output', hide: 'md' },
   ];
 
   constructor(private api: L2ApiService, private http: HttpClient, private route: ActivatedRoute, private router: Router, private seo: SeoService) {}

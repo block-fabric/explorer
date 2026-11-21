@@ -144,7 +144,8 @@ export class L2SpentComponent {
 const CONTENT_NAMES: Record<string, string> = {
   value: 'Value', withdrawal: 'Withdrawal', bitname: 'BitName', bitnameReservation: 'BitName reservation',
   bitasset: 'BitAsset', bitassetControl: 'BitAsset control', bitassetReservation: 'BitAsset reservation',
-  ammLpToken: 'AMM LP token', dutchAuctionReceipt: 'Dutch auction receipt', marketFunds: 'Market funds', swapPending: 'Swap pending', other: 'Other',
+  ammLpToken: 'AMM LP token', dutchAuctionReceipt: 'Dutch auction receipt', marketFunds: 'Market funds', swapPending: 'Swap pending',
+  gameDeposit: 'Game deposit', other: 'Other',
 };
 
 /**
@@ -319,6 +320,10 @@ export function humanize(k: string): string {
         }
         @case ('marketFunds') {
           <span class="pill a">market funds</span><app-l2-amount [sats]="c.value ?? c.amount ?? value"></app-l2-amount>
+        }
+        @case ('gameDeposit') {
+          <span class="pill a" title="credited to this game account as its block applies: not a coin">game deposit</span><app-l2-amount [sats]="c.value ?? value"></app-l2-amount>
+          @if (c.account) {<span class="muted"> to </span><a [routerLink]="['/game']" [queryParams]="{ account: c.account }" class="mono" [title]="c.account">{{ shortId(c.account) }}</a>}
         }
         @default {
           <span class="pill a">{{ typeName(c.type) }}</span>

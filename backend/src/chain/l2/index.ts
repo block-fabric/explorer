@@ -97,13 +97,17 @@ export interface StoredBlock {
   events: BundleEventRef[];
 }
 
-/** A deposit credited to an account of the chain's own ledger (Sidepot's game accounts) */
+/**
+ * A deposit credited to an account of the chain's own ledger (Sidepot's game accounts): a peg deposit (an eCash
+ * output addressed spot:<account>) or a sidechain tx's GameDeposit output (from Sidepot 0.2.0's fork)
+ */
 export interface GameDeposit {
   txid: string;
   vout: number;
   amount: number;
   account: string;
   mainHeight: number;
+  source?: 'peg' | 'tx';
 }
 
 /** An output, with what happened to it since */
@@ -663,6 +667,11 @@ export class L2Index {
     const ref: OutRef = {
       key, outpoint, vout, txid, height, address: o.address, content, value: valueOf(content), memo: o.memo || null, spent: null, m6id: null,
     };
+    if (content.type === 'gameDeposit') {
+      // (Sidepot: credited to a game account as its block applies; never a coin, no address holds it)
+      ref.spent = { txid, vin: null, height, kind: 'state' };
+      return ref;
+    }
     this.outputs.set(key, ref);
     const a = this.addr(ref.address);
     a.funded.count++;
@@ -742,7 +751,9 @@ export class L2Index {
       const outSum = outputs.reduce((s, r) => s + r.value, 0);
       const payoutSum = payouts.reduce((s, r) => s + r.value, 0);
       for (const r of [...outputs, ...payouts]) {
-        moves.push([r.address, r.value]);
+        if (r.content.type !== 'gameDeposit') {
+          moves.push([r.address, r.value]);
+        }
       }
       const shieldedIn = t.shielded ? t.shielded.valueBalance : 0; // > 0 leaves the pool
       let fee: number;
@@ -1218,8 +1229,17 @@ export class L2Index {
   /** Every deposit to the chain's own ledger (L2Chain.gameDeposit), oldest first, with its sidechain block */
   forEachGameDeposit(fn: (d: GameDeposit & { height: number; time: number | null }) => void): void {
     for (const b of this.stored) {
+      const at = { height: b.height, time: b.main?.time ?? null };
       for (const d of b.gameDeposits ?? []) {
-        fn({ ...d, height: b.height, time: b.main?.time ?? null });
+        fn({ ...d, source: 'peg', ...at });
+      }
+      for (const t of b.txs) {
+        t.outputs.forEach((o, vout) => {
+          const c = this.content(o.content);
+          if (c.type === 'gameDeposit' && c.account) {
+            fn({ txid: t.txid, vout, amount: c.value ?? 0, account: c.account, mainHeight: b.main?.height ?? b.prevMainHeight, source: 'tx', ...at });
+          }
+        });
       }
     }
   }

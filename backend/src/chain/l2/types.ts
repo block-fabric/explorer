@@ -17,7 +17,7 @@ export interface OutPoint {
 }
 
 export type ContentType = 'value' | 'withdrawal' | 'bitname' | 'bitnameReservation' | 'bitasset' | 'bitassetControl'
-  | 'bitassetReservation' | 'ammLpToken' | 'dutchAuctionReceipt' | 'marketFunds' | 'swapPending' | 'other';
+  | 'bitassetReservation' | 'ammLpToken' | 'dutchAuctionReceipt' | 'marketFunds' | 'swapPending' | 'gameDeposit' | 'other';
 
 export interface Content {
   type: ContentType;
@@ -28,6 +28,8 @@ export interface Content {
   amount?: number;
   name?: string;
   swapId?: string;
+  /** a gameDeposit's game account (Sidepot): 64 hex */
+  account?: string;
   raw: any;
 }
 

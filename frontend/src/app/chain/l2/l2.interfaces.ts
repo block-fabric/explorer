@@ -72,7 +72,7 @@ export interface L2OutPoint {
 }
 
 export type L2ContentType = 'value' | 'withdrawal' | 'bitname' | 'bitnameReservation' | 'bitasset' | 'bitassetControl'
-  | 'bitassetReservation' | 'ammLpToken' | 'dutchAuctionReceipt' | 'marketFunds' | 'swapPending' | 'other';
+  | 'bitassetReservation' | 'ammLpToken' | 'dutchAuctionReceipt' | 'marketFunds' | 'swapPending' | 'gameDeposit' | 'other';
 
 export interface L2Content {
   type: L2ContentType;
@@ -82,6 +82,8 @@ export interface L2Content {
   assetId?: string;
   amount?: number;
   name?: string;
+  /** a gameDeposit's game account (Sidepot): 64 hex */
+  account?: string;
   /** the node's own JSON */
   raw?: any;
 }
